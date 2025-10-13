@@ -1,0 +1,32 @@
+<h1>Crear usuario para {{ alumno.numero_estudiante }} — {{ alumno.nombre }} {{ alumno.apellido_p }} {{ alumno.apellido_m }}</h1>
+
+<form method="post">
+  {% csrf_token %}
+  <p>
+    <label>Usuario</label><br>
+    {{ form.username }}
+  </p>
+  <p>
+    <label>Email</label><br>
+    {{ form.email }}
+  </p>
+  <p>
+    <label>Contraseña</label><br>
+    {{ form.password1 }}
+  </p>
+  <p>
+    <label>Confirmar Contraseña</label><br>
+    {{ form.password2 }}
+  </p>
+  <p>
+    <label>Roles (Grupos)</label><br>
+    {{ form.grupos }}
+  </p>
+
+  <button type="submit">Crear usuario</button>
+  <a href="{% url 'alumnos_detalle' alumno.pk %}">Cancelar</a>
+
+
+
+  <a href="{% url 'alumnos_crear_usuario' alumno.pk %}">Crear usuario</a>
+</form>

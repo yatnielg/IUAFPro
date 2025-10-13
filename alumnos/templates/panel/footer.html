@@ -1,0 +1,43 @@
+      <footer class="footer">
+
+ {% if activar_notificaciones_global %}
+   {% include "chat/notificaciones_mobile.html" %}
+{% endif %}
+
+
+        <div class="container-fluid">
+          <nav class="float-left">
+            <ul>
+              {% comment %} <li>
+                <a href="https://www.codifica360.com" target="_blank">
+                  Codifica360
+                </a>
+              </li>
+              <li>
+                <a href="https://www.codifica360.com/presentation" target="_blank">
+                  Acerca de Nosotros
+                </a>
+              </li>
+              <li>
+                <a href="https://www.codifica360.com/blog" target="_blank">
+                  Blog
+                </a>
+              </li> {% endcomment %}
+         {% comment %}      <li>
+                <a href="https://www.codifica360.com/license" target="_blank">
+                  Licencias
+                </a>
+              </li> {% endcomment %}
+            </ul>
+          </nav>
+          <div class="copyright float-right">
+            &copy;
+            <script>
+              document.write(new Date().getFullYear())
+            </script>, hecho  <i class="material-icons">favorite</i> por
+            <a href="https://www.iuaf.edu.mx/" target="_blank">IUAFPro</a>
+          </div>
+        </div>
+      </footer>
+
+

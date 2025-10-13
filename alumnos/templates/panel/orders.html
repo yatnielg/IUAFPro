@@ -1,0 +1,133 @@
+<style>
+  .order-img {
+    width: 34px !important;
+    height: 34px !important;
+    object-fit: cover;
+    border-radius: 5px;
+    margin-right: 2px;
+    background: #f7f8fa;
+    transition: transform 0.2s;
+    cursor: pointer;
+  }
+  .order-img:hover {
+    transform: scale(2.5) translateX(5px);
+    z-index: 2;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+  }
+  /* Scroll horizontal: puedes usar Bootstrap o este CSS */
+  .table-responsive {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+</style>
+<!-- DataTables CSS -->
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
+<!-- jQuery -->
+<script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+<!-- DataTables JS -->
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+
+<div class="content">
+  <div class="container-fluid">
+    <div class="row">
+      <div class="col-md-12">
+        <div class="card">
+          <div class="card-header card-header-primary card-header-icon">
+            <div class="card-icon">
+              <i class="material-icons">assignment</i>
+            </div>
+            <h4 class="card-title">Información acerca de estudiantes</h4>
+          </div>
+          <div class="card-body">
+            <div class="toolbar"></div>
+            <div class="material-datatables table-responsive">
+              <table id="datatables" class="table table-striped table-no-bordered table-hover" cellspacing="0" width="100%" style="width:100%">
+                <thead>
+                  <tr>
+                    <th>No</th>
+                    <th>Nombre Completo</th>
+                    <th>CURP</th>
+                    <th>Programa</th>
+                    <th>Estatus Administrativo</th>
+                    <th>Estatus Académico</th>
+                    <th class="disabled-sorting text-right">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for a in alumnos %}
+                    <tr>
+                      <!-- No. Estudiante (con estilo de link tipo "Órdenes") -->
+                      <td>
+                        <a href="{% url 'alumnos_detalle' a.pk %}" class="btn btn-link text-info btn-just-icon like" title="Ver detalle">
+                          {{ a.numero_estudiante }}
+                        </a>
+                      </td>
+
+                      <!-- Nombre completo -->
+                      <td>{{ a.nombre }} {{ a.apellido_p }} {{ a.apellido_m }}</td>
+
+                      <!-- CURP -->
+                      <td>{{ a.curp|default:"—" }}</td>
+
+                      <!-- Programa -->
+                      <td title="{{ a.programa.nombre_ayuda|default_if_none:''|escape }}">
+                        {% if a.programa %}
+                          {{ a.programa_clave }}
+                        {% else %}
+                          <span class="text-muted">—</span>
+                        {% endif %}
+                      </td>
+
+                      <!-- Estatus Administrativo (badge como en Órdenes) -->
+                      <td>
+                        {% if a.estatus_administrativo %}
+                          <span class="badge bg-secondary text-white">{{ a.estatus_administrativo }}</span>
+                        {% else %}
+                          <span class="text-muted">—</span>
+                        {% endif %}
+                      </td>
+
+                      <!-- Estatus Académico (badge info) -->
+                      <td>
+                        {% if a.estatus_academico %}
+                          <span class="badge bg-info text-white">{{ a.estatus_academico }}</span>
+                        {% else %}
+                          <span class="text-muted">—</span>
+                        {% endif %}
+                      </td>
+
+                      <!-- Acciones (icon buttons al estilo Material Dashboard) -->
+                      <td class="text-right">
+                        <a href="{% url 'alumnos_detalle' a.pk %}" class="btn btn-link text-info btn-just-icon like" title="Ver">
+                          <i class="material-icons">visibility</i>
+                        </a>
+                        <a href="{% url 'alumnos_editar' a.pk %}" class="btn btn-link text-secondary btn-just-icon edit" title="Editar">
+                          <i class="material-icons">edit</i>
+                        </a>
+                      </td>
+                    </tr>
+                  {% empty %}
+                    <tr>
+                      <td colspan="7" class="text-center text-muted py-4">Sin resultados</td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+$('#datatables').DataTable({
+  language: {
+    url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/es-ES.json'
+  },
+  order: [[0, 'desc']] // <- Primera columna, descendente
+});
+</script>

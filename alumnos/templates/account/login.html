@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}Ingresar — IUAFPro{% endblock %}
+
+{% block account_content %}
+<div class="container" style="max-width: 520px;">
+  <div class="card shadow-sm border-0">
+    <div class="card-body p-4">
+      <h1 class="h4 mb-3">{% trans "Ingresar" %}</h1>
+
+      {% if form.non_field_errors %}
+        <div class="alert alert-danger" role="alert">
+          {{ form.non_field_errors }}
+        </div>
+      {% endif %}
+
+      <form method="post" action="{% url 'account_login' %}">
+        {% csrf_token %}
+
+        {# Campos (email/usuario y password). Sin libs extra: usa as_p o as_div #}
+        <div class="mb-3">
+          <label class="form-label" for="id_login">{% trans "Email o usuario" %}</label>
+          {{ form.login }}
+        </div>
+        <div class="mb-2">
+          <label class="form-label" for="id_password">{% trans "Contraseña" %}</label>
+          {{ form.password }}
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <div class="form-check">
+            {{ form.remember }} <label class="form-check-label" for="id_remember">{% trans "Recordarme" %}</label>
+          </div>
+          <a href="{% url 'account_reset_password' %}" class="small">{% trans "¿Olvidaste tu contraseña?" %}</a>
+        </div>
+
+        <button class="btn btn-primary w-100" type="submit">{% trans "Entrar" %}</button>
+      </form>
+
+      <hr class="my-4">
+      <p class="mb-0 small text-secondary">
+        {% blocktrans %}¿No tienes cuenta?{% endblocktrans %}
+        <a href="{% url 'account_signup' %}">{% trans "Crear cuenta" %}</a>
+      </p>
+    </div>
+  </div>
+</div>
+
+{# Pequeño ajuste para inputs con clase Bootstrap si no usas crispy/widget_tweaks #}
+<script>
+  document.querySelectorAll("input[type='text'],input[type='email'],input[type='password']").forEach(el=>{
+    el.classList.add("form-control");
+  });
+  document.querySelectorAll("input[type='checkbox']").forEach(el=>{
+    el.classList.add("form-check-input");
+  });
+</script>
+{% endblock %}

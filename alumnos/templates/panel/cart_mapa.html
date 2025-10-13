@@ -1,0 +1,78 @@
+{% if primer_producto_global %}
+<div class="alert alert-info alert-with-icon" data-notify="container" style="font-size:1.05rem;">
+    <i class="material-icons" data-notify="icon">shopping_cart</i>
+    <span>
+        ¡Tu tienda está lista!<br>
+        En el panel izquierdo puedes agregar <strong>categorías</strong> para organizar tus productos y crear nuevos <strong>productos</strong>.<br>
+        Usa la opción <strong>Tienda</strong> para ver cómo la ven tus clientes.
+    </span>
+</div>
+{% endif %}
+
+
+
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flag-icons@7/css/flag-icons.min.css">
+         <div class="row">
+              <div class="col-md-12">
+                <div class="card ">
+                  <div class="card-header card-header-success card-header-icon">
+                    <div class="card-icon">
+                      <i class="material-icons"></i>
+                    </div>
+                    <h4 class="card-title">Ventas Globales</h4>
+                  </div>
+                  <div class="card-body ">
+                    <div class="row">                      
+                      <div class="col-md-6">
+                        <div class="table-responsive table-sales">
+                          <table class="table">
+                            <tbody>
+
+                        {% for row in ventas_por_pais %}
+                        <tr>
+                          <td>
+                            <div class="flag">
+                              {% if row.pais == "USA" or row.pais == "Estados Unidos" %}
+                                <span class="fi fi-us" style="font-size: 1em;"></span>
+                              {% elif row.pais == "Cuba" %}
+                                <span class="fi fi-cu" style="font-size: 1em;"></span>
+                              {% elif row.pais == "España" %}
+                                <span class="fi fi-es" style="font-size: 1em;"></span>
+                              {% else %}
+                                <span class="fi fi-{{ row.pais|lower|slice:":2" }}" style="font-size: 1em;"></span>
+                              {% endif %}
+                            </div>
+                          </td>
+                        <td>{{ row.pais }}</td>
+                        <td class="text-right">
+                          {{ row.total_vendido|floatformat:0 }} MXN
+                        </td>
+                        <td class="text-right">
+                          {% if row.porcentaje %}
+                            {{ row.porcentaje|floatformat:2 }}%
+                          {% else %}
+                            <!-- Si no calculaste el porcentaje, puedes dejarlo vacío o poner un guion -->
+                            -
+                          {% endif %}
+                        </td>
+                      </tr>
+                  {% empty %}
+                  <tr>
+                    <td colspan="4">No hay ventas.</td>
+                  </tr>
+                  {% endfor %}
+
+                                                                      
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                      <div class="col-md-6 ml-auto mr-auto">
+                        <div id="worldMap" style="height: 300px;"></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>

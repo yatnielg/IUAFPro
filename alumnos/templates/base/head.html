@@ -1,0 +1,52 @@
+{% load static %}    
+    <head>
+    <meta charset="utf-8">
+    <meta name="generator" content="{{ seo_global.generator|default:'Codifica360 0.001.1' }}">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+    <title>{{ seo_global.title }}</title>
+    <meta name="description" content="{{ seo_global.description }}">
+    <meta name="keywords" content="{{ seo_global.keywords }}">
+    <meta name="abstract" content="{{ seo_global.abstract }}">
+    <meta name="author" content="{{ seo_global.author }}">
+    <meta name="publisher" content="{{ seo_global.publisher }}">
+    <meta name="revisit-after" content="{{ seo_global.revisit_after|default:'1 days' }}">
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="{{ seo_global.og_title|default:seo_global.title }}">
+    <meta property="og:description" content="{{ seo_global.og_description|default:seo_global.description }}">
+    <meta property="og:image" content="{% if seo_global.og_image %}{{ seo_global.og_image.url }}{% else %}{% static '/media/logo.avif' %}{% endif %}">
+    <meta property="og:image:alt" content="{{ seo_global.og_image_alt|default:'Logotipo de Codifica360' }}">
+    <meta property="og:type" content="{{ seo_global.og_type|default:'website' }}">
+    <meta property="og:url" content="{{ seo_global.og_url|default:'https://www.codifica360.com/' }}">
+    <meta property="og:site_name" content="{{ seo_global.og_site_name|default:'Codifica360' }}">
+    <meta property="og:locale" content="{{ seo_global.og_locale|default:'es_ES' }}">
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="{{ seo_global.twitter_card|default:'summary_large_image' }}">
+    <meta name="twitter:title" content="{{ seo_global.twitter_title|default:seo_global.title }}">
+    <meta name="twitter:description" content="{{ seo_global.twitter_description|default:seo_global.description }}">
+    <meta name="twitter:image" content="{% if seo_global.twitter_image %}{{ seo_global.twitter_image.url }}{% else %}{% static '/media/logo.avif' %}{% endif %}">
+
+    <!-- Geo / Localización -->
+    <meta name="country" content="{{ seo_global.country }}">
+    <meta name="currency" content="{{ seo_global.currency }}">
+    <meta http-equiv="Content-Language" content="{{ seo_global.content_language|default:'es' }}">
+    <meta name="geo.position" content="{{ seo_global.geo_position }}">
+    <meta name="geo.region" content="{{ seo_global.geo_region }}">
+    <meta name="geo.placename" content="{{ seo_global.geo_placename }}">
+
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <!-- Favicon -->
+    {% if seo_global.favicon %}
+        <link rel="icon" type="image/x-icon" href="{{ seo_global.favicon.url }}">
+    {% else %}
+        <link rel="icon" type="image/x-icon" href="{% static '/favicon.ico' %}">
+    {% endif %}
+    <link rel="stylesheet" href="">
+
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" rel="stylesheet">
+    <link rel="manifest" href="{% url 'manifest' %}">
+        
+    </head>

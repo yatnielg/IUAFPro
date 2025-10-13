@@ -1,0 +1,164 @@
+<!-- Chartist Plugin Tooltip CSS y JS -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/chartist-plugin-tooltips@0.0.18/dist/chartist-plugin-tooltip.css">
+<script src="https://cdn.jsdelivr.net/npm/chartist-plugin-tooltips@0.0.18/dist/chartist-plugin-tooltip.min.js"></script>
+
+<div class="row">
+  <div class="col-md-4">
+    <div class="card card-chart">
+      <div class="card-header card-header-primary" data-header-animation="true">
+        <div class="ct-chart" id="myMonthlySalesChart"></div>
+                  </div>
+                  <div class="card-body">
+                    <div class="card-actions">
+                      <button type="button" class="btn text-danger btn-link fix-broken-card">
+                        <i class="material-icons">build</i> Fix Header!
+                      </button>
+                      <button type="button" class="btn text-info btn-link" data-toggle="tooltip" data-placement="bottom" title="Refresh">
+                        <i class="material-icons">refresh</i>
+                      </button>
+                      <button type="button" class="btn text-default btn-link" data-toggle="tooltip" data-placement="bottom" title="Change Date">
+                        <i class="material-icons">edit</i>
+                      </button>
+                    </div>
+                    <h4 class="card-title">Ventas Mensuales</h4>
+                    <p class="card-category">Volumen de venta por meses</p>
+                  </div>
+                  <div class="card-footer">
+                    <div class="stats">
+                      <i class="material-icons">access_time</i> Prendas vendidas alcanza las {{ prendas_mes }} unidades en el mes.
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="col-md-4">
+                <div class="card card-chart">
+                  <div class="card-header card-header-warning" data-header-animation="true">
+                     <div class="ct-chart" id="myDailyOrdersChart"></div>
+                  </div>
+                  <div class="card-body">
+                    <div class="card-actions">
+                      <button type="button" class="btn text-danger btn-link fix-broken-card">
+                        <i class="material-icons">build</i> Fijar encabezado!
+                      </button>
+                      <button type="button" class="btn text-info btn-link" data-toggle="tooltip" data-placement="bottom" title="Refresh">
+                        <i class="material-icons">refresh</i>
+                      </button>
+                      <button type="button" class="btn text-default btn-link" data-toggle="tooltip" data-placement="bottom" title="Change Date">
+                        <i class="material-icons">edit</i>
+                      </button>
+                    </div>
+                    <h4 class="card-title">Ventas Diarias</h4>
+                    <p class="card-category">
+                      
+        <span class="text-warning">
+  {% if porcentaje_cambio_pedidos_hoy >= 0 %}
+    <i class="fa fa-long-arrow-up"></i>
+  {% else %}
+    <i class="fa fa-long-arrow-down"></i>
+  {% endif %}
+  {{ porcentaje_cambio_pedidos_hoy }}%
+</span>
+{% if porcentaje_cambio_pedidos_hoy >= 0 %}
+  aumento
+{% else %}
+  disminución
+{% endif %}
+en las ventas de hoy ({{ pedidos_hoy }}) ayer ({{ pedidos_ayer }}).
+
+
+
+                  </div>
+                  <div class="card-footer">
+                    <div class="stats">
+                      <i class="material-icons">access_time</i> Pedidos semanal alcanza las {{ total_pedidos_semana }} unidades.
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+
+
+              <div class="col-md-4">
+                <div class="card card-chart">
+                  <div class="card-header card-header-info" data-header-animation="true">
+                    <div class="ct-chart" id="myWeeklyEvolutionChart"></div>
+                  </div>
+                  <div class="card-body">
+                    <div class="card-actions">
+                      <button type="button" class="btn text-danger btn-link fix-broken-card">
+                        <i class="material-icons">build</i> Fix Header!
+                      </button>
+                      <button type="button" class="btn text-info btn-link" data-toggle="tooltip" data-placement="bottom" title="Refresh">
+                        <i class="material-icons">refresh</i>
+                      </button>
+                      <button type="button" class="btn text-default btn-link" data-toggle="tooltip" data-placement="bottom" title="Change Date">
+                        <i class="material-icons">edit</i>
+                      </button>
+                    </div>
+                    <h4 class="card-title">Evolución Anual</h4>
+                    <p class="card-category">Todos los Cierres</p>
+                  </div>
+                  <div class="card-footer">
+                    <div class="stats">
+                      <i class="material-icons">access_time</i> 0 unidades vendidas en el año.
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+
+<script>
+ document.addEventListener("DOMContentLoaded", function () {
+    // Estos datos vienen de Django
+    var mesesLabels = {{ meses_labels|safe }};
+var mesesVentas = {{ meses_ventas|safe }};
+new Chartist.Bar('#myMonthlySalesChart', {
+    labels: mesesLabels,
+    series: [mesesVentas]
+}, {
+    axisX: { showGrid: false },
+    low: 0,
+    high: Math.max.apply(null, mesesVentas) + 5,
+    chartPadding: { top: 0, right: 5, bottom: 0, left: 0 },
+
+});
+
+
+
+
+    // Estos datos vienen de Django
+    var diasPedidos = {{ dias_pedidos|safe }};
+    var totalesPedidos = {{ totales_pedidos|safe }};
+
+    // Gráfico 2: Volumen de pedidos diarios (LINE) usando datos reales
+    new Chartist.Line('#myDailyOrdersChart', {
+      labels: diasPedidos,
+      series: [
+        totalesPedidos
+      ]
+    }, {
+      lineSmooth: Chartist.Interpolation.cardinal({ tension: 0 }),
+      low: 0,
+      high: Math.max.apply(null, totalesPedidos) + 5,
+      chartPadding: { top: 0, right: 0, bottom: 0, left: 0 },     
+      
+    });
+
+
+    
+    // Gráfico 3: Evolución semanal y total anual (LINE)
+    new Chartist.Line('#myWeeklyEvolutionChart', {
+      labels: ["S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8", "S9", "S10", "S11", "S12"],
+      series: [
+        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+      ]
+    }, {
+      lineSmooth: Chartist.Interpolation.cardinal({ tension: 0 }),
+      low: 0,
+      high: 1600,
+      chartPadding: { top: 0, right: 0, bottom: 0, left: 0 }
+    });
+  });
+</script>

@@ -1,0 +1,133 @@
+{% extends "panel/grafico.html" %}
+{% load i18n static %}
+
+{% block title %}Crear cuenta — IUAFPro{% endblock %}
+
+{% block main_content %}
+  <div class="row mt-5">
+    <div class="col-lg-5 col-md-7 col-sm-9 ml-auto mr-auto mt-5">
+      <div class="card card-login card-hidden" style="max-width:560px;margin:0 auto;">
+        <div class="card-header card-header-primary text-center">
+          <h4 class="card-title m-0">{% trans "Crear cuenta" %}</h4>
+          <p class="card-category m-0">
+            {% trans "Completa los datos para registrarte." %}
+          </p>
+
+          {# Social opcional (solo apariencia). Borra si no lo usas #}
+          <div class="social-line">
+            <a href="javascript:;" class="btn btn-just-icon btn-link text-white" aria-label="Facebook">
+              <i class="fa fa-facebook-square"></i>
+            </a>
+            <a href="javascript:;" class="btn btn-just-icon btn-link text-white" aria-label="Twitter">
+              <i class="fa fa-twitter"></i>
+            </a>
+            <a href="javascript:;" class="btn btn-just-icon btn-link text-white" aria-label="Google">
+              <i class="fa fa-google-plus"></i>
+            </a>
+          </div>
+        </div>
+
+        <div class="card-body">
+          {% if form.non_field_errors %}
+            <div class="alert alert-danger mb-3" role="alert">{{ form.non_field_errors }}</div>
+          {% endif %}
+
+          <form method="post" action="{% url 'account_signup' %}" class="form">
+            {% csrf_token %}
+
+            {# Email #}
+            {% if form.email %}
+            <span class="md-form-group d-block mb-3">
+              <label for="{{ form.email.id_for_label }}" class="form-label d-none">{% trans "Correo electrónico" %}</label>
+              <div class="input-group">
+                <div class="input-group-prepend">
+                  <span class="input-group-text"><i class="material-icons">email</i></span>
+                </div>
+                {{ form.email }}
+              </div>
+              {% for error in form.email.errors %}<div class="text-danger small mt-1">{{ error }}</div>{% endfor %}
+            </span>
+            {% endif %}
+
+            {# Usuario (si tu form lo incluye) #}
+            {% if form.username %}
+            <span class="md-form-group d-block mb-3">
+              <label for="{{ form.username.id_for_label }}" class="form-label d-none">{% trans "Usuario" %}</label>
+              <div class="input-group">
+                <div class="input-group-prepend">
+                  <span class="input-group-text"><i class="material-icons">person</i></span>
+                </div>
+                {{ form.username }}
+              </div>
+              {% for error in form.username.errors %}<div class="text-danger small mt-1">{{ error }}</div>{% endfor %}
+            </span>
+            {% endif %}
+
+            {# Password 1 #}
+            {% if form.password1 %}
+            <span class="md-form-group d-block mb-3">
+              <label for="{{ form.password1.id_for_label }}" class="form-label d-none">{% trans "Contraseña" %}</label>
+              <div class="input-group">
+                <div class="input-group-prepend">
+                  <span class="input-group-text"><i class="material-icons">lock_outline</i></span>
+                </div>
+                {{ form.password1 }}
+              </div>
+              {% for error in form.password1.errors %}<div class="text-danger small mt-1">{{ error }}</div>{% endfor %}
+            </span>
+            {% endif %}
+
+            {# Password 2 (confirmación) #}
+            {% if form.password2 %}
+            <span class="md-form-group d-block mb-3">
+              <label for="{{ form.password2.id_for_label }}" class="form-label d-none">{% trans "Confirmar contraseña" %}</label>
+              <div class="input-group">
+                <div class="input-group-prepend">
+                  <span class="input-group-text"><i class="material-icons">lock</i></span>
+                </div>
+                {{ form.password2 }}
+              </div>
+              {% for error in form.password2.errors %}<div class="text-danger small mt-1">{{ error }}</div>{% endfor %}
+            </span>
+            {% endif %}
+
+            {# Si tu form trae más campos personalizados, muéstralos abajo en pares #}
+            {% for field in form.visible_fields %}
+              {% if field.name not in 'email username password1 password2' %}
+              <span class="md-form-group d-block mb-3">
+                <label for="{{ field.id_for_label }}" class="form-label d-none">{{ field.label }}</label>
+                {{ field }}
+                {% for error in field.errors %}<div class="text-danger small mt-1">{{ error }}</div>{% endfor %}
+              </span>
+              {% endif %}
+            {% endfor %}
+
+            <button class="btn btn-primary btn-block" type="submit">
+              {% trans "Registrarme" %}
+            </button>
+          </form>
+        </div>
+
+        <div class="card-footer text-center">
+          <small class="text-muted">
+            {% trans "¿Ya tienes cuenta?" %}
+            <a href="{% url 'account_login' %}">{% trans "Ingresar" %}</a>
+          </small>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# Clases de inputs + animación #}
+  <script>
+    // Aplica .form-control a todos los inputs y selects del form
+    document.querySelectorAll('.card form input, .card form select').forEach(el=>{
+      if(!el.classList.contains('form-control')) el.classList.add('form-control');
+    });
+    // Animación de aparición
+    setTimeout(function(){
+      var card=document.querySelector('.card.card-login');
+      if(card) card.classList.remove('card-hidden');
+    },700);
+  </script>
+{% endblock %}

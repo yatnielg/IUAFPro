@@ -1,0 +1,216 @@
+{% extends "panel/grafico.html" %}
+{% load static %}
+
+{% block main_content %}
+
+<style>
+.row { padding-left: 50px; padding-right: 50px; }
+@media (max-width: 576px) {
+  .botones-footer { flex-direction: column !important; align-items: stretch !important; text-align: center !important; }
+  .botones-footer .btn { width: 100%; margin-bottom: 8px; }
+  .botones-footer .btn:last-child { margin-bottom: 0; }
+}
+</style>
+
+<div class="col-md-10 mx-auto">
+  <div class="card">
+    <div class="card-header card-header-primary card-header-icon">
+      <div class="card-icon">
+        <i class="material-icons">person</i>
+      </div>
+      <h4 class="card-title">
+        {% if modo == "editar" %}Editar Alumno{% else %}Nuevo Alumno{% endif %}
+      </h4>
+    </div>
+
+    <div class="card-body px-6">
+      <form method="post" class="needs-validation" novalidate>
+        {% csrf_token %}
+
+        {# Fila 1: Identidad principal #}
+        <div class="row">
+          <div class="form-group col-md-4">
+            <label for="{{ form.numero_estudiante.id_for_label }}" class="md-label-floating">
+              {{ form.numero_estudiante.label }}{% if form.numero_estudiante.field.required %} <span class="text-danger">*</span>{% endif %}
+            </label>
+            {{ form.numero_estudiante }}
+            {% for error in form.numero_estudiante.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
+          </div>
+          <div class="form-group col-md-4">
+            <label for="{{ form.curp.id_for_label }}" class="md-label-floating">
+              {{ form.curp.label }}
+            </label>
+            {{ form.curp }}
+            {% for error in form.curp.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
+          </div>
+          <div class="form-group col-md-4">
+            <label for="{{ form.sexo.id_for_label }}" class="md-label-floating">
+              {{ form.sexo.label }}
+            </label>
+            {{ form.sexo }}
+            {% for error in form.sexo.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
+          </div>
+        </div>
+
+        {# Fila 2: Nombre #}
+        <div class="row mt-3">
+          <div class="form-group col-md-4">
+            <label for="{{ form.nombre.id_for_label }}" class="md-label-floating">
+              {{ form.nombre.label }}{% if form.nombre.field.required %} <span class="text-danger">*</span>{% endif %}
+            </label>
+            {{ form.nombre }}
+            {% for error in form.nombre.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
+          </div>
+          <div class="form-group col-md-4">
+            <label for="{{ form.apellido_p.id_for_label }}" class="md-label-floating">
+              {{ form.apellido_p.label }}
+            </label>
+            {{ form.apellido_p }}
+            {% for error in form.apellido_p.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
+          </div>
+          <div class="form-group col-md-4">
+            <label for="{{ form.apellido_m.id_for_label }}" class="md-label-floating">
+              {{ form.apellido_m.label }}
+            </label>
+            {{ form.apellido_m }}
+            {% for error in form.apellido_m.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
+          </div>
+        </div>
+
+        {# Fila 3: Contacto #}
+        <div class="row mt-3">
+          <div class="form-group col-md-6">
+            <label for="{{ form.email.id_for_label }}" class="md-label-floating">
+              {{ form.email.label }}
+            </label>
+            {{ form.email }}
+            {% for error in form.email.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
+          </div>
+          <div class="form-group col-md-6">
+            <label for="{{ form.telefono.id_for_label }}" class="md-label-floating">
+              {{ form.telefono.label }}
+            </label>
+            {{ form.telefono }}
+            {% for error in form.telefono.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
+          </div>
+        </div>
+
+        {# Fila 4: Ubicación #}
+        <div class="row mt-3">
+          <div class="form-group col-md-6">
+            <label for="{{ form.pais.id_for_label }}" class="md-label-floating">
+              {{ form.pais.label }}
+            </label>
+            {{ form.pais }}
+            {% for error in form.pais.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
+          </div>
+          <div class="form-group col-md-6">
+            <label for="{{ form.estado.id_for_label }}" class="md-label-floating">
+              {{ form.estado.label }}
+            </label>
+            {{ form.estado }}
+            {% for error in form.estado.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
+          </div>
+        </div>
+
+        {# Fila 5: Programa y estatus #}
+        <div class="row mt-3">
+          <div class="form-group col-md-6">
+            <label for="{{ form.programa.id_for_label }}" class="md-label-floating">
+              {{ form.programa.label }}
+            </label>
+            {{ form.programa }}
+            {% for error in form.programa.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
+          </div>
+          <div class="form-group col-md-3">
+            <label for="{{ form.estatus_administrativo.id_for_label }}" class="md-label-floating">
+              {{ form.estatus_administrativo.label }}
+            </label>
+            {{ form.estatus_administrativo }}
+            {% for error in form.estatus_administrativo.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
+          </div>
+          <div class="form-group col-md-3">
+            <label for="{{ form.estatus_academico.id_for_label }}" class="md-label-floating">
+              {{ form.estatus_academico.label }}
+            </label>
+            {{ form.estatus_academico }}
+            {% for error in form.estatus_academico.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
+          </div>
+        </div>
+
+        {# Fila 6: Otros #}
+        <div class="row mt-3">
+          <div class="form-group col-md-4">
+            <label for="{{ form.estatus.id_for_label }}" class="md-label-floating">
+              {{ form.estatus.label }}
+            </label>
+            {{ form.estatus }}
+            {% for error in form.estatus.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
+          </div>
+          <div class="form-group col-md-4">
+            <label for="{{ form.fecha_nacimiento.id_for_label }}" class="md-label-floating">
+             {% comment %}  {{ form.fecha_nacimiento.label }} {% endcomment %}
+            </label>
+            {{ form.fecha_nacimiento }}
+            {% for error in form.fecha_nacimiento.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
+          </div>
+        </div>
+
+        {% if form.non_field_errors %}
+          <div class="alert alert-danger mt-2">
+            {% for error in form.non_field_errors %}<div>{{ error }}</div>{% endfor %}
+          </div>
+        {% endif %}
+
+        <div class="card-footer text-right d-flex flex-row flex-wrap justify-content-end gap-2 botones-footer">
+          <button type="submit" class="btn btn-fill btn-primary">
+            <i class="material-icons align-middle">save</i>
+            {% if modo == "editar" %} Guardar cambios {% else %} Crear alumno {% endif %}
+          </button>
+          <a href="{% url 'alumnos_lista' %}" class="btn btn-secondary">
+            <i class="material-icons align-middle">arrow_back</i> Cancelar
+          </a>
+
+          {% if alumno %}
+          <!-- Botón eliminar (opcional) -->
+          <button type="button" class="btn btn-outline-danger" data-toggle="modal" data-target="#eliminarModal">
+            <i class="material-icons align-middle">delete</i> Eliminar
+          </button>
+          {% endif %}
+        </div>
+      </form>
+
+      {% if alumno %}
+      <!-- Modal eliminar opcional -->
+      <div class="modal fade" id="eliminarModal" tabindex="-1" role="dialog" aria-labelledby="eliminarLabel" aria-hidden="true">
+        <div class="modal-dialog" role="document">
+            {% comment %} {% url 'alumnos_eliminar' alumno.pk %} {% endcomment %}
+          <form method="post" action="">
+            {% csrf_token %}
+            <div class="modal-content">
+              <div class="modal-header">
+                <h5 class="modal-title" id="eliminarLabel">Eliminar alumno</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar">
+                  <span aria-hidden="true">&times;</span>
+                </button>
+              </div>
+              <div class="modal-body">
+                ¿Seguro que deseas eliminar al alumno <strong>{{ alumno.numero_estudiante }}</strong>?
+              </div>
+              <div class="modal-footer d-flex justify-content-between">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                <button type="submit" class="btn btn-danger">
+                  <i class="material-icons align-middle">delete</i> Eliminar
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+      {% endif %}
+
+    </div>
+  </div>
+</div>
+
+{% endblock %}
