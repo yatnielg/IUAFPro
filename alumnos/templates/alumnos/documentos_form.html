@@ -1,0 +1,44 @@
+{# templates/alumnos/documentos_form.html #}
+{% extends "panel/grafico.html" %}
+
+{% block main_content %}
+<div class="col-md-10 mx-auto">
+  <div class="card">
+    <div class="card-header card-header-primary card-header-icon">
+      <div class="card-icon"><i class="material-icons">upload_file</i></div>
+      <h4 class="card-title">Documentos — {{ alumno.numero_estudiante }}</h4>
+    </div>
+
+    <div class="card-body px-6">
+      <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        <div class="row">
+          {% for field in form %}
+            <div class="form-group col-md-6">
+              <label class="md-label-floating" for="{{ field.id_for_label }}">{{ field.label }}</label>
+              {{ field }}
+              {% if field.value %}
+                <div class="mt-1 small">
+                  Actual: <a href="{{ field.value.url }}" target="_blank">Ver archivo</a>
+                </div>
+              {% endif %}
+              {% for error in field.errors %}
+                <div class="text-danger small">{{ error }}</div>
+              {% endfor %}
+            </div>
+          {% endfor %}
+        </div>
+
+        <div class="card-footer text-right">
+          <button type="submit" class="btn btn-primary">
+            <i class="material-icons align-middle">save</i> Guardar
+          </button>
+          <a href="{% url 'alumnos_detalle' alumno.pk %}" class="btn btn-secondary">
+            <i class="material-icons align-middle">arrow_back</i> Volver
+          </a>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

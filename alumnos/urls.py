@@ -8,6 +8,7 @@ from .views import (
     alumnos_crear_usuario,
     principal,
     estudiantes,
+    documentos_alumno_editar,
 )
 
 urlpatterns = [
@@ -20,6 +21,11 @@ urlpatterns = [
     path("alumnos/<str:pk>/editar/", alumnos_editar, name="alumnos_editar"),
     path("alumnos/<str:pk>/crear-usuario/", alumnos_crear_usuario, name="alumnos_crear_usuario"),
     path("estudiantes", estudiantes,name="estudiantes"),
+    path(
+        "alumnos/<str:numero_estudiante>/documentos/",
+        documentos_alumno_editar,
+        name="alumnos_documentos_editar",
+    ),
 
 
 ]

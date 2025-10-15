@@ -29,6 +29,19 @@
 <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
 
 <div class="content">
+
+<div class="toolbar">
+  {% if request.user.is_staff %}
+  <a href="{% url 'alumnos_crear' %}" class="btn btn-primary btn-sm">
+    <i class="material-icons" style="vertical-align:middle">add</i>
+     Agregar Nuevo Estudiante
+  </a>
+  {% endif %}
+</div>
+
+
+
+
   <div class="container-fluid">
     <div class="row">
       <div class="col-md-12">
@@ -71,9 +84,9 @@
                       <td>{{ a.curp|default:"—" }}</td>
 
                       <!-- Programa -->
-                      <td title="{{ a.programa.nombre_ayuda|default_if_none:''|escape }}">
-                        {% if a.programa %}
-                          {{ a.programa_clave }}
+                      <td title="{{ a.informacionEscolar.programa.nombre|default_if_none:''|escape }}">
+                        {% if a.informacionEscolar.programa %}
+                          {{ a.informacionEscolar.programa.codigo }} 
                         {% else %}
                           <span class="text-muted">—</span>
                         {% endif %}
@@ -81,8 +94,8 @@
 
                       <!-- Estatus Administrativo (badge como en Órdenes) -->
                       <td>
-                        {% if a.estatus_administrativo %}
-                          <span class="badge bg-secondary text-white">{{ a.estatus_administrativo }}</span>
+                        {% if a.informacionEscolar.estatus_administrativo %}
+                          <span class="badge bg-secondary text-white">{{ a.informacionEscolar.estatus_administrativo }}</span>
                         {% else %}
                           <span class="text-muted">—</span>
                         {% endif %}
@@ -90,8 +103,8 @@
 
                       <!-- Estatus Académico (badge info) -->
                       <td>
-                        {% if a.estatus_academico %}
-                          <span class="badge bg-info text-white">{{ a.estatus_academico }}</span>
+                        {% if a.informacionEscolar.estatus_academico %}
+                          <span class="badge bg-info text-white">{{ a.informacionEscolar.estatus_academico }}</span>
                         {% else %}
                           <span class="text-muted">—</span>
                         {% endif %}

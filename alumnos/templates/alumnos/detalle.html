@@ -1,201 +1,203 @@
-{% extends "base.html" %}
+{% extends "panel/grafico.html" %}
+{% load i18n %}
+
 {% block title %}Alumno {{ alumno.numero_estudiante }} — CampusIUAF{% endblock %}
 
-{% block content %}
+{% block main_content %}
+
 <div class="d-flex justify-content-between align-items-center mb-3">
-  <h1 class="h4 mb-0">Alumno {{ alumno.numero_estudiante }}</h1>
-  <div class="d-flex gap-2">
-    <a class="btn btn-outline-secondary" href="{% url 'alumnos_lista' %}">Volver</a>
-    <a class="btn btn-primary" href="{% url 'alumnos_editar' alumno.pk %}">Editar</a>
+  <h1 class="h4 m-0">
+    <i class="material-icons align-middle mr-1">person</i>
+    Alumno {{ alumno.numero_estudiante }}
+  </h1>
+  <div>
+    <a class="btn btn-outline-secondary" href="{% url 'estudiantes' %}">
+      <i class="material-icons align-middle">arrow_back</i> Volver
+    </a>
+    <a class="btn btn-primary" href="{% url 'alumnos_editar' alumno.pk %}">
+      <i class="material-icons align-middle">edit</i> Editar
+    </a>
   </div>
 </div>
 
-<div class="card shadow-sm">
+<div class="card">
+  <div class="card-header card-header-primary card-header-icon">
+    <div class="card-icon">
+      <i class="material-icons">badge</i>
+    </div>
+    <h4 class="card-title">Ficha del alumno</h4>
+    <p class="card-category">Resumen general</p>
+  </div>
   <div class="card-body">
-    <div class="row g-3">
-      <div class="col-md-6">
-        <div class="text-muted small">Número de estudiante</div>
-        <div class="fw-semibold">{{ alumno.numero_estudiante }}</div>
-      </div>
+    <div class="row">
 
       <div class="col-md-6">
-        <div class="text-muted small">CURP</div>
-        <div>{{ alumno.curp|default:"—" }}</div>
-      </div>
+        <div class="card card-plain">
+          <div class="card-header card-header-text">
+            <h6 class="card-title">
+              <i class="material-icons align-middle mr-1">account_circle</i> Datos personales
+            </h6>
+          </div>
+          <div class="card-body">
 
-      <div class="col-md-6">
-        <div class="text-muted small">Nombre(s)</div>
-        <div class="fw-semibold">{{ alumno.nombre }}</div>
-      </div>
+            <div class="row">
+              <div class="col-sm-6 mb-3">
+                <div class="text-muted small">Número de estudiante</div>
+                <div class="font-weight-bold">{{ alumno.numero_estudiante }}</div>
+              </div>
+              <div class="col-sm-6 mb-3">
+                <div class="text-muted small">CURP</div>
+                <div>{{ alumno.curp|default:"—" }}</div>
+              </div>
 
-      <div class="col-md-3">
-        <div class="text-muted small">Apellido paterno</div>
-        <div>{{ alumno.apellido_p|default:"—" }}</div>
-      </div>
+              <div class="col-sm-6 mb-3">
+                <div class="text-muted small">Nombre(s)</div>
+                <div class="font-weight-bold">{{ alumno.nombre }}</div>
+              </div>
+              <div class="col-sm-3 mb-3">
+                <div class="text-muted small">Ap. paterno</div>
+                <div>{{ alumno.apellido_p|default:"—" }}</div>
+              </div>
+              <div class="col-sm-3 mb-3">
+                <div class="text-muted small">Ap. materno</div>
+                <div>{{ alumno.apellido_m|default:"—" }}</div>
+              </div>
 
-      <div class="col-md-3">
-        <div class="text-muted small">Apellido materno</div>
-        <div>{{ alumno.apellido_m|default:"—" }}</div>
-      </div>
+              <div class="col-sm-4 mb-3">
+                <div class="text-muted small">Sexo</div>
+                <div>{{ alumno.sexo|default:"—" }}</div>
+              </div>
+              <div class="col-sm-4 mb-3">
+                <div class="text-muted small">Fecha de nacimiento</div>
+                <div>{% if alumno.fecha_nacimiento %}{{ alumno.fecha_nacimiento|date:"d/m/Y" }}{% else %}—{% endif %}</div>
+              </div>
+              <div class="col-sm-4 mb-3">
+                <div class="text-muted small">Fecha de alta</div>
+                <div>{{ alumno.fecha_alta|date:"d/m/Y H:i" }}</div>
+              </div>
+            </div>
 
-      <div class="col-md-3">
-        <div class="text-muted small">Sexo</div>
-        <div>{{ alumno.sexo|default:"—" }}</div>
-      </div>
-
-      <div class="col-md-3">
-        <div class="text-muted small">Fecha de nacimiento</div>
-        <div>{% if alumno.fecha_nacimiento %}{{ alumno.fecha_nacimiento|date:"d/m/Y" }}{% else %}—{% endif %}</div>
-      </div>
-
-      <div class="col-md-6">
-        <div class="text-muted small">Email</div>
-        <div>{{ alumno.email|default:"—" }}</div>
-      </div>
-
-      <div class="col-md-6">
-        <div class="text-muted small">Teléfono</div>
-        <div>{{ alumno.telefono|default:"—" }}</div>
-      </div>
-
-      <div class="col-md-6">
-        <div class="text-muted small">Programa</div>
-        <div>
-          {% if alumno.programa %}
-            {{ alumno.programa }}
-          {% else %}
-            <span class="text-muted">—</span>
-          {% endif %}
+          </div>
         </div>
-      </div>
-
-      <div class="col-md-3">
-        <div class="text-muted small">País</div>
-        <div>{{ alumno.pais.nombre|default:"—" }}</div>
-      </div>
-
-      <div class="col-md-3">
-        <div class="text-muted small">Estado / Provincia</div>
-        <div>{% if alumno.estado %}{{ alumno.estado.nombre }}{% else %}<span class="text-muted">—</span>{% endif %}</div>
-      </div>
-
-      <div class="col-md-4">
-        <div class="text-muted small">Estatus (general)</div>
-        <span class="badge text-bg-secondary">{{ alumno.estatus|default:"—" }}</span>
-      </div>
-
-      <div class="col-md-4">
-        <div class="text-muted small">Estatus académico</div>
-        <span class="badge text-bg-info">{{ alumno.estatus_academico|default:"—" }}</span>
-      </div>
-
-      <div class="col-md-4">
-        <div class="text-muted small">Estatus administrativo</div>
-        <span class="badge text-bg-warning text-dark">{{ alumno.estatus_administrativo|default:"—" }}</span>
-      </div>
+      </div><!-- /col izquierda -->
 
       <div class="col-md-6">
-        <div class="text-muted small">Fecha de alta</div>
-        <div>{{ alumno.fecha_alta|date:"d/m/Y H:i" }}</div>
-      </div>
+        <div class="card card-plain">
+          <div class="card-header card-header-text">
+            <h6 class="card-title">
+              <i class="material-icons align-middle mr-1">contact_mail</i> Contacto & estado
+            </h6>
+          </div>
+          <div class="card-body">
 
-      <div class="col-md-6">
-        <div class="text-muted small">Usuario vinculado</div>
-        <div>
-          {% if alumno.user %}
-            {{ alumno.user.username }}
-            {% if alumno.user.get_full_name %} ({{ alumno.user.get_full_name }}){% endif %}
-          {% else %}
-            <span class="text-muted">Sin usuario</span>
-            — <a href="{% url 'alumnos_crear_usuario' alumno.pk %}">Crear usuario</a>
-          {% endif %}
+            <div class="row">
+              <div class="col-sm-6 mb-3">
+                <div class="text-muted small">Email</div>
+                <div>{{ alumno.email|default:"—" }}</div>
+              </div>
+              <div class="col-sm-6 mb-3">
+                <div class="text-muted small">Teléfono</div>
+                <div>{{ alumno.telefono|default:"—" }}</div>
+              </div>
+
+              <div class="col-sm-4 mb-3">
+                <div class="text-muted small">Estatus (general)</div>
+                <span class="badge badge-secondary">{{ alumno.estatus|default:"—" }}</span>
+              </div>
+              <div class="col-sm-4 mb-3">
+                <div class="text-muted small">Académico</div>
+                <span class="badge badge-info">{{ alumno.estatus_academico|default:"—" }}</span>
+              </div>
+              <div class="col-sm-4 mb-3">
+                <div class="text-muted small">Administrativo</div>
+                <span class="badge badge-warning text-dark">{{ alumno.estatus_administrativo|default:"—" }}</span>
+              </div>
+
+              <div class="col-sm-12 mb-2">
+                <div class="text-muted small">Usuario vinculado</div>
+                <div>
+                  {% if alumno.user %}
+                    <i class="material-icons align-middle mr-1">person</i>
+                    {{ alumno.user.username }}
+                    {% if alumno.user.get_full_name %} ({{ alumno.user.get_full_name }}){% endif %}
+                  {% else %}
+                    <span class="text-muted">Sin usuario</span>
+                    — <a href="{% url 'alumnos_crear_usuario' alumno.pk %}" class="text-primary">Crear usuario</a>
+                  {% endif %}
+                </div>
+              </div>
+            </div>
+
+          </div>
         </div>
-      </div>
+      </div><!-- /col derecha -->
+
+    </div><!-- /row -->
+
+    <hr class="my-3">
+
+    <div class="row">
+      <div class="col-md-6">
+        <div class="card card-plain">
+          <div class="card-header card-header-text">
+            <h6 class="card-title">
+              <i class="material-icons align-middle mr-1">school</i> Programa
+            </h6>
+          </div>
+          <div class="card-body">
+            <div class="row">
+              <div class="col-sm-12 mb-3">
+                <div class="text-muted small">Programa</div>
+                <div>
+                  {% if alumno.programa %}
+                    {{ alumno.programa }}
+                  {% else %}
+                    <span class="text-muted">—</span>
+                  {% endif %}
+                </div>
+              </div>
+              <div class="col-sm-4 mb-3">
+                <div class="text-muted small">País</div>
+                <div>{{ alumno.pais.nombre|default:"—" }}</div>
+              </div>
+              <div class="col-sm-4 mb-3">
+                <div class="text-muted small">Estado / Provincia</div>
+                <div>{% if alumno.estado %}{{ alumno.estado.nombre }}{% else %}<span class="text-muted">—</span>{% endif %}</div>
+              </div>
+              <div class="col-sm-4 mb-3">
+                <div class="text-muted small">Sede</div>
+                <div>{{ alumno.sede.nombre|default:"—" }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div><!-- /col programa -->
+
+      <div class="col-md-6">
+        <div class="card card-plain">
+          <div class="card-header card-header-text">
+            <h6 class="card-title">
+              <i class="material-icons align-middle mr-1">payments</i> Plan financiero
+            </h6>
+          </div>
+          <div class="card-body">
+            <div class="text-muted small mb-1">Plan asignado</div>
+            <div>
+              {% if alumno.plan_financiero %}
+                {{ alumno.plan_financiero.nombre|default:"Plan" }}
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </div>
+            {# Aquí puedes agregar más campos calculados del plan si quieres mostrarlos #}
+          </div>
+        </div>
+      </div><!-- /col finanzas -->
     </div>
+
   </div>
 </div>
 
-{# ======= Secciones opcionales: movimientos financieros ======= #}
-{# Descomenta si quieres ver cargos y pagos aquí mismo #}
-{#
-<div class="mt-4">
-  <div class="accordion" id="finanzasAlumno">
-    <div class="accordion-item">
-      <h2 class="accordion-header" id="headCargos">
-        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#colCargos" aria-expanded="false" aria-controls="colCargos">
-          Cargos
-        </button>
-      </h2>
-      <div id="colCargos" class="accordion-collapse collapse" aria-labelledby="headCargos" data-bs-parent="#finanzasAlumno">
-        <div class="accordion-body">
-          {% if alumno.cargos.all %}
-            <div class="table-responsive">
-              <table class="table table-sm table-hover align-middle">
-                <thead class="table-light">
-                  <tr>
-                    <th>ID</th><th>Concepto</th><th>Monto</th><th>Fecha cargo</th><th>Vence</th><th>Pagado</th><th>Folio</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {% for c in alumno.cargos.all %}
-                  <tr>
-                    <td>{{ c.id }}</td>
-                    <td>{{ c.concepto.nombre }}</td>
-                    <td>${{ c.monto }}</td>
-                    <td>{{ c.fecha_cargo|date:"d/m/Y" }}</td>
-                    <td>{% if c.fecha_vencimiento %}{{ c.fecha_vencimiento|date:"d/m/Y" }}{% else %}—{% endif %}</td>
-                    <td>{% if c.pagado %}Sí{% else %}No{% endif %}</td>
-                    <td>{{ c.folio|default:"—" }}</td>
-                  </tr>
-                  {% endfor %}
-                </tbody>
-              </table>
-            </div>
-          {% else %}
-            <div class="text-muted">Sin cargos registrados.</div>
-          {% endif %}
-        </div>
-      </div>
-    </div>
+{# Si después quieres reactivar la parte de cargos/pagos, conviértelo a cards o acordeón MD aquí. #}
 
-    <div class="accordion-item mt-2">
-      <h2 class="accordion-header" id="headPagos">
-        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#colPagos" aria-expanded="false" aria-controls="colPagos">
-          Pagos
-        </button>
-      </h2>
-      <div id="colPagos" class="accordion-collapse collapse" aria-labelledby="headPagos" data-bs-parent="#finanzasAlumno">
-        <div class="accordion-body">
-          {% if alumno.pagos.all %}
-            <div class="table-responsive">
-              <table class="table table-sm table-hover align-middle">
-                <thead class="table-light">
-                  <tr>
-                    <th>ID</th><th>Fecha</th><th>Monto</th><th>Método</th><th>Banco</th><th>Referencia</th><th>Conciliado</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {% for p in alumno.pagos.all %}
-                  <tr>
-                    <td>{{ p.id }}</td>
-                    <td>{{ p.fecha|date:"d/m/Y" }}</td>
-                    <td>${{ p.monto }}</td>
-                    <td>{{ p.metodo|default:"—" }}</td>
-                    <td>{{ p.banco|default:"—" }}</td>
-                    <td>{{ p.referencia|default:"—" }}</td>
-                    <td>{% if p.conciliado %}Sí{% else %}No{% endif %}</td>
-                  </tr>
-                  {% endfor %}
-                </tbody>
-              </table>
-            </div>
-          {% else %}
-            <div class="text-muted">Sin pagos registrados.</div>
-          {% endif %}
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-#}
 {% endblock %}

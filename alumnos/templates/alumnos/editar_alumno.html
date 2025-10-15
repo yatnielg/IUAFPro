@@ -4,213 +4,344 @@
 {% block main_content %}
 
 <style>
-.row { padding-left: 50px; padding-right: 50px; }
-@media (max-width: 576px) {
-  .botones-footer { flex-direction: column !important; align-items: stretch !important; text-align: center !important; }
-  .botones-footer .btn { width: 100%; margin-bottom: 8px; }
-  .botones-footer .btn:last-child { margin-bottom: 0; }
-}
+  .section-title {
+    font-size: .95rem; letter-spacing:.06em; text-transform:uppercase;
+    color: #9aa0a6; margin: 1.25rem 0 .5rem; display:flex; align-items:center; gap:.5rem;
+  }
+  .section-title .material-icons { font-size: 1.1rem; }
+  .row { padding-left: 50px; padding-right: 50px; }
+  @media (max-width: 576px) {
+    .row { padding-left: 18px; padding-right: 18px; }
+  }
+  .age-badge{display:inline-block;min-width:54px;text-align:center;padding:.25rem .5rem;border-radius:999px;font-size:.85rem;background:rgba(255,255,255,.08)}
+  .nav-pills .nav-link{border-radius:999px}
+  .tab-pane{padding-top: .75rem}
 </style>
+
+{% if form.errors %}
+  <pre class="text-warning small">{{ form.errors }}</pre>
+{% endif %}
+
+
 
 <div class="col-md-10 mx-auto">
   <div class="card">
     <div class="card-header card-header-primary card-header-icon">
-      <div class="card-icon">
-        <i class="material-icons">person</i>
-      </div>
-      <h4 class="card-title">
-        {% if modo == "editar" %}Editar Alumno{% else %}Nuevo Alumno{% endif %}
-      </h4>
+      <div class="card-icon"><i class="material-icons">person</i></div>
+      <h4 class="card-title">{% if modo == "editar" %}Editar Alumno{% else %}Nuevo Alumno{% endif %}</h4>
     </div>
 
     <div class="card-body px-6">
-      <form method="post" class="needs-validation" novalidate>
+      <form method="post" class="needs-validation" novalidate id="alumnoForm">
         {% csrf_token %}
 
-        {# Fila 1: Identidad principal #}
-        <div class="row">
-          <div class="form-group col-md-4">
-            <label for="{{ form.numero_estudiante.id_for_label }}" class="md-label-floating">
-              {{ form.numero_estudiante.label }}{% if form.numero_estudiante.field.required %} <span class="text-danger">*</span>{% endif %}
-            </label>
-            {{ form.numero_estudiante }}
-            {% for error in form.numero_estudiante.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
-          </div>
-          <div class="form-group col-md-4">
-            <label for="{{ form.curp.id_for_label }}" class="md-label-floating">
-              {{ form.curp.label }}
-            </label>
-            {{ form.curp }}
-            {% for error in form.curp.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
-          </div>
-          <div class="form-group col-md-4">
-            <label for="{{ form.sexo.id_for_label }}" class="md-label-floating">
-              {{ form.sexo.label }}
-            </label>
-            {{ form.sexo }}
-            {% for error in form.sexo.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
-          </div>
-        </div>
+        {# ---------- Tabs ---------- #}
+        <ul class="nav nav-pills nav-justified mb-4" id="wizardTabs" role="tablist">
+          <li class="nav-item">
+            <a class="nav-link active" id="tab-personales" data-toggle="tab" href="#pane-personales" role="tab">
+              <i class="material-icons align-middle">account_circle</i> &nbsp;Datos personales
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" id="tab-ubicacion" data-toggle="tab" href="#pane-ubicacion" role="tab">
+              <i class="material-icons align-middle">place</i> &nbsp;Ubicación y programa
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" id="tab-finanzas" data-toggle="tab" href="#pane-finanzas" role="tab">
+              <i class="material-icons align-middle">payments</i> &nbsp;Modalidad y finanzas
+            </a>
+          </li>
+        </ul>
 
-        {# Fila 2: Nombre #}
-        <div class="row mt-3">
-          <div class="form-group col-md-4">
-            <label for="{{ form.nombre.id_for_label }}" class="md-label-floating">
-              {{ form.nombre.label }}{% if form.nombre.field.required %} <span class="text-danger">*</span>{% endif %}
-            </label>
-            {{ form.nombre }}
-            {% for error in form.nombre.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
-          </div>
-          <div class="form-group col-md-4">
-            <label for="{{ form.apellido_p.id_for_label }}" class="md-label-floating">
-              {{ form.apellido_p.label }}
-            </label>
-            {{ form.apellido_p }}
-            {% for error in form.apellido_p.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
-          </div>
-          <div class="form-group col-md-4">
-            <label for="{{ form.apellido_m.id_for_label }}" class="md-label-floating">
-              {{ form.apellido_m.label }}
-            </label>
-            {{ form.apellido_m }}
-            {% for error in form.apellido_m.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
-          </div>
-        </div>
+        <div class="tab-content" id="wizardContent">
 
-        {# Fila 3: Contacto #}
-        <div class="row mt-3">
-          <div class="form-group col-md-6">
-            <label for="{{ form.email.id_for_label }}" class="md-label-floating">
-              {{ form.email.label }}
-            </label>
-            {{ form.email }}
-            {% for error in form.email.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
-          </div>
-          <div class="form-group col-md-6">
-            <label for="{{ form.telefono.id_for_label }}" class="md-label-floating">
-              {{ form.telefono.label }}
-            </label>
-            {{ form.telefono }}
-            {% for error in form.telefono.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
-          </div>
-        </div>
+          {# ========== PANE 1: Personales/Identificación/Contacto ========== #}
+          <div class="tab-pane fade show active" id="pane-personales" role="tabpanel" data-required="#{{ form.numero_estudiante.auto_id }},#{{ form.nombre.auto_id }}">
+            <div class="section-title"><i class="material-icons">badge</i> Identificación</div>
+            <div class="row">
+              <div class="form-group col-md-4">
+                <label for="{{ form.numero_estudiante.id_for_label }}" class="md-label-floating">
+                  {{ form.numero_estudiante.label }}{% if form.numero_estudiante.field.required %} <span class="text-danger">*</span>{% endif %}
+                </label>
+                {{ form.numero_estudiante }}
+                {% for error in form.numero_estudiante.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
+              </div>
+              <div class="form-group col-md-4">
+                <label for="{{ form.matricula.id_for_label }}" class="md-label-floating">{{ form.matricula.label }}</label>
+                {{ form.matricula }}
+                {% for error in form.matricula.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
+              </div>
+              <div class="form-group col-md-4">
+                <label for="{{ form.curp.id_for_label }}" class="md-label-floating">{{ form.curp.label }}</label>
+                {{ form.curp }}
+                {% for error in form.curp.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
+              </div>
+            </div>
 
-        {# Fila 4: Ubicación #}
-        <div class="row mt-3">
-          <div class="form-group col-md-6">
-            <label for="{{ form.pais.id_for_label }}" class="md-label-floating">
-              {{ form.pais.label }}
-            </label>
-            {{ form.pais }}
-            {% for error in form.pais.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
-          </div>
-          <div class="form-group col-md-6">
-            <label for="{{ form.estado.id_for_label }}" class="md-label-floating">
-              {{ form.estado.label }}
-            </label>
-            {{ form.estado }}
-            {% for error in form.estado.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
-          </div>
-        </div>
+            <div class="section-title"><i class="material-icons">account_circle</i> Datos personales</div>
+            <div class="row">
+              <div class="form-group col-md-4">
+                <label for="{{ form.nombre.id_for_label }}" class="md-label-floating">
+                  {{ form.nombre.label }}{% if form.nombre.field.required %} <span class="text-danger">*</span>{% endif %}
+                </label>
+                {{ form.nombre }}
+                {% for error in form.nombre.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
+              </div>
+              <div class="form-group col-md-4">
+                <label for="{{ form.apellido_p.id_for_label }}" class="md-label-floating">{{ form.apellido_p.label }}</label>
+                {{ form.apellido_p }}
+                {% for error in form.apellido_p.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
+              </div>
+              <div class="form-group col-md-4">
+                <label for="{{ form.apellido_m.id_for_label }}" class="md-label-floating">{{ form.apellido_m.label }}</label>
+                {{ form.apellido_m }}
+                {% for error in form.apellido_m.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
+              </div>
+            </div>
 
-        {# Fila 5: Programa y estatus #}
-        <div class="row mt-3">
-          <div class="form-group col-md-6">
-            <label for="{{ form.programa.id_for_label }}" class="md-label-floating">
-              {{ form.programa.label }}
-            </label>
-            {{ form.programa }}
-            {% for error in form.programa.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
-          </div>
-          <div class="form-group col-md-3">
-            <label for="{{ form.estatus_administrativo.id_for_label }}" class="md-label-floating">
-              {{ form.estatus_administrativo.label }}
-            </label>
-            {{ form.estatus_administrativo }}
-            {% for error in form.estatus_administrativo.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
-          </div>
-          <div class="form-group col-md-3">
-            <label for="{{ form.estatus_academico.id_for_label }}" class="md-label-floating">
-              {{ form.estatus_academico.label }}
-            </label>
-            {{ form.estatus_academico }}
-            {% for error in form.estatus_academico.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
-          </div>
-        </div>
+            <div class="row">
+              <div class="form-group col-md-4">
+                <label for="{{ form.fecha_nacimiento.id_for_label }}" class="md-label-floating">{{ form.fecha_nacimiento.label }}</label>
+                <div class="d-flex align-items-center gap-2">
+                  {{ form.fecha_nacimiento }}
+                  <small class="age-badge ml-2" id="edadBadge">—</small>
+                </div>
+                {% for error in form.fecha_nacimiento.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
+              </div>
+              <div class="form-group col-md-4">
+                <label for="{{ form.sexo.id_for_label }}" class="md-label-floating">{{ form.sexo.label }}</label>
+                {{ form.sexo }}
+                {% for error in form.sexo.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
+              </div>
+              <div class="form-group col-md-4">
+                <label for="{{ form.estatus.id_for_label }}" class="md-label-floating">{{ form.estatus.label }}</label>
+                {{ form.estatus }}
+                {% for error in form.estatus.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
+              </div>
+            </div>
 
-        {# Fila 6: Otros #}
-        <div class="row mt-3">
-          <div class="form-group col-md-4">
-            <label for="{{ form.estatus.id_for_label }}" class="md-label-floating">
-              {{ form.estatus.label }}
-            </label>
-            {{ form.estatus }}
-            {% for error in form.estatus.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
+            <div class="section-title"><i class="material-icons">mail</i> Contacto</div>
+            <div class="row">
+              <div class="form-group col-md-6">
+                <label for="{{ form.email.id_for_label }}" class="md-label-floating">{{ form.email.label }}</label>
+                {{ form.email }}
+                {% for error in form.email.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
+              </div>
+              <div class="form-group col-md-6">
+                <label for="{{ form.telefono.id_for_label }}" class="md-label-floating">{{ form.telefono.label }}</label>
+                {{ form.telefono }}
+                {% for error in form.telefono.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
+              </div>
+            </div>
+
+
+
+            <div class="d-flex justify-content-end mt-3">
+
+{% if alumno and alumno.pk %}
+<a class="btn btn-outline-primary"
+   href="{% url 'alumnos_documentos_editar' alumno.pk %}">
+  Documentos
+</a>
+
+{% endif %}
+
+              <button class="btn btn-primary" type="button" data-next="#tab-ubicacion">
+                Siguiente <i class="material-icons align-middle">arrow_forward</i>
+              </button>
+            </div>
           </div>
-          <div class="form-group col-md-4">
-            <label for="{{ form.fecha_nacimiento.id_for_label }}" class="md-label-floating">
-             {% comment %}  {{ form.fecha_nacimiento.label }} {% endcomment %}
-            </label>
-            {{ form.fecha_nacimiento }}
-            {% for error in form.fecha_nacimiento.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
+
+          {# ========== PANE 2: Ubicación + Programa ========== #}
+          <div class="tab-pane fade" id="pane-ubicacion" role="tabpanel" data-required="#{{ form.pais.auto_id }},#{{ form.programa.auto_id }}">
+            <div class="section-title"><i class="material-icons">place</i> Ubicación</div>
+            <div class="row">
+              <div class="form-group col-md-4">
+                <label for="{{ form.pais.id_for_label }}" class="md-label-floating">{{ form.pais.label }}</label>
+                {{ form.pais }}
+                {% for error in form.pais.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
+              </div>
+              <div class="form-group col-md-4">
+                <label for="{{ form.estado.id_for_label }}" class="md-label-floating">{{ form.estado.label }}</label>
+                {{ form.estado }}
+                {% for error in form.estado.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
+              </div>
+              <div class="form-group col-md-4">
+                <label for="{{ form.sede.id_for_label }}" class="md-label-floating">{{ form.sede.label }}</label>
+                {{ form.sede }}
+                {% for error in form.sede.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
+              </div>
+            </div>
+
+            <div class="section-title"><i class="material-icons">school</i> Programa</div>
+            <div class="row">
+              <div class="form-group col-md-6">
+                <label for="{{ form.programa.id_for_label }}" class="md-label-floating">{{ form.programa.label }}</label>
+                {{ form.programa }}
+                {% for error in form.programa.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
+              </div>
+              <div class="form-group col-md-6">
+                <label for="{{ form.grupo.id_for_label }}" class="md-label-floating">{{ form.grupo.label }}</label>
+                {{ form.grupo }}
+                {% for error in form.grupo.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
+              </div>
+            </div>
+
+            <div class="d-flex justify-content-between mt-3">
+              <button class="btn btn-secondary" type="button" data-prev="#tab-personales">
+                <i class="material-icons align-middle">arrow_back</i> Anterior
+              </button>
+              <button class="btn btn-primary" type="button" data-next="#tab-finanzas">
+                Siguiente <i class="material-icons align-middle">arrow_forward</i>
+              </button>
+            </div>
           </div>
+
+          {# ========== PANE 3: Modalidad + Estatus académicos + Plan financiero ========== #}
+          <div class="tab-pane fade" id="pane-finanzas" role="tabpanel" data-required="#{{ form.modalidad.auto_id }}">
+            <div class="section-title"><i class="material-icons">cast_for_education</i> Modalidad</div>
+            <div class="row">
+              <div class="form-group col-md-12">
+                <label class="md-label-floating d-block">{{ form.modalidad.label }}</label>
+                {% for radio in form.modalidad %}
+                  <div class="form-check form-check-inline">
+                    {{ radio.tag }}
+                    <label class="form-check-label" for="{{ radio.id_for_label }}">{{ radio.choice_label }}</label>
+                  </div>
+                {% endfor %}
+                {% for error in form.modalidad.errors %}<div class="text-danger d-block">{{ error }}</div>{% endfor %}
+              </div>
+            </div>
+
+            <div class="section-title"><i class="material-icons">assignment_turned_in</i> Estatus académicos</div>
+            <div class="row">
+              <div class="form-group col-md-6">
+                <label for="{{ form.estatus_administrativo.id_for_label }}" class="md-label-floating">{{ form.estatus_administrativo.label }}</label>
+                {{ form.estatus_administrativo }}
+                {% for error in form.estatus_administrativo.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
+              </div>
+              <div class="form-group col-md-6">
+                <label for="{{ form.estatus_academico.id_for_label }}" class="md-label-floating">{{ form.estatus_academico.label }}</label>
+                {{ form.estatus_academico }}
+                {% for error in form.estatus_academico.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
+              </div>
+            </div>
+
+            <div class="section-title"><i class="material-icons">payments</i> Plan financiero</div>
+            <div class="row">
+              <div class="form-group col-md-6">
+                <label for="{{ form.informacionEscolar.id_for_label }}" class="md-label-floating">{{ form.informacionEscolar.label }}</label>
+                {{ form.informacionEscolar }}
+                {% for error in form.informacionEscolar.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
+              </div>
+            </div>
+
+            <div class="d-flex justify-content-between mt-3">
+              <button class="btn btn-secondary" type="button" data-prev="#tab-ubicacion">
+                <i class="material-icons align-middle">arrow_back</i> Anterior
+              </button>
+              <button type="submit" class="btn btn-fill btn-primary">
+                <i class="material-icons align-middle">save</i>
+                {% if modo == "editar" %} Guardar cambios {% else %} Crear alumno {% endif %}
+              </button>
+            </div>
+          </div>
+
         </div>
 
         {% if form.non_field_errors %}
-          <div class="alert alert-danger mt-2">
+          <div class="alert alert-danger mt-3">
             {% for error in form.non_field_errors %}<div>{{ error }}</div>{% endfor %}
           </div>
         {% endif %}
-
-        <div class="card-footer text-right d-flex flex-row flex-wrap justify-content-end gap-2 botones-footer">
-          <button type="submit" class="btn btn-fill btn-primary">
-            <i class="material-icons align-middle">save</i>
-            {% if modo == "editar" %} Guardar cambios {% else %} Crear alumno {% endif %}
-          </button>
-          <a href="{% url 'alumnos_lista' %}" class="btn btn-secondary">
-            <i class="material-icons align-middle">arrow_back</i> Cancelar
-          </a>
-
-          {% if alumno %}
-          <!-- Botón eliminar (opcional) -->
-          <button type="button" class="btn btn-outline-danger" data-toggle="modal" data-target="#eliminarModal">
-            <i class="material-icons align-middle">delete</i> Eliminar
-          </button>
-          {% endif %}
-        </div>
       </form>
-
-      {% if alumno %}
-      <!-- Modal eliminar opcional -->
-      <div class="modal fade" id="eliminarModal" tabindex="-1" role="dialog" aria-labelledby="eliminarLabel" aria-hidden="true">
-        <div class="modal-dialog" role="document">
-            {% comment %} {% url 'alumnos_eliminar' alumno.pk %} {% endcomment %}
-          <form method="post" action="">
-            {% csrf_token %}
-            <div class="modal-content">
-              <div class="modal-header">
-                <h5 class="modal-title" id="eliminarLabel">Eliminar alumno</h5>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar">
-                  <span aria-hidden="true">&times;</span>
-                </button>
-              </div>
-              <div class="modal-body">
-                ¿Seguro que deseas eliminar al alumno <strong>{{ alumno.numero_estudiante }}</strong>?
-              </div>
-              <div class="modal-footer d-flex justify-content-between">
-                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
-                <button type="submit" class="btn btn-danger">
-                  <i class="material-icons align-middle">delete</i> Eliminar
-                </button>
-              </div>
-            </div>
-          </form>
-        </div>
-      </div>
-      {% endif %}
-
     </div>
   </div>
 </div>
+
+
+
+
+<script>
+  // Edad visual
+  (function(){
+    const input = document.getElementById("{{ form.fecha_nacimiento.auto_id }}");
+    const badge = document.getElementById("edadBadge");
+    if (!input || !badge) return;
+    function calcEdad() {
+      if (!input.value) { badge.textContent = "—"; return; }
+      const hoy = new Date(), fn = new Date(input.value);
+      if (isNaN(fn)) { badge.textContent = "—"; return; }
+      let e = hoy.getFullYear()-fn.getFullYear();
+      const m = hoy.getMonth()-fn.getMonth();
+      if (m<0 || (m===0 && hoy.getDate()<fn.getDate())) e--;
+      badge.textContent = e + " años";
+    }
+    input.addEventListener('change', calcEdad);
+    calcEdad();
+  })();
+
+  // Navegación siguiente/anterior
+  (function(){
+    function goToTab(selector){
+      const trigger = document.querySelector(selector);
+      if (trigger) $(trigger).tab('show'); // requiere Bootstrap (ya lo tienes en la base)
+    }
+    document.querySelectorAll('[data-next]').forEach(btn=>{
+      btn.addEventListener('click', function(){
+        const pane = this.closest('.tab-pane');
+        if (pane && !validatePane(pane)) return;
+        goToTab(this.getAttribute('data-next'));
+      });
+    });
+    document.querySelectorAll('[data-prev]').forEach(btn=>{
+      btn.addEventListener('click', function(){
+        goToTab(this.getAttribute('data-prev'));
+      });
+    });
+
+    // Auto-avance: cuando todos los "required" del pane tienen valor, pasa solo si hay un siguiente marcado
+    document.querySelectorAll('.tab-pane').forEach(pane=>{
+      const reqSel = pane.getAttribute('data-required');
+      if (!reqSel) return;
+      const required = reqSel.split(',').map(s=>s.trim()).map(sel=>document.querySelector(sel)).filter(Boolean);
+      required.forEach(el=>{
+        el && el.addEventListener('change', ()=> {
+          if (required.every(i => i && (i.value && i.value.trim()!==""))) {
+            const nextBtn = pane.querySelector('[data-next]');
+            if (nextBtn) nextBtn.click();
+          }
+        });
+      });
+    });
+
+    function validatePane(pane){
+      // Validación mínima: todos los campos listados en data-required con valor
+      const reqSel = pane.getAttribute('data-required');
+      if (!reqSel) return true;
+      const required = reqSel.split(',').map(s=>s.trim()).map(sel=>document.querySelector(sel)).filter(Boolean);
+      let ok = true;
+      required.forEach(el=>{
+        const wrap = el.closest('.form-group') || el.parentElement;
+        if (!el.value || el.value.trim()==="") {
+          ok = false;
+          if (wrap) wrap.classList.add('has-error');
+        } else {
+          if (wrap) wrap.classList.remove('has-error');
+        }
+      });
+      if (!ok) {
+        // Pequeña alerta
+        if (window.md && md.showNotification) {
+          md.showNotification('top','right','Completa los campos requeridos para continuar.');
+        } else {
+          alert('Completa los campos requeridos para continuar.');
+        }
+      }
+      return ok;
+    }
+  })();
+</script>
 
 {% endblock %}

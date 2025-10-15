@@ -1,7 +1,7 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.urls import reverse
 from django import forms
-from .models import Alumno
+from .models import Alumno, DocumentosAlumno
 from django.contrib.auth.models import User, Group
 
 from django.contrib import messages
@@ -12,6 +12,7 @@ from django.core.exceptions import ValidationError
 from django.utils import timezone
 from datetime import date
 
+from .forms import DocumentosAlumnoForm
 
 from django.db.models import Q
 from .models import  Pais, Estado
@@ -323,3 +324,22 @@ def alumnos_crear_usuario(request, pk):
         })
 
     return render(request, "alumnos/crear_usuario.html", {"alumno": alumno, "form": form})    
+
+#################################################
+def documentos_alumno_editar(request, numero_estudiante):
+    alumno = get_object_or_404(Alumno, pk=numero_estudiante)
+    docs, _ = DocumentosAlumno.objects.get_or_create(alumno=alumno)
+
+    if request.method == "POST":
+        form = DocumentosAlumnoForm(request.POST, request.FILES, instance=docs)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Documentos actualizados.")
+            return redirect("alumnos_detalle", alumno.pk)  # ajusta el nombre de tu url
+    else:
+        form = DocumentosAlumnoForm(instance=docs)
+
+    return render(request, "alumnos/documentos_form.html", {
+        "alumno": alumno,
+        "form": form,
+    })
