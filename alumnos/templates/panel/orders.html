@@ -1,46 +1,48 @@
-<style>
-  .order-img {
-    width: 34px !important;
-    height: 34px !important;
-    object-fit: cover;
-    border-radius: 5px;
-    margin-right: 2px;
-    background: #f7f8fa;
-    transition: transform 0.2s;
-    cursor: pointer;
-  }
-  .order-img:hover {
-    transform: scale(2.5) translateX(5px);
-    z-index: 2;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.18);
-  }
-  /* Scroll horizontal: puedes usar Bootstrap o este CSS */
-  .table-responsive {
-    width: 100%;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-  }
-</style>
-<!-- DataTables CSS -->
-<link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
-<!-- jQuery -->
-<script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
-<!-- DataTables JS -->
-<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+{% load permisos %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Estudiantes</title>
+
+  <style>
+    .order-img {
+      width: 34px !important;
+      height: 34px !important;
+      object-fit: cover;
+      border-radius: 5px;
+      margin-right: 2px;
+      background: #f7f8fa;
+      transition: transform 0.2s;
+      cursor: pointer;
+    }
+    .order-img:hover {
+      transform: scale(2.5) translateX(5px);
+      z-index: 2;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+    }
+    .table-responsive {
+      width: 100%;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+  </style>
+
+  <!-- DataTables CSS -->
+  <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
+</head>
+<body>
 
 <div class="content">
 
-<div class="toolbar">
-  {% if request.user.is_staff %}
-  <a href="{% url 'alumnos_crear' %}" class="btn btn-primary btn-sm">
-    <i class="material-icons" style="vertical-align:middle">add</i>
-     Agregar Nuevo Estudiante
-  </a>
-  {% endif %}
-</div>
-
-
-
+  <div class="toolbar">
+     {% if request.user.profile.puede_editar_todo or request.user.is_superuser %}
+    <a href="{% url 'alumnos_crear' %}" class="btn btn-primary btn-sm">
+      <i class="material-icons" style="vertical-align:middle">add</i>
+      Agregar Nuevo Estudiante
+    </a>
+    {% endif %}
+  </div>
 
   <div class="container-fluid">
     <div class="row">
@@ -52,8 +54,10 @@
             </div>
             <h4 class="card-title">Información acerca de estudiantes</h4>
           </div>
+
           <div class="card-body">
             <div class="toolbar"></div>
+
             <div class="material-datatables table-responsive">
               <table id="datatables" class="table table-striped table-no-bordered table-hover" cellspacing="0" width="100%" style="width:100%">
                 <thead>
@@ -64,83 +68,108 @@
                     <th>Programa</th>
                     <th>Estatus Administrativo</th>
                     <th>Estatus Académico</th>
-                    <th class="disabled-sorting text-right">Acciones</th>
+
+                     {% if request.user.profile.puede_editar_todo or request.user.profile.puede_ver_todo %}
+                        <th class="disabled-sorting text-right">Acciones</th>
+                      {% endif %}
+
+
                   </tr>
                 </thead>
+
                 <tbody>
                   {% for a in alumnos %}
-                    <tr>
-                      <!-- No. Estudiante (con estilo de link tipo "Órdenes") -->
-                      <td>
-                        <a href="{% url 'alumnos_detalle' a.pk %}" class="btn btn-link text-info btn-just-icon like" title="Ver detalle">
-                          {{ a.numero_estudiante }}
-                        </a>
-                      </td>
+                  <tr>
+                    <!-- No. Estudiante -->
+                    <td>
+                      <a href="{% url 'alumnos_detalle' a.pk %}" class="btn btn-link text-info btn-just-icon like" title="Ver detalle">
+                        {{ a.numero_estudiante }}
+                      </a>
+                    </td>
 
-                      <!-- Nombre completo -->
-                      <td>{{ a.nombre }} {{ a.apellido_p }} {{ a.apellido_m }}</td>
+                    <!-- Nombre -->
+                    <td>{{ a.nombre }} {{ a.apellido_p }} {{ a.apellido_m }}</td>
 
-                      <!-- CURP -->
-                      <td>{{ a.curp|default:"—" }}</td>
+                    <!-- CURP -->
+                    <td>{{ a.curp|default:"—" }}</td>
 
-                      <!-- Programa -->
-                      <td title="{{ a.informacionEscolar.programa.nombre|default_if_none:''|escape }}">
-                        {% if a.informacionEscolar.programa %}
-                          {{ a.informacionEscolar.programa.codigo }} 
-                        {% else %}
-                          <span class="text-muted">—</span>
-                        {% endif %}
-                      </td>
+                    <!-- Programa -->
+                    <td title="{{ a.informacionEscolar.programa.nombre|default_if_none:''|escape }}">
+                      {% if a.informacionEscolar.programa %}
+                        {{ a.informacionEscolar.programa.codigo }}
+                      {% else %}
+                        <span class="text-muted">—</span>
+                      {% endif %}
+                    </td>
 
-                      <!-- Estatus Administrativo (badge como en Órdenes) -->
-                      <td>
-                        {% if a.informacionEscolar.estatus_administrativo %}
-                          <span class="badge bg-secondary text-white">{{ a.informacionEscolar.estatus_administrativo }}</span>
-                        {% else %}
-                          <span class="text-muted">—</span>
-                        {% endif %}
-                      </td>
+                    <!-- Estatus Administrativo -->
+                    <td>
+                      {% if a.informacionEscolar.estatus_administrativo %}
+                        <span class="badge bg-secondary text-white">{{ a.informacionEscolar.estatus_administrativo }}</span>
+                      {% else %}
+                        <span class="text-muted">—</span>
+                      {% endif %}
+                    </td>
 
-                      <!-- Estatus Académico (badge info) -->
-                      <td>
-                        {% if a.informacionEscolar.estatus_academico %}
-                          <span class="badge bg-info text-white">{{ a.informacionEscolar.estatus_academico }}</span>
-                        {% else %}
-                          <span class="text-muted">—</span>
-                        {% endif %}
-                      </td>
+                    <!-- Estatus Académico -->
+                    <td>
+                      {% if a.informacionEscolar.estatus_academico %}
+                        <span class="badge bg-info text-white">{{ a.informacionEscolar.estatus_academico }}</span>
+                      {% else %}
+                        <span class="text-muted">—</span>
+                      {% endif %}
+                    </td>
 
-                      <!-- Acciones (icon buttons al estilo Material Dashboard) -->
-                      <td class="text-right">
+                    <!-- Acciones -->
+                    <td class="text-right">
+
+                      {% if request.user.profile.puede_ver_todo %} 
                         <a href="{% url 'alumnos_detalle' a.pk %}" class="btn btn-link text-info btn-just-icon like" title="Ver">
                           <i class="material-icons">visibility</i>
                         </a>
-                        <a href="{% url 'alumnos_editar' a.pk %}" class="btn btn-link text-secondary btn-just-icon edit" title="Editar">
-                          <i class="material-icons">edit</i>
-                        </a>
-                      </td>
-                    </tr>
-                  {% empty %}
-                    <tr>
-                      <td colspan="7" class="text-center text-muted py-4">Sin resultados</td>
-                    </tr>
+                      {% endif %}
+
+                      
+                      {% if request.user.profile.puede_editar_todo %}
+                            {% can_edit_alumno request.user a as puede_editar %}
+                            {% if puede_editar %}
+                              <a href="{% url 'alumnos_editar' a.pk %}" class="btn btn-link text-secondary btn-just-icon edit" title="Editar">
+                                <i class="material-icons">edit</i>
+                              </a>
+                            {% endif %}
+                    {% endif %}
+
+                    </td>
+                  </tr>
                   {% endfor %}
                 </tbody>
-
+                {# Sin fila {% empty %}: DataTables mostrará 'emptyTable' automáticamente #}
               </table>
             </div>
           </div>
+
         </div>
       </div>
     </div>
   </div>
+
 </div>
 
+<!-- jQuery + DataTables JS (al final para cargar más rápido) -->
+<script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+
 <script>
-$('#datatables').DataTable({
-  language: {
-    url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/es-ES.json'
-  },
-  order: [[0, 'desc']] // <- Primera columna, descendente
-});
+  $(function () {
+    $('#datatables').DataTable({
+      language: {
+        url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/es-ES.json',
+        emptyTable: 'Sin resultados'
+      },
+      order: [[0, 'desc']]
+    });
+  });
 </script>
+
+</body>
+</html>

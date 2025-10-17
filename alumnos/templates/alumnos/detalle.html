@@ -5,6 +5,20 @@
 
 {% block main_content %}
 
+<!-- DataTables (solo para la tabla de pagos) -->
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
+<script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+
+<style>
+  .section-title {
+    font-size: .95rem; letter-spacing:.06em; text-transform:uppercase;
+    color: #9aa0a6; margin: 1.25rem 0 .5rem; display:flex; align-items:center; gap:.5rem;
+  }
+  .section-title .material-icons { font-size: 1.1rem; }
+  .table-responsive { overflow-x:auto; }
+</style>
+
 <div class="d-flex justify-content-between align-items-center mb-3">
   <h1 class="h4 m-0">
     <i class="material-icons align-middle mr-1">person</i>
@@ -14,190 +28,381 @@
     <a class="btn btn-outline-secondary" href="{% url 'estudiantes' %}">
       <i class="material-icons align-middle">arrow_back</i> Volver
     </a>
+
+    {% if request.user.profile.puede_editar_todo or request.user.is_superuser %}
     <a class="btn btn-primary" href="{% url 'alumnos_editar' alumno.pk %}">
       <i class="material-icons align-middle">edit</i> Editar
     </a>
+    {% endif %}
   </div>
 </div>
 
 <div class="card">
   <div class="card-header card-header-primary card-header-icon">
-    <div class="card-icon">
-      <i class="material-icons">badge</i>
-    </div>
+    <div class="card-icon"><i class="material-icons">badge</i></div>
     <h4 class="card-title">Ficha del alumno</h4>
     <p class="card-category">Resumen general</p>
   </div>
+
   <div class="card-body">
     <div class="row">
-
+      <!-- Columna izquierda -->
       <div class="col-md-6">
-        <div class="card card-plain">
-          <div class="card-header card-header-text">
-            <h6 class="card-title">
-              <i class="material-icons align-middle mr-1">account_circle</i> Datos personales
-            </h6>
+        <div class="section-title"><i class="material-icons">account_circle</i> Datos personales</div>
+        <div class="row">
+          <div class="col-sm-6 mb-3">
+            <div class="text-muted small">Número de estudiante</div>
+            <div class="font-weight-bold">{{ alumno.numero_estudiante }}</div>
           </div>
-          <div class="card-body">
+          <div class="col-sm-6 mb-3">
+            <div class="text-muted small">CURP</div>
+            <div>{{ alumno.curp|default:"—" }}</div>
+          </div>
 
-            <div class="row">
-              <div class="col-sm-6 mb-3">
-                <div class="text-muted small">Número de estudiante</div>
-                <div class="font-weight-bold">{{ alumno.numero_estudiante }}</div>
-              </div>
-              <div class="col-sm-6 mb-3">
-                <div class="text-muted small">CURP</div>
-                <div>{{ alumno.curp|default:"—" }}</div>
-              </div>
+          <div class="col-sm-6 mb-3">
+            <div class="text-muted small">Nombre(s)</div>
+            <div class="font-weight-bold">{{ alumno.nombre }}</div>
+          </div>
+          <div class="col-sm-3 mb-3">
+            <div class="text-muted small">Ap. paterno</div>
+            <div>{{ alumno.apellido_p|default:"—" }}</div>
+          </div>
+          <div class="col-sm-3 mb-3">
+            <div class="text-muted small">Ap. materno</div>
+            <div>{{ alumno.apellido_m|default:"—" }}</div>
+          </div>
 
-              <div class="col-sm-6 mb-3">
-                <div class="text-muted small">Nombre(s)</div>
-                <div class="font-weight-bold">{{ alumno.nombre }}</div>
-              </div>
-              <div class="col-sm-3 mb-3">
-                <div class="text-muted small">Ap. paterno</div>
-                <div>{{ alumno.apellido_p|default:"—" }}</div>
-              </div>
-              <div class="col-sm-3 mb-3">
-                <div class="text-muted small">Ap. materno</div>
-                <div>{{ alumno.apellido_m|default:"—" }}</div>
-              </div>
-
-              <div class="col-sm-4 mb-3">
-                <div class="text-muted small">Sexo</div>
-                <div>{{ alumno.sexo|default:"—" }}</div>
-              </div>
-              <div class="col-sm-4 mb-3">
-                <div class="text-muted small">Fecha de nacimiento</div>
-                <div>{% if alumno.fecha_nacimiento %}{{ alumno.fecha_nacimiento|date:"d/m/Y" }}{% else %}—{% endif %}</div>
-              </div>
-              <div class="col-sm-4 mb-3">
-                <div class="text-muted small">Fecha de alta</div>
-                <div>{{ alumno.fecha_alta|date:"d/m/Y H:i" }}</div>
-              </div>
+          <div class="col-sm-4 mb-3">
+            <div class="text-muted small">Sexo</div>
+            <div>{{ alumno.sexo|default:"—" }}</div>
+          </div>
+          <div class="col-sm-4 mb-3">
+            <div class="text-muted small">Fecha de nacimiento</div>
+            <div>{% if alumno.fecha_nacimiento %}{{ alumno.fecha_nacimiento|date:"d/m/Y" }}{% else %}—{% endif %}</div>
+          </div>
+          <div class="col-sm-4 mb-3">
+            <div class="text-muted small">Fecha de alta</div>
+            <div>
+              {% if alumno.informacionEscolar and alumno.informacionEscolar.fecha_alta %}
+                {{ alumno.informacionEscolar.fecha_alta|date:"d/m/Y H:i" }}
+              {% else %}—{% endif %}
             </div>
-
           </div>
         </div>
-      </div><!-- /col izquierda -->
+      </div>
 
+      <!-- Columna derecha -->
       <div class="col-md-6">
-        <div class="card card-plain">
-          <div class="card-header card-header-text">
-            <h6 class="card-title">
-              <i class="material-icons align-middle mr-1">contact_mail</i> Contacto & estado
-            </h6>
-          </div>
-          <div class="card-body">
-
-            <div class="row">
-              <div class="col-sm-6 mb-3">
-                <div class="text-muted small">Email</div>
-                <div>{{ alumno.email|default:"—" }}</div>
-              </div>
-              <div class="col-sm-6 mb-3">
-                <div class="text-muted small">Teléfono</div>
-                <div>{{ alumno.telefono|default:"—" }}</div>
-              </div>
-
-              <div class="col-sm-4 mb-3">
-                <div class="text-muted small">Estatus (general)</div>
-                <span class="badge badge-secondary">{{ alumno.estatus|default:"—" }}</span>
-              </div>
-              <div class="col-sm-4 mb-3">
-                <div class="text-muted small">Académico</div>
-                <span class="badge badge-info">{{ alumno.estatus_academico|default:"—" }}</span>
-              </div>
-              <div class="col-sm-4 mb-3">
-                <div class="text-muted small">Administrativo</div>
-                <span class="badge badge-warning text-dark">{{ alumno.estatus_administrativo|default:"—" }}</span>
-              </div>
-
-              <div class="col-sm-12 mb-2">
-                <div class="text-muted small">Usuario vinculado</div>
-                <div>
-                  {% if alumno.user %}
-                    <i class="material-icons align-middle mr-1">person</i>
-                    {{ alumno.user.username }}
-                    {% if alumno.user.get_full_name %} ({{ alumno.user.get_full_name }}){% endif %}
-                  {% else %}
-                    <span class="text-muted">Sin usuario</span>
-                    — <a href="{% url 'alumnos_crear_usuario' alumno.pk %}" class="text-primary">Crear usuario</a>
-                  {% endif %}
-                </div>
-              </div>
+        <div class="section-title"><i class="material-icons">contact_mail</i> Contacto & estado</div>
+        <div class="row">
+          <div class="col-sm-6 mb-3">
+            <div class="text-muted small">Email personal</div>
+            <div>
+              {% if alumno.email %}
+                <a href="mailto:{{ alumno.email }}">{{ alumno.email }}</a>
+              {% else %}—{% endif %}
             </div>
+          </div>
+          <div class="col-sm-6 mb-3">
+            <div class="text-muted small">Email institucional</div>
+            <div>
+              {% if alumno.email_institucional %}
+                <a href="mailto:{{ alumno.email_institucional }}">{{ alumno.email_institucional }}</a>
+              {% else %}—{% endif %}
+            </div>
+          </div>
 
+          <div class="col-sm-6 mb-3">
+            <div class="text-muted small">Teléfono</div>
+            <div>{{ alumno.telefono|default:"—" }}</div>
+          </div>
+
+          <div class="col-sm-4 mb-3">
+            <div class="text-muted small">Estatus (general)</div>
+            <span class="badge badge-secondary">{{ alumno.estatus|default:"—" }}</span>
+          </div>
+          <div class="col-sm-4 mb-3">
+            <div class="text-muted small">Académico</div>
+            <span class="badge badge-info">
+              {% if alumno.informacionEscolar %}{{ alumno.informacionEscolar.estatus_academico|default:"—" }}{% else %}—{% endif %}
+            </span>
+          </div>
+          <div class="col-sm-4 mb-3">
+            <div class="text-muted small">Administrativo</div>
+            <span class="badge badge-warning text-dark">
+              {% if alumno.informacionEscolar %}{{ alumno.informacionEscolar.estatus_administrativo|default:"—" }}{% else %}—{% endif %}
+            </span>
+          </div>
+
+          <div class="col-sm-12 mb-2">
+            <div class="text-muted small">Usuario vinculado</div>
+            <div>
+              {% if alumno.user %}
+                <i class="material-icons align-middle mr-1">person</i>
+                {{ alumno.user.username }}
+                {% if alumno.user.get_full_name %} ({{ alumno.user.get_full_name }}){% endif %}
+              {% else %}
+                <span class="text-muted">Sin usuario</span>
+                — <a href="{% url 'alumnos_crear_usuario' alumno.pk %}" class="text-primary">Crear usuario</a>
+              {% endif %}
+            </div>
           </div>
         </div>
-      </div><!-- /col derecha -->
-
-    </div><!-- /row -->
+      </div>
+    </div> <!-- /row -->
 
     <hr class="my-3">
 
     <div class="row">
       <div class="col-md-6">
-        <div class="card card-plain">
-          <div class="card-header card-header-text">
-            <h6 class="card-title">
-              <i class="material-icons align-middle mr-1">school</i> Programa
-            </h6>
-          </div>
-          <div class="card-body">
-            <div class="row">
-              <div class="col-sm-12 mb-3">
-                <div class="text-muted small">Programa</div>
-                <div>
-                  {% if alumno.programa %}
-                    {{ alumno.programa }}
-                  {% else %}
-                    <span class="text-muted">—</span>
-                  {% endif %}
-                </div>
-              </div>
-              <div class="col-sm-4 mb-3">
-                <div class="text-muted small">País</div>
-                <div>{{ alumno.pais.nombre|default:"—" }}</div>
-              </div>
-              <div class="col-sm-4 mb-3">
-                <div class="text-muted small">Estado / Provincia</div>
-                <div>{% if alumno.estado %}{{ alumno.estado.nombre }}{% else %}<span class="text-muted">—</span>{% endif %}</div>
-              </div>
-              <div class="col-sm-4 mb-3">
-                <div class="text-muted small">Sede</div>
-                <div>{{ alumno.sede.nombre|default:"—" }}</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div><!-- /col programa -->
-
-      <div class="col-md-6">
-        <div class="card card-plain">
-          <div class="card-header card-header-text">
-            <h6 class="card-title">
-              <i class="material-icons align-middle mr-1">payments</i> Plan financiero
-            </h6>
-          </div>
-          <div class="card-body">
-            <div class="text-muted small mb-1">Plan asignado</div>
+        <div class="section-title"><i class="material-icons">school</i> Programa / Ubicación</div>
+        <div class="row">
+          <div class="col-sm-12 mb-3">
+            <div class="text-muted small">Programa</div>
             <div>
-              {% if alumno.plan_financiero %}
-                {{ alumno.plan_financiero.nombre|default:"Plan" }}
+              {% if alumno.informacionEscolar and alumno.informacionEscolar.programa %}
+                {{ alumno.informacionEscolar.programa.codigo }} — {{ alumno.informacionEscolar.programa.nombre }}
               {% else %}
                 <span class="text-muted">—</span>
               {% endif %}
             </div>
-            {# Aquí puedes agregar más campos calculados del plan si quieres mostrarlos #}
+          </div>
+          <div class="col-sm-4 mb-3">
+            <div class="text-muted small">País</div>
+            <div>{{ alumno.pais.nombre|default:"—" }}</div>
+          </div>
+          <div class="col-sm-4 mb-3">
+            <div class="text-muted small">Estado / Provincia</div>
+            <div>{% if alumno.estado %}{{ alumno.estado.nombre }}{% else %}<span class="text-muted">—</span>{% endif %}</div>
+          </div>
+          <div class="col-sm-4 mb-3">
+            <div class="text-muted small">Sede</div>
+            <div>
+              {% if alumno.informacionEscolar and alumno.informacionEscolar.sede %}
+                {{ alumno.informacionEscolar.sede }}
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </div>
           </div>
         </div>
-      </div><!-- /col finanzas -->
-    </div>
+      </div>
+
+      <div class="col-md-6">
+        <div class="section-title"><i class="material-icons">payments</i> Plan financiero</div>
+        <div class="row">
+          <div class="col-sm-12 mb-2">
+            <div class="text-muted small">Financiamiento</div>
+            <div>
+              {% if alumno.informacionEscolar and alumno.informacionEscolar.financiamiento %}
+                {{ alumno.informacionEscolar.financiamiento.beca }}
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </div>
+          </div>
+
+          <div class="col-sm-4 mb-2">
+            <div class="text-muted small">Inscripción</div>
+            <div>
+              {% if alumno.informacionEscolar %}
+                $ {{ alumno.informacionEscolar.precio_inscripcion|default:"0.00" }}
+              {% else %}—{% endif %}
+            </div>
+          </div>
+
+          <div class="col-sm-4 mb-2">
+            <div class="text-muted small">Reinscripciones (#)</div>
+            <div>
+              {% if alumno.informacionEscolar %}
+                {{ alumno.informacionEscolar.numero_reinscripciones|default:"0" }}
+              {% else %}—{% endif %}
+            </div>
+          </div>
+
+          <div class="col-sm-4 mb-2">
+            <div class="text-muted small">Colegiatura</div>
+            <div>
+              {% if alumno.informacionEscolar %}
+                $ {{ alumno.informacionEscolar.precio_colegiatura|default:"0.00" }}
+              {% else %}—{% endif %}
+            </div>
+          </div>
+
+          <div class="col-sm-4 mb-2">
+            <div class="text-muted small">Descuento</div>
+            <div>
+              {% if alumno.informacionEscolar %}
+                $ {{ alumno.informacionEscolar.monto_descuento|default:"0.00" }}
+              {% else %}—{% endif %}
+            </div>
+          </div>
+
+          <div class="col-sm-4 mb-2">
+            <div class="text-muted small">Precio final</div>
+            <div>
+              {% if alumno.informacionEscolar %}
+                $ {{ alumno.informacionEscolar.precio_final|default:"0.00" }}
+              {% else %}—{% endif %}
+            </div>
+          </div>
+
+          <div class="col-sm-4 mb-2">
+            <div class="text-muted small">Meses del programa</div>
+            <div>
+              {% if alumno.informacionEscolar %}
+                {{ alumno.informacionEscolar.meses_programa|default:"—" }}
+              {% else %}—{% endif %}
+            </div>
+          </div>
+
+          <!-- Equivalencia y Titulación -->
+          <div class="col-sm-6 mb-2">
+            <div class="text-muted small">Precio de equivalencia</div>
+            <div>
+              {% if alumno.informacionEscolar %}
+                {% with pe=alumno.informacionEscolar.precio_equivalencia %}
+                  {% if pe and pe|stringformat:"s" != "-1.00" %}
+                    $ {{ pe }}
+                  {% else %}
+                    <span class="text-muted">No aplica</span>
+                  {% endif %}
+                {% endwith %}
+              {% else %}—{% endif %}
+            </div>
+          </div>
+
+          <div class="col-sm-6 mb-2">
+            <div class="text-muted small">Precio de titulación</div>
+            <div>
+              {% if alumno.informacionEscolar %}
+                $ {{ alumno.informacionEscolar.precio_titulacion|default:"0.00" }}
+              {% else %}—{% endif %}
+            </div>
+          </div>
+
+          <!-- Inicio y fin del programa -->
+          <div class="col-sm-6 mb-2">
+            <div class="text-muted small">Inicio del programa</div>
+            <div>
+              {% if alumno.informacionEscolar and alumno.informacionEscolar.inicio_programa %}
+                {{ alumno.informacionEscolar.inicio_programa|date:"d/m/Y" }}
+              {% else %}—{% endif %}
+            </div>
+          </div>
+
+          <div class="col-sm-6 mb-2">
+            <div class="text-muted small">Fin del programa</div>
+            <div>
+              {% if alumno.informacionEscolar and alumno.informacionEscolar.fin_programa %}
+                {{ alumno.informacionEscolar.fin_programa|date:"d/m/Y" }}
+              {% else %}—{% endif %}
+            </div>
+          </div>
+
+          <!-- NUEVO: ¿Requiere datos de facturación? -->
+          <div class="col-sm-12 mb-2">
+            <div class="text-muted small">¿Requiere datos de facturación?</div>
+            <div>
+              {% if alumno.informacionEscolar %}
+                {% if alumno.informacionEscolar.requiere_datos_de_facturacion %}
+                  <span class="badge badge-danger">Sí</span>
+                {% else %}
+                  <span class="badge badge-success">No</span>
+                {% endif %}
+              {% else %}—{% endif %}
+            </div>
+          </div>
+          <!-- /NUEVO -->
+
+        </div>
+      </div>
+    </div> <!-- /row detalles -->
 
   </div>
 </div>
 
-{# Si después quieres reactivar la parte de cargos/pagos, conviértelo a cards o acordeón MD aquí. #}
+<!-- ===================== PAGOS DEL ALUMNO ===================== -->
+<div class="card mt-4">
+  <div class="card-header card-header-primary card-header-icon">
+    <div class="card-icon"><i class="material-icons">receipt_long</i></div>
+    <h4 class="card-title">Pagos del alumno (DIARIO)</h4>
+    <p class="card-category">
+      Total registros: <strong>{{ pagos|length }}</strong>
+      &nbsp;•&nbsp; Suma de montos: <strong>$ {{ pagos_total }} </strong>
+    </p>
+  </div>
+
+  <div class="card-body">
+    <div class="d-flex justify-content-between mb-2">
+      <div class="small text-muted">
+        Los pagos se importan desde el Excel “DIARIO”. Si alguno falta, verifica la importación.
+      </div>
+
+      {% if request.user.is_superuser %}
+      <div>
+        <a class="btn btn-outline-secondary btn-sm" href="/admin/alumnos/pagodiario/?alumno__id__exact={{ alumno.id }}" target="_blank">
+          Ver en Admin
+        </a>
+      </div>
+      {% endif %}
+    </div>
+
+    <div class="table-responsive">
+      <table id="tabla-pagos" class="table table-striped table-hover" width="100%">
+        <thead>
+          <tr>
+            <th>Fecha</th>
+            <th>Folio</th>
+            <th>Monto</th>
+            <th>Concepto</th>
+            <th>Detalle</th>
+            <th>Programa</th>
+            <th>Forma</th>
+            <th>Sede</th>
+            <th>CURP</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in pagos %}
+          <tr>
+            <td>{% if p.fecha %}{{ p.fecha|date:"d/m/Y" }}{% else %}—{% endif %}</td>
+            <td>{{ p.folio|default:"—" }}</td>
+            <td>{% if p.monto != None %}$ {{ p.monto }}{% else %}—{% endif %}</td>
+            <td>{{ p.concepto|default:"—" }}</td>
+            <td>{{ p.pago_detalle|default:"—" }}</td>
+            <td>{{ p.programa|default:"—" }}</td>
+            <td>{{ p.forma_pago|default:"—" }}</td>
+            <td>{{ p.sede|default:"—" }}</td>
+            <td>{{ p.curp|default:"—" }}</td>
+            <td class="text-right">
+              <a href="/admin/alumnos/pagodiario/{{ p.pk }}/change/" class="btn btn-link text-info btn-just-icon like" title="Ver/Editar (admin)">
+                <i class="material-icons">visibility</i>
+              </a>
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="10" class="text-center text-muted py-4">Este alumno no tiene pagos registrados.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+  $(function(){
+    $('#tabla-pagos').DataTable({
+      language: { url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/es-ES.json' },
+      order: [[0, 'desc']],
+      pageLength: 10,
+      autoWidth: false,
+      scrollX: true
+    });
+  });
+</script>
 
 {% endblock %}

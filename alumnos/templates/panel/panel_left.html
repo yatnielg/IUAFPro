@@ -19,7 +19,7 @@
                 {% if user.cliente and not user.cliente.first_name == None %}
                   {{ user.cliente.first_name }} {{ user.cliente.last_name }}
                 {% else %}
-                  {{ request.user }} 
+                <span class="small"> {{ request.user }} </span>
                 {% endif %}
                 <b class="caret"></b>
               </span>
@@ -82,8 +82,8 @@
             </a>
           </li>
 
-            <li class="nav-item {% if  request.resolver_match.url_name == 'all_orders'  %} active {% endif %}">
-            <a class="nav-link" href="">
+            <li class="nav-item {% if  request.resolver_match.url_name == 'pagos_diario_lista'  %} active {% endif %}">
+            <a class="nav-link" href="{% url 'pagos_diario_lista' %}">
               <i class="material-icons">payment</i>
               <p> Pagos </p>
             </a>

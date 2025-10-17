@@ -4,10 +4,57 @@ from django.conf import settings
 
 from decimal import Decimal
 from django.core.validators import MinValueValidator
+from django.utils import timezone
 
 # Create your models here.
+class UserProfile(models.Model):
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="profile")
+    sedes = models.ManyToManyField("Sede", blank=True)  # sedes a las que el usuario está asignado
+
+    # flags de alcance global
+    puede_ver_todo = models.BooleanField(default=False)
+    puede_editar_todo = models.BooleanField(default=False)  # si esto es True, ya implica ver_todo
+
+    def __str__(self):
+        return f"Perfil de {self.user}"
+####################################################################################################
+from django.core.validators import MinValueValidator, MaxValueValidator
+from django.db import models
+
 class Financiamiento(models.Model):
-    beca = models.CharField("Beca",max_length=120,blank=True,help_text="Ej.: Beca Académica, Beca 50%, Convenio, etc.")
+    TIPO_DESCUENTO = [
+        ("ninguno", "Sin descuento"),
+        ("porcentaje", "Porcentaje"),
+        ("monto", "Monto fijo"),
+    ]
+
+    beca = models.CharField(
+        "Beca",
+        max_length=120,
+        blank=True,
+        help_text="Ej.: Beca Académica, Beca 50%, Convenio, etc."
+    )
+    tipo_descuento = models.CharField(
+        "Tipo de descuento",
+        max_length=20,
+        choices=TIPO_DESCUENTO,
+        default="ninguno",
+        help_text="Selecciona si el descuento es porcentual o de monto fijo."
+    )
+    porcentaje_descuento = models.DecimalField(
+        "Porcentaje de descuento",
+        max_digits=5, decimal_places=2,
+        null=True, blank=True,
+        validators=[MinValueValidator(Decimal("0")), MaxValueValidator(Decimal("100"))],
+        help_text="Solo si el tipo es 'Porcentaje'. Ej.: 15.5 = 15.5%."
+    )
+    monto_descuento = models.DecimalField(
+        "Monto fijo a descontar",
+        max_digits=12, decimal_places=2,
+        null=True, blank=True,
+        validators=[MinValueValidator(Decimal("0.00"))],
+        help_text="Solo si el tipo es 'Monto fijo'. Ej.: 1500.00"
+    )
 
     class Meta:
         verbose_name = "Financiamiento"
@@ -15,7 +62,51 @@ class Financiamiento(models.Model):
         ordering = ["id"]
 
     def __str__(self):
+        if self.tipo_descuento == "porcentaje" and self.porcentaje_descuento is not None:
+            return f"{self.beca or 'Sin nombre'} — {self.porcentaje_descuento}%"
+        if self.tipo_descuento == "monto" and self.monto_descuento is not None:
+            return f"{self.beca or 'Sin nombre'} — ${self.monto_descuento}"
         return self.beca or "Sin nombre"
+
+    def clean(self):
+        """
+        Valida coherencia entre tipo_descuento y los campos de valor.
+        """
+        from django.core.exceptions import ValidationError
+
+        if self.tipo_descuento == "porcentaje":
+            if self.porcentaje_descuento is None:
+                raise ValidationError({"porcentaje_descuento": "Requerido cuando el tipo es 'Porcentaje'."})
+            # anula monto si quedó cargado
+            if self.monto_descuento not in (None, Decimal("0"), 0):
+                raise ValidationError({"monto_descuento": "No debe establecerse cuando el tipo es 'Porcentaje'."})
+
+        elif self.tipo_descuento == "monto":
+            if self.monto_descuento is None:
+                raise ValidationError({"monto_descuento": "Requerido cuando el tipo es 'Monto fijo'."})
+            # anula porcentaje si quedó cargado
+            if self.porcentaje_descuento not in (None, Decimal("0"), 0):
+                raise ValidationError({"porcentaje_descuento": "No debe establecerse cuando el tipo es 'Monto fijo'."})
+
+        else:  # ninguno
+            if (self.porcentaje_descuento not in (None, Decimal("0"), 0)) or \
+               (self.monto_descuento not in (None, Decimal("0"), 0)):
+                raise ValidationError("Si el tipo es 'Sin descuento', no establezcas porcentaje ni monto.")
+
+    def calcular_descuento(self, base: Decimal) -> Decimal:
+        """
+        Devuelve el monto a descontar dado un precio base.
+        - porcentaje: base * (porcentaje/100)
+        - monto: el monto fijo
+        - ninguno: 0
+        """
+        base = base or Decimal("0")
+        if self.tipo_descuento == "porcentaje" and self.porcentaje_descuento:
+            return (base * (self.porcentaje_descuento / Decimal("100"))).quantize(Decimal("0.01"))
+        if self.tipo_descuento == "monto" and self.monto_descuento:
+            return Decimal(self.monto_descuento).quantize(Decimal("0.01"))
+        return Decimal("0.00")
+
 
 
 
@@ -103,6 +194,23 @@ class InformacionEscolar(models.Model):
         ("presencial", "Presencial"),
     ]
 
+    ESTATUS_OPCIONES_academico = [
+        ("VIGENTE", "VIGENTE"),
+        ("EGRESADO", "EGRESADO"),
+        ("BAJA TEMPORAL", "BAJA TEMPORAL"),
+        ("BAJA DEFINITIVA", "BAJA DEFINITIVA"),
+        ("EN TITULACIÓN", "EN TITULACIÓN"),
+
+        
+    ]
+
+    ESTATUS_OPCIONES_administrativo = [
+        ("VIGENTE", "VIGENTE"),
+        ("EGRESADO", "EGRESADO"),
+        ("BAJA TEMPORAL", "BAJA TEMPORAL"),
+        ("BAJA DEFINITIVA", "BAJA DEFINITIVA"),        
+    ]
+
     programa = models.ForeignKey(Programa, on_delete=models.PROTECT,related_name='programa', null=True, blank=True)
     financiamiento = models.ForeignKey(Financiamiento,on_delete=models.SET_NULL, null=True,blank=True,related_name="alumnos",verbose_name="Financiamiento")
     precio_colegiatura = models.DecimalField("Precio colegiatura", max_digits=12, decimal_places=2)
@@ -114,20 +222,18 @@ class InformacionEscolar(models.Model):
     numero_reinscripciones = models.PositiveIntegerField("No. de reinscripciones", default=0)
     sede = models.ForeignKey("Sede", on_delete=models.SET_NULL, null=True, blank=True, related_name="alumnos")    
     precio_final = models.DecimalField("Precio Final", max_digits=12, decimal_places=2, null=True, blank=True)
+    inicio_programa = models.DateField("Inicio del programa", null=True, blank=True)
     fin_programa = models.DateField("Fin del programa", null=True, blank=True)
-
+    requiere_datos_de_facturacion = models.BooleanField("¿Requiere datos de facturación?", default=False)
     creado_en = models.DateTimeField(auto_now_add=True)
     actualizado_en = models.DateTimeField(auto_now=True)
-
-    from django.utils import timezone
-
     fecha_alta = models.DateTimeField(null=True, blank=True, help_text="Fecha en que el alumno se dio de alta en el sistema")
-
     grupo = models.CharField("Grupo", max_length=50, blank=True, null= True)
     modalidad = models.CharField("Modalidad",max_length=15,choices=MODALIDAD_OPCIONES,default="en_linea")
     matricula = models.CharField("Matrícula",max_length=64, null=True, blank= True)
-    estatus_academico = models.CharField("Estatus académico", max_length=60, blank=True)
-    estatus_administrativo = models.CharField("Estatus administrativo", max_length=60, blank=True)
+    # CAMBIA estos dos: ahora son selects con choices
+    estatus_academico = models.CharField("Estatus académico",max_length=20,choices=ESTATUS_OPCIONES_academico,blank=True,default="vigente")# deja en blanco si quieres
+    estatus_administrativo = models.CharField("Estatus administrativo",max_length=20,choices=ESTATUS_OPCIONES_administrativo,blank=True,default="vigente")
 
     class Meta:
         verbose_name = "Informacion Escolar"
@@ -137,9 +243,24 @@ class InformacionEscolar(models.Model):
     def __str__(self):
         return f"Plan {self.programa} · fin {self.fin_programa}"
 
+
+
     def save(self, *args, **kwargs):
+        # Descuento del financiamiento (si hay)
+        desc_fin = Decimal("0.00")
+        if self.financiamiento_id:
+            try:
+                desc_fin = self.financiamiento.calcular_descuento(self.precio_colegiatura or Decimal("0"))
+            except Exception:
+                desc_fin = Decimal("0.00")
+
+        # Tu campo existente 'monto_descuento' (por si además aplicas otro descuento manual)
+        desc_manual = self.monto_descuento or Decimal("0.00")
+
         if self.precio_final is None:
-            self.precio_final = (self.precio_colegiatura or Decimal("0")) - (self.monto_descuento or Decimal("0"))
+            bruto = (self.precio_colegiatura or Decimal("0")) - desc_fin - desc_manual
+            self.precio_final = max(bruto, Decimal("0.00")).quantize(Decimal("0.01"))
+
         super().save(*args, **kwargs)
 
     @property
@@ -148,6 +269,7 @@ class InformacionEscolar(models.Model):
 ############################################################################
 class Alumno(models.Model):
     from django.utils import timezone
+    from django.core.validators import RegexValidator
     SEXO_OPCIONES = [("Hombre","Hombre"),("Mujer","Mujer")]
 
 
@@ -158,7 +280,17 @@ class Alumno(models.Model):
     nombre = models.CharField('Nombre(s)',max_length=120)
     apellido_p = models.CharField("Apellido paterno", max_length=120, blank=True)
     apellido_m = models.CharField("Apellido materno", max_length=120, blank=True)
-    email = models.EmailField(blank=True)
+    email = models.EmailField("Correo electrónico personal",blank=True)
+    email_institucional = models.EmailField("Correo electrónico institucional",blank=True,
+        validators=[
+            # obliga a que, si se llena, termine en @iuaf.edu.mx
+            RegexValidator(
+                regex=r"^[^@\s]+@iuaf\.edu\.mx$",
+                message="El correo institucional debe ser @iuaf.edu.mx"
+            )
+        ],
+        help_text="Usa siempre el correo @iuaf.edu.mx para Classroom/Zoom."
+    )
     telefono = models.CharField(max_length=40, blank=True)    
     curp = models.CharField("CURP", max_length=18, null=True, blank=True)
 
@@ -201,6 +333,11 @@ class Alumno(models.Model):
 
     def __str__(self):
         return f"{self.numero_estudiante} - {self.nombre} {self.apellido_p}".strip()
+    
+    @property
+    def email_preferido(self):
+        """Regresa el institucional si existe; si no, el personal."""
+        return self.email_institucional or self.email
     
 
 
@@ -355,3 +492,44 @@ def crear_contenedor_documentos(sender, instance, created, **kwargs):
         DocumentosAlumno.objects.get_or_create(alumno=instance)
 
 ############################################################################################################
+class PagoDiario(models.Model):
+    folio = models.CharField(max_length=32, null=True, blank=True, db_index=True)  # no único, puede venir vacío
+    sede = models.CharField(max_length=120, null=True, blank=True)
+    nombre = models.CharField(max_length=200, null=True, blank=True)
+
+    monto = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    grado = models.CharField(max_length=16, null=True, blank=True)
+    forma_pago = models.CharField(max_length=32, null=True, blank=True)
+    fecha = models.DateField(null=True, blank=True)
+
+    concepto = models.CharField(max_length=120, null=True, blank=True)
+    pago_detalle = models.CharField(max_length=200, null=True, blank=True)
+    programa = models.CharField(max_length=200, null=True, blank=True)
+
+    no_auto = models.CharField(max_length=64, null=True, blank=True)
+    curp = models.CharField(max_length=24, null=True, blank=True)
+    numero_alumno = models.IntegerField(null=True, blank=True)  # opcional: conservar valor crudo
+    emision = models.CharField(max_length=64, null=True, blank=True)
+
+    alumno = models.ForeignKey(Alumno, null=True, blank=True, on_delete=models.SET_NULL, related_name="pagos_diario")
+
+    creado_en = models.DateTimeField(auto_now_add=True)
+    actualizado_en = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-fecha"]
+        indexes = [
+            models.Index(fields=["folio"]),
+            models.Index(fields=["fecha"]),
+            models.Index(fields=["curp"]),
+        ]
+
+    def __str__(self):
+        return f"PagoDiario folio={self.folio or '-'} fecha={self.fecha or '-'} monto={self.monto or '-'}"
+############################################################################################################
+class ContadorAlumno(models.Model):
+    llave = models.CharField(max_length=32, unique=True, default="global")
+    ultimo_numero = models.BigIntegerField(default=0)
+
+    def __str__(self):
+        return f"{self.llave} -> {self.ultimo_numero}"

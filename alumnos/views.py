@@ -1,18 +1,20 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.urls import reverse
 from django import forms
-from .models import Alumno, DocumentosAlumno
+from .models import Alumno, DocumentosAlumno, Programa
 from django.contrib.auth.models import User, Group
 
 from django.contrib import messages
 from django.contrib.auth.models import User
 from django.contrib.auth import password_validation
 from django.core.exceptions import ValidationError
+from .models import Financiamiento
 
 from django.utils import timezone
+from django.http import JsonResponse, Http404
 from datetime import date
 
-from .forms import DocumentosAlumnoForm
+from .forms import DocumentosAlumnoForm, InformacionEscolarForm
 
 from django.db.models import Q
 from .models import  Pais, Estado
@@ -27,38 +29,85 @@ from .forms import AlumnoForm
 
 def admin_required(view_func):
     return user_passes_test(lambda u: u.is_active and u.is_staff)(view_func)
+################################################################################
+from .utils import siguiente_numero_estudiante
 
 @admin_required
 def alumnos_crear(request):
     if request.method == "POST":
-        form = AlumnoForm(request.POST)
+        form = AlumnoForm(request.POST, crear=True)
         if form.is_valid():
-            alumno = form.save()
+            alumno = form.save(commit=False)
+            alumno.numero_estudiante = siguiente_numero_estudiante()  # <- AQUÍ
+            alumno.save()
             messages.success(request, "Alumno creado correctamente.")
             return redirect("alumnos_detalle", pk=alumno.pk)
     else:
-        form = AlumnoForm()
+        form = AlumnoForm(crear=True)
+
     return render(request, "alumnos/editar_alumno.html", {
         "form": form,
         "alumno": None,
         "modo": "crear",
+        # opcional: una vista previa NO reservada
+        # "preview_numero": (ContadorAlumno.objects.first().ultimo_numero + 1) if ContadorAlumno.objects.exists() else 1,
     })
+####################################################################################
+# views.py (o donde tengas alumnos_editar)
+from django.db.models import Sum
+from alumnos.models import Alumno, PagoDiario
 
 @admin_required
 def alumnos_editar(request, pk):
-    alumno = get_object_or_404(Alumno, pk=pk)  # pk = numero_estudiante
+    from django.http import HttpResponseForbidden
+    from alumnos.permisos import user_can_edit_alumno
+    alumno = get_object_or_404(Alumno, pk=pk)
+    if not user_can_edit_alumno(request.user, alumno):
+        return HttpResponseForbidden("No tienes permiso para editar este alumno.")
+
+    plan_instance = alumno.informacionEscolar
+
+    from .models import DocumentosAlumno
+    docs_instance, _ = DocumentosAlumno.objects.get_or_create(alumno=alumno)
+
+    # NUEVO: pagos del alumno
+    pagos_qs = PagoDiario.objects.filter(alumno=alumno).order_by('-fecha', '-id')
+    pagos_total = pagos_qs.aggregate(total=Sum('monto'))['total'] or 0
+
     if request.method == "POST":
         form = AlumnoForm(request.POST, instance=alumno)
-        if form.is_valid():
-            form.save()
-            messages.success(request, "Alumno actualizado correctamente.")
+        form_info = InformacionEscolarForm(
+            request.POST,
+            instance=plan_instance,
+            readonly_prices=True,   # <- bloque “Precios y reinscripciones” solo lectura
+        )
+        docs_form = DocumentosAlumnoForm(request.POST, request.FILES, instance=docs_instance)
+
+        if form.is_valid() and form_info.is_valid() and docs_form.is_valid():
+            alumno = form.save()
+            plan = form_info.save()          # crea o actualiza el plan
+            if not alumno.informacionEscolar_id:
+                alumno.informacionEscolar = plan
+                alumno.save(update_fields=["informacionEscolar"])
+            docs_form.save()
+            messages.success(request, "Alumno, plan y documentos actualizados.")
             return redirect("alumnos_detalle", pk=alumno.pk)
     else:
         form = AlumnoForm(instance=alumno)
+        form_info = InformacionEscolarForm(
+            instance=plan_instance,
+            readonly_prices=True,   # <- también en GET para que salgan deshabilitados en la UI
+        )
+        docs_form = DocumentosAlumnoForm(instance=docs_instance)
+
     return render(request, "alumnos/editar_alumno.html", {
         "form": form,
+        "form_info": form_info,
+        "docs_form": docs_form,
         "alumno": alumno,
         "modo": "editar",
+        "pagos": pagos_qs,
+        "pagos_total": pagos_total,
     })
 
 ####################################################################
@@ -83,11 +132,63 @@ from django.shortcuts import render
 from datetime import date, timedelta
 import json
 from math import ceil
+from .models import UserProfile
 
+
+def _filtrar_por_permisos_sede(qs, user):
+    """
+    Filtra el queryset de alumnos según los permisos de sede del usuario.
+    - superuser => ve todo
+    - si tiene sedes asignadas => ve sólo esas sedes
+    - puede_ver_todo / puede_editar_todo => no limita por rol, pero sí por sedes asignadas
+    - sin perfil o sin sedes => no ve nada
+    """
+    if not user.is_authenticated:
+        return qs.none()
+
+    if user.is_superuser:
+        return qs  # acceso total
+
+    try:
+        profile = user.profile
+    except UserProfile.DoesNotExist:
+        return qs.none()
+
+    # SedES asignadas al usuario
+    sedes_ids = list(profile.sedes.values_list("id", flat=True))
+
+    if not sedes_ids:
+        # si no tiene sedes asignadas, no puede ver nada
+        return qs.none()
+
+    # Aquí definimos el filtro de base: sólo las sedes asignadas
+    filtro = Q(informacionEscolar__sede_id__in=sedes_ids)
+
+    # Si tiene editar/ver todo, no filtramos más por "alcance total del sistema",
+    # solo le permitimos trabajar libremente dentro de sus sedes.
+    return qs.filter(filtro)
+
+###############################################################
 @login_required
-def estudiantes(request):    
+def estudiantes(request):
     q = request.GET.get("q", "").strip()
-    qs = Alumno.objects.all()
+
+    qs_base = (
+        Alumno.objects.all()
+        .select_related(
+            "pais",
+            "estado",
+            "informacionEscolar",
+            "informacionEscolar__programa",
+            "informacionEscolar__sede",
+            "user",
+            "documentos",
+        )
+    )
+
+    # Filtramos por las sedes que el usuario puede ver
+    qs = _filtrar_por_permisos_sede(qs_base, request.user)
+
     if q:
         qs = qs.filter(
             Q(numero_estudiante__icontains=q) |
@@ -97,7 +198,10 @@ def estudiantes(request):
             Q(email__icontains=q) |
             Q(curp__icontains=q)
         )
+
     return render(request, "panel/all_orders.html", {"alumnos": qs, "q": q})
+
+###############################################################
   
 @login_required   
 def principal(request):
@@ -220,10 +324,40 @@ def alumnos_lista(request):
     return render(request, "alumnos/lista.html", {"alumnos": qs, "q": q})
 
 ###############################################################
-@login_required   
+@login_required
 def alumnos_detalle(request, pk):
-    alumno = get_object_or_404(Alumno, pk=pk)
-    return render(request, "alumnos/detalle.html", {"alumno": alumno})
+    alumno = (
+        Alumno.objects
+        .select_related(
+            "pais",
+            "estado",
+            "informacionEscolar",
+            "informacionEscolar__programa",
+            "informacionEscolar__sede",
+        )
+        .get(pk=pk)
+    )
+
+    pagos = (
+        PagoDiario.objects
+        .filter(alumno=alumno)
+        .order_by("-fecha", "-id")
+    )
+    pagos_total = pagos.aggregate(total=Sum("monto"))["total"] or 0
+
+    pagos_total = round(pagos_total, 2)
+    
+
+    return render(
+        request,
+        "alumnos/detalle.html",
+        {
+            "alumno": alumno,
+            "pagos": pagos,
+            "pagos_total": pagos_total,
+        },
+    )
+
 
 ###############################################################
 @login_required   
@@ -336,6 +470,125 @@ def documentos_alumno_editar(request, numero_estudiante):
             form.save()
             messages.success(request, "Documentos actualizados.")
             return redirect("alumnos_detalle", alumno.pk)  # ajusta el nombre de tu url
+    else:
+        form = DocumentosAlumnoForm(instance=docs)
+
+    return render(request, "alumnos/documentos_form.html", {
+        "alumno": alumno,
+        "form": form,
+    })
+###########################################################################################################
+from django.utils.decorators import method_decorator
+from django.views.generic import ListView
+from .models import PagoDiario
+
+@method_decorator(login_required, name="dispatch")
+class PagoDiarioListView(ListView):
+    model = PagoDiario
+    template_name = "alumnos/pagos_diario_list.html"
+    context_object_name = "pagos"
+    paginate_by = None  # DataTables pagina en el cliente
+
+    def get_queryset(self):
+        # Base
+        qs = (
+            PagoDiario.objects
+            .select_related("alumno")
+            .order_by("-fecha", "-id")
+        )
+
+        user = self.request.user
+
+        # --- Filtro por permisos de sede, inline (sin helper) ---
+        if not user.is_authenticated:
+            return qs.none()
+
+        if not user.is_superuser:
+            try:
+                profile = user.profile
+            except UserProfile.DoesNotExist:
+                return qs.none()
+
+            sedes_ids = list(profile.sedes.values_list("id", flat=True))
+            if not sedes_ids:
+                return qs.none()
+
+            # Filtra por la sede del plan del alumno
+            filtro = Q(alumno__informacionEscolar__sede_id__in=sedes_ids)
+
+            # (Opcional) si tienes pagos sin alumno pero con 'sede' (texto) y quieres incluirlos:
+            # sede_nombres = list(profile.sedes.values_list("nombre", flat=True))
+            # filtro |= Q(sede__in=sede_nombres)
+
+            qs = qs.filter(filtro)
+
+        # --- Búsqueda opcional por ?q= ---
+        q = self.request.GET.get("q", "").strip()
+        if q:
+            qs = qs.filter(
+                Q(alumno__numero_estudiante__icontains=q) |
+                Q(alumno__nombre__icontains=q) |
+                Q(alumno__apellido_p__icontains=q) |
+                Q(alumno__apellido_m__icontains=q) |
+                Q(curp__icontains=q) |
+                Q(folio__icontains=q) |
+                Q(concepto__icontains=q) |
+                Q(programa__icontains=q)
+            )
+
+        return qs
+############################################################################################################
+
+@login_required
+def programa_info(request, pk):
+    """Devuelve los valores por defecto del programa elegido."""
+    try:
+        p = Programa.objects.get(pk=pk)
+    except Programa.DoesNotExist:
+        return JsonResponse({"error": "Programa no encontrado"}, status=404)
+
+    data = {
+        "meses_programa": p.meses_programa,
+        "precio_colegiatura": str(p.colegiatura),
+        "precio_inscripcion": str(p.inscripcion),
+        "precio_titulacion": str(p.titulacion),
+        "precio_equivalencia": str(p.equivalencia),
+        "numero_reinscripciones": 0,  # si tienes un valor base, cámbialo
+    }
+    return JsonResponse(data)    
+###############################################################
+@admin_required
+def api_financiamiento(request, pk):
+    try:
+        f = Financiamiento.objects.get(pk=pk)
+    except Financiamiento.DoesNotExist:
+        raise Http404("Financiamiento no encontrado")
+
+    data = {
+        "id": f.id,
+        "tipo": getattr(f, "tipo_descuento", None),                # "porcentaje" | "monto"
+        "porcentaje": float(getattr(f, "porcentaje_descuento", 0) or 0),
+        "monto": float(getattr(f, "monto_descuento", 0) or 0),
+    }
+    return JsonResponse(data)
+
+
+###########################################################################
+@login_required
+def alumnos_documentos_editar(request, pk):
+    alumno = get_object_or_404(Alumno, pk=pk)
+    # crea si no existe
+    docs, _ = DocumentosAlumno.objects.get_or_create(alumno=alumno)
+
+    if request.method == "POST":
+        form = DocumentosAlumnoForm(request.POST, request.FILES, instance=docs)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Documentos actualizados correctamente.")
+            # redirige a donde prefieras (detalle del alumno, o quedarse aquí)
+            return redirect("alumnos_documentos_editar", pk=alumno.pk)
+        else:
+            messages.error(request, "Revisa los errores del formulario.")
     else:
         form = DocumentosAlumnoForm(instance=docs)
 

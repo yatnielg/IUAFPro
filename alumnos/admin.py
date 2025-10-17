@@ -14,7 +14,13 @@ from .models import (
     ConceptoPago, Cargo, Pago,
     Sede,
     DocumentosAlumno,
+    PagoDiario,
+    UserProfile,
 )
+
+admin.site.site_header = "Sistema IUAFPro"
+admin.site.site_title  = "IUAFPro — Admin"
+admin.site.index_title = "Panel de administración"
 
 # ========= util: acción para exportar CSV =========
 def exportar_csv(modeladmin, request, queryset):
@@ -117,11 +123,60 @@ class SedeAdmin(admin.ModelAdmin):
 
 
 # ========= PROGRAMAS / FINANCIAMIENTO =========
+from django import forms
+class FinanciamientoForm(forms.ModelForm):
+    class Meta:
+        model = Financiamiento
+        fields = "__all__"
+
+    def clean(self):
+        """
+        Opcional: además de la validación del modelo, ‘limpia’ el campo
+        que no aplica según tipo_descuento para que quede bonito en BD.
+        """
+        cleaned = super().clean()
+        tipo = cleaned.get("tipo_descuento")
+
+        if tipo == "porcentaje":
+            # Si es porcentaje, asegúrate de vaciar monto
+            cleaned["monto_descuento"] = None
+        elif tipo == "monto":
+            # Si es monto, vacía porcentaje
+            cleaned["porcentaje_descuento"] = None
+        else:  # ninguno
+            cleaned["monto_descuento"] = None
+            cleaned["porcentaje_descuento"] = None
+
+        return cleaned
+
+
+
 @admin.register(Financiamiento)
 class FinanciamientoAdmin(admin.ModelAdmin):
-    list_display = ("beca",)
+    form = FinanciamientoForm
+
+    list_display = (
+        "beca",
+        "tipo_descuento",
+        "porcentaje_descuento",
+        "monto_descuento",
+    )
+    list_filter = ("tipo_descuento",)
     search_fields = ("beca",)
-    actions = [exportar_csv]
+
+    fieldsets = (
+        (None, {
+            "fields": ("beca", "tipo_descuento")
+        }),
+        ("Valores de descuento", {
+            "fields": ("porcentaje_descuento", "monto_descuento"),
+            "description": "Completa SOLO el campo que corresponda al tipo de descuento."
+        }),
+    )
+
+    # Incluye un JS simple para mostrar/ocultar campos según el tipo:
+    class Media:
+        js = ("admin/financiamiento_toggle.js",)
 
 
 @admin.register(Programa)
@@ -197,6 +252,7 @@ class AlumnoAdmin(admin.ModelAdmin):
         "numero_estudiante", "nombre_completo",
         "curp", "sexo",
         "pais", "estado",
+        "email_institucional", "email_preferido",
         "email", "telefono",
         "programa_display", "sede_display",
         "creado_en",
@@ -204,7 +260,7 @@ class AlumnoAdmin(admin.ModelAdmin):
     list_filter = ("sexo", "pais", "estado")
     search_fields = (
         "numero_estudiante", "nombre", "apellido_p", "apellido_m",
-        "curp", "email", "telefono",
+        "curp", "email", "telefono","email_institucional",
         "informacionEscolar__programa__codigo",
         "informacionEscolar__programa__nombre",
         "informacionEscolar__sede__nombre",
@@ -296,3 +352,242 @@ class DocumentosAlumnoAdmin(admin.ModelAdmin):
                 parts.append(f"<span style='padding:2px 6px;border-radius:8px;background:#e6f4ea;margin-right:4px'>{label}</span>")
         return format_html("".join(parts) or "—")
     vista_rapida.short_description = "Documentos subidos"
+
+
+#########################################################################################
+
+
+class AsociadoFilter(admin.SimpleListFilter):
+    title = "¿Asociado a alumno?"
+    parameter_name = "asociado"
+
+    def lookups(self, request, model_admin):
+        return (
+            ("si", "Sí"),
+            ("no", "No"),
+        )
+
+    def queryset(self, request, queryset):
+        if self.value() == "si":
+            return queryset.filter(alumno__isnull=False)
+        if self.value() == "no":
+            return queryset.filter(alumno__isnull=True)
+        return queryset
+
+
+
+
+
+def borrar_todos_pagos(modeladmin, request, queryset):
+    """
+    ⚠️ Elimina TODOS los registros de PagoDiario, ignorando la selección.
+    Usa con precaución.
+    """
+    if not request.user.is_superuser:
+        messages.error(request, "Solo un superusuario puede ejecutar esta acción.")
+        return
+
+    try:
+        with transaction.atomic():
+            total = PagoDiario.objects.all().delete()
+        messages.success(request, f"Se eliminaron todos los registros de PagoDiario ({total[0]} filas).")
+    except Exception as e:
+        messages.error(request, f"Error al eliminar: {e}")
+
+borrar_todos_pagos.short_description = "🧨 BORRAR TODOS los registros de PagoDiario"
+
+@admin.register(PagoDiario)
+class PagoDiarioAdmin(admin.ModelAdmin):
+    date_hierarchy = "fecha"
+    ordering = ("-fecha", "-id")
+
+    list_display = (
+        "folio", "fecha", "monto", "concepto", "pago_detalle",
+        "programa", "sede", "forma_pago", "curp",
+        "numero_alumno", "alumno_link",
+        "emision",
+    )
+    list_select_related = ("alumno",)
+
+    search_fields = (
+        "folio", "nombre", "curp", "programa", "concepto", "pago_detalle",
+        "sede", "no_auto",
+        "numero_alumno",
+        "alumno__numero_estudiante", "alumno__nombre", "alumno__apellido_p", "alumno__apellido_m",
+    )
+    list_filter = (
+        AsociadoFilter,
+        "sede",
+        "programa",
+        "concepto",
+        "forma_pago",
+        "emision",
+        ("fecha", admin.DateFieldListFilter),
+    )
+
+    readonly_fields = ("creado_en", "actualizado_en")
+    fields = (
+        "folio", "fecha", "monto", "forma_pago",
+        "concepto", "pago_detalle", "programa",
+        "sede", "no_auto", "curp", "numero_alumno",
+        "nombre", "emision",
+        "alumno",
+        "creado_en", "actualizado_en",
+    )
+
+    raw_id_fields = ("alumno",)
+
+    actions = ("asociar_por_numero_alumno", "desasociar_alumno", borrar_todos_pagos)
+    #actions = ("asociar_por_numero_alumno", "desasociar_alumno")
+
+
+    def alumno_link(self, obj):
+        if not obj.alumno:
+            return "—"
+        return f"{obj.alumno.numero_estudiante} — {obj.alumno.nombre}"
+    alumno_link.short_description = "Alumno"
+
+    # --- ACCIONES ---
+
+    def asociar_por_numero_alumno(self, request, queryset):
+        """
+        Si la fila tiene numero_alumno y existe un Alumno con ese pk,
+        se asocia. No pisa asociaciones existentes.
+        """
+        asociados = 0
+        no_encontrado = 0
+        ya_asociado = 0
+        for pago in queryset:
+            if pago.alumno_id:
+                ya_asociado += 1
+                continue
+            num = pago.numero_alumno
+            if not num:
+                no_encontrado += 1
+                continue
+            alumno = Alumno.objects.filter(pk=num).first()
+            if alumno:
+                pago.alumno = alumno
+                pago.save(update_fields=["alumno"])
+                asociados += 1
+            else:
+                no_encontrado += 1
+        self.message_user(
+            request,
+            f"Asociados: {asociados} | Ya asociados: {ya_asociado} | Sin alumno/No encontrado: {no_encontrado}"
+        )
+    asociar_por_numero_alumno.short_description = "Asociar por 'No.Alumno' (si existe)"
+
+    def desasociar_alumno(self, request, queryset):
+        rows = queryset.update(alumno=None)
+        self.message_user(request, f"Desasociados {rows} pagos.")
+    desasociar_alumno.short_description = "Desasociar alumno"
+
+
+# (Opcional) Ver pagos desde el admin de Alumno como inline
+class PagoDiarioInline(admin.TabularInline):
+    model = PagoDiario
+    extra = 0
+    fields = ("fecha", "monto", "concepto", "pago_detalle", "programa", "forma_pago", "folio")
+    readonly_fields = fields
+
+# En alumnos/admin.py puedes añadir:
+# from django.contrib import admin
+# from .models import Alumno
+# from pagos.admin import PagoDiarioInline
+#
+# @admin.register(Alumno)
+# class AlumnoAdmin(admin.ModelAdmin):
+#     inlines = [PagoDiarioInline]
+#     ...
+########################################################################
+# app/admin.py
+
+from django.contrib.auth import get_user_model
+from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
+
+#from .models import UserProfile
+
+@admin.register(UserProfile)
+class UserProfileAdmin(admin.ModelAdmin):
+    list_display = ("user", "puede_ver_todo", "puede_editar_todo", "sedes_list")
+    list_filter = ("puede_ver_todo", "puede_editar_todo", "sedes")
+    search_fields = ("user__username", "user__email", "user__first_name", "user__last_name")
+    filter_horizontal = ("sedes",)
+
+    @admin.display(description="Sedes")
+    def sedes_list(self, obj):
+        return ", ".join(obj.sedes.values_list("nombre", flat=True))
+
+# --------- OPCIONAL: editar el perfil desde el admin de Usuario ---------
+User = get_user_model()
+
+class UserProfileInline(admin.StackedInline):
+    model = UserProfile
+    can_delete = False
+    fk_name = "user"
+    filter_horizontal = ("sedes",)
+
+# Si el User ya está registrado por otra app, intenta reemplazarlo con inline
+try:
+    admin.site.unregister(User)
+except admin.sites.NotRegistered:
+    pass
+
+@admin.register(User)
+class UserAdmin(BaseUserAdmin):
+    inlines = [UserProfileInline]
+
+######################################################################################
+# admin.py
+
+
+from django.db.models import F
+from .models import ContadorAlumno
+
+@admin.register(ContadorAlumno)
+class ContadorAlumnoAdmin(admin.ModelAdmin):
+    list_display = ("llave", "ultimo_numero", "siguiente_numero")    
+    search_fields = ("llave",)
+    list_per_page = 25
+
+    # Solo lectura del ID por comodidad (si lo muestras en el form)
+    readonly_fields = ()
+
+    fieldsets = (
+        (None, {
+            "fields": ("llave", "ultimo_numero"),
+            "description": "Contador por llave. Usa las acciones para incrementar o resetear de forma segura."
+        }),
+    )
+
+    def siguiente_numero(self, obj):
+        return obj.ultimo_numero + 1
+    siguiente_numero.short_description = "Siguiente"
+
+    # ========== ACCIONES ==========
+    actions = ["incrementar_1", "incrementar_10", "resetear_a_cero"]
+
+    @admin.action(description="Incrementar +1 (atómico)")
+    def incrementar_1(self, request, queryset):
+        self._incrementar(request, queryset, step=1)
+
+    @admin.action(description="Incrementar +10 (atómico)")
+    def incrementar_10(self, request, queryset):
+        self._incrementar(request, queryset, step=10)
+
+    @admin.action(description="Resetear a 0 (atómico)")
+    def resetear_a_cero(self, request, queryset):
+        with transaction.atomic():
+            updated = queryset.update(ultimo_numero=0)
+        self.message_user(request, f"Se reseteó a 0 en {updated} contador(es).", level=messages.SUCCESS)
+
+    # Helper para incremento seguro
+    def _incrementar(self, request, queryset, step):
+        with transaction.atomic():
+            updated = 0
+            # Usamos F() para evitar condiciones de carrera
+            for obj in queryset:
+                ContadorAlumno.objects.filter(pk=obj.pk).update(ultimo_numero=F("ultimo_numero") + step)
+                updated += 1
+        self.message_user(request, f"Incrementados +{step} en {updated} contador(es).", level=messages.SUCCESS)

@@ -1,0 +1,161 @@
+{% extends "panel/grafico.html" %}
+{% load static %}
+
+{% block main_content %}
+
+<style>
+  /* ====== Estilos de imagen ====== */
+  .order-img {
+    width: 34px !important;
+    height: 34px !important;
+    object-fit: cover;
+    border-radius: 5px;
+    margin-right: 2px;
+    background: #f7f8fa;
+    transition: transform 0.2s;
+    cursor: pointer;
+  }
+  .order-img:hover {
+    transform: scale(2.5) translateX(5px);
+    z-index: 2;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+  }
+
+  /* ====== FIX Scroll Mouse ====== */
+  html, body {
+    height: 100% !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+  }
+
+  .main-panel, .content, .card-body {
+    overflow-y: visible !important;
+  }
+
+  /* Scroll horizontal para DataTables */
+  .dataTables_wrapper {
+    overflow-x: auto;
+    overflow-y: visible;
+  }
+
+  .table-responsive {
+    width: 100%;
+    overflow-x: auto !important;
+    overflow-y: visible !important;
+    -webkit-overflow-scrolling: touch;
+  }
+</style>
+
+<!-- ====== DataTables CSS/JS ====== -->
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
+<script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+
+<div class="content">
+  <div class="toolbar">
+    {% if request.user.is_staff %}
+      <a href="{% url 'pagos_diario_lista' %}" class="btn btn-primary btn-sm">
+        <i class="material-icons" style="vertical-align:middle">receipt_long</i>
+        Pagos de Diario
+      </a>
+    {% endif %}
+  </div>
+
+  <div class="container-fluid">
+    <div class="row">
+      <div class="col-md-12">
+
+        <div class="card">
+          <div class="card-header card-header-primary card-header-icon">
+            <div class="card-icon">
+              <i class="material-icons">assignment</i>
+            </div>
+            <h4 class="card-title">Pagos (DIARIO)</h4>
+          </div>
+
+          <div class="card-body">
+            <div class="material-datatables table-responsive">
+              <table id="pagos-table" class="table table-striped table-no-bordered table-hover" cellspacing="0" width="100%">
+                <thead>
+                  <tr>
+                    <th>Folio</th>
+                    <th>Fecha</th>
+                    <th>Nombre</th>
+                    <th>CURP</th>
+                    <th>Programa</th>
+                    <th>Concepto</th>
+                    <th>Detalle</th>
+                    <th>Monto</th>
+                    <th>Forma de pago</th>
+                    <th>Sede</th>
+                    <th>No.Alumno</th>
+                    <th>Alumno</th>
+                    <th class="disabled-sorting text-right">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for p in pagos %}
+                  <tr>
+                    <td>{{ p.folio|default:"—" }}</td>
+                    <td>{% if p.fecha %}{{ p.fecha|date:"d/m/Y" }}{% else %}—{% endif %}</td>
+                    <td>{{ p.nombre|default:"—" }}</td>
+                    <td>{{ p.curp|default:"—" }}</td>
+                    <td>{{ p.programa|default:"—" }}</td>
+                    <td>{{ p.concepto|default:"—" }}</td>
+                    <td>{{ p.pago_detalle|default:"—" }}</td>
+                    <td>
+                      {% if p.monto != None %}
+                        $ {{ p.monto }}
+                      {% else %}
+                        —
+                      {% endif %}
+                    </td>
+                    <td>{{ p.forma_pago|default:"—" }}</td>
+                    <td>{{ p.sede|default:"—" }}</td>
+                    <td>{{ p.numero_alumno|default:"—" }}</td>
+                    <td>
+                      {% if p.alumno_id %}
+                        <a href="{% url 'alumnos_detalle' p.alumno_id %}">
+                          {{ p.alumno.numero_estudiante }} — {{ p.alumno.nombre }}
+                        </a>
+                      {% else %}
+                        <span class="text-muted">—</span>
+                      {% endif %}
+                    </td>
+
+                    <td class="text-right">
+                      <a href="/admin/alumnos/pagodiario/{{ p.pk }}/change/" class="btn btn-link text-info btn-just-icon like" title="Ver/Editar (admin)">
+                        <i class="material-icons">visibility</i>
+                      </a>
+                    </td>
+                  </tr>
+                  {% empty %}
+                  <tr>
+                    <td colspan="13" class="text-center text-muted py-4">Sin resultados</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div> <!-- /table-responsive -->
+          </div> <!-- /card-body -->
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  $(document).ready(function() {
+    $('#pagos-table').DataTable({
+      language: { url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/es-ES.json' },
+      order: [[1, 'desc'], [0, 'desc']], // fecha desc, luego folio desc
+      pageLength: 10,
+      autoWidth: false,
+      scrollX: true,
+      scrollCollapse: true
+    });
+  });
+</script>
+
+{% endblock %}
