@@ -291,3 +291,5 @@ class Command(BaseCommand):
 
         except Exception as e:
             self.stderr.write(self.style.ERROR(f"Error leyendo el archivo: {e}"))
+
+

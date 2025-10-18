@@ -1,0 +1,4 @@
+<h2>¡Pago recibido!</h2>
+<p>Orden #{{ orden.pk }} — Monto: ${{ orden.amount }} {{ orden.currency }}</p>
+<p>Estado: {{ orden.status }}</p>
+<a href="{% url 'alumnos_detalle' pk=orden.alumno.pk %}">Volver al alumno</a>

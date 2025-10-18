@@ -14,6 +14,8 @@ class UserProfile(models.Model):
     # flags de alcance global
     puede_ver_todo = models.BooleanField(default=False)
     puede_editar_todo = models.BooleanField(default=False)  # si esto es True, ya implica ver_todo
+    # ver todos los pagos (ignora el recorte a 2 años)
+    ver_todos_los_pagos = models.BooleanField(default=False,help_text="Si está activo, el usuario verá todos los pagos (sin límite de años).")
 
     def __str__(self):
         return f"Perfil de {self.user}"
@@ -533,3 +535,87 @@ class ContadorAlumno(models.Model):
 
     def __str__(self):
         return f"{self.llave} -> {self.ultimo_numero}"
+
+#############################################################################################################
+class ClipCredential(models.Model):
+    """
+    Credenciales para integración con Clip.
+    Guarda tanto credenciales de sandbox como de producción.
+    Mantén solo UNA instancia activa por environment si así lo deseas.
+    """
+    name = models.CharField(max_length=60, help_text="Nombre descriptivo (ej. 'Clip Prod', 'Clip Sandbox')")
+    public_key = models.CharField(max_length=255, blank=True, null=True)
+    secret_key = models.TextField(blank=True, null=True, help_text="Secret key (API secret). Guardar con precaución.")
+    is_sandbox = models.BooleanField(default=True)
+    active = models.BooleanField(default=False, help_text="Si está activa, será la usada por defecto en helpers.")
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-updated_at",)
+        verbose_name = "Credencial Clip"
+        verbose_name_plural = "Credenciales Clip"
+
+    def __str__(self):
+        env = "SANDBOX" if self.is_sandbox else "PROD"
+        return f"{self.name} ({env}){' - activo' if self.active else ''}"
+
+    def as_dict(self):
+        return {
+            "public_key": self.public_key,
+            "secret_key": self.secret_key,
+            "is_sandbox": self.is_sandbox,
+            "active": self.active,
+        }
+    
+    def clean(self):
+        super().clean()
+        if self.active:
+            same = ClipCredential.objects.filter(is_sandbox=self.is_sandbox, active=True)
+            if self.pk:
+                same = same.exclude(pk=self.pk)
+            if same.exists():
+                raise ValidationError("Ya existe otra credencial activa para este ambiente (sandbox/producción).")
+#############################################################################################################
+class ClipPaymentOrder(models.Model):
+    ESTADOS = [
+        ("created", "Creada"),
+        ("pending", "Pendiente"),
+        ("paid", "Pagada"),
+        ("failed", "Fallida"),
+        ("canceled", "Cancelada"),
+        ("expired", "Expirada"),
+    ]
+
+    alumno = models.ForeignKey("Alumno", on_delete=models.SET_NULL, null=True, related_name="ordenes_clip")
+    cargo  = models.ForeignKey("Cargo", on_delete=models.SET_NULL, null=True, blank=True, related_name="ordenes_clip")
+
+    # Datos económicos
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    currency = models.CharField(max_length=3, default="MXN")
+    description = models.CharField(max_length=255, blank=True)
+
+    # Estado de la orden
+    status = models.CharField(max_length=12, choices=ESTADOS, default="created", db_index=True)
+
+    # Identificadores/URLs de Clip
+    clip_payment_id = models.CharField(max_length=64, blank=True, db_index=True)
+    checkout_url = models.URLField(blank=True)  # si tu integración usa "link/checkout"
+
+    # Metadatos crudos de Clip para auditoría / debug
+    raw_request  = models.JSONField(null=True, blank=True)
+    raw_response = models.JSONField(null=True, blank=True)
+    last_webhook = models.JSONField(null=True, blank=True)
+
+    # Idempotencia nuestra (evita duplicados al reintentar)
+    idempotency_key = models.CharField(max_length=64, blank=True, db_index=True)
+
+    # Timestamps
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+
+    def __str__(self):
+        return f"ClipOrder#{self.pk} {self.amount} {self.currency} [{self.status}]"

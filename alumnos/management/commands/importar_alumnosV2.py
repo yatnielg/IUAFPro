@@ -397,3 +397,6 @@ class Command(BaseCommand):
 
         except Exception as e:
             self.stderr.write(self.style.ERROR(f"Error leyendo el archivo: {e}"))
+
+
+#python manage.py importar_alumnosV2 "C:\Users\yatni\Downloads\COPIA control alumnos totales 2022.xlsm"

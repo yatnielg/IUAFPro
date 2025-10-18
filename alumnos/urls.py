@@ -10,6 +10,10 @@ from .views import (
     estudiantes,
     documentos_alumno_editar,
     PagoDiarioListView,
+    crear_pago_de_cargo,
+    pago_exitoso,
+    pago_cancelado,
+    clip_webhook,
 )
 from alumnos import views as alumnos_views
 from . import views
@@ -29,6 +33,16 @@ urlpatterns = [
  
     path("alumnos/<int:pk>/documentos/", views.alumnos_documentos_editar, name="alumnos_documentos_editar"),
 
+    path("documentos/", views.documentos_alumnos_lista, name="documentos_alumnos_lista"),
+
     path("alumnos/api/programa/<int:pk>/", alumnos_views.programa_info, name="alumnos_programa_info"),
     path("alumnos/api/financiamiento/<int:pk>/", alumnos_views.api_financiamiento, name="api_financiamiento"),
+
+    path('configuracion/', views.config_panel, name='config_panel'),
+
+
+    path("pagos/cargo/<int:cargo_id>/crear/", crear_pago_de_cargo, name="clip_crear_pago_cargo"),
+    path("pagos/exito/<int:orden_id>/",       pago_exitoso,        name="clip_pago_exitoso"),
+    path("pagos/cancelado/<int:orden_id>/",   pago_cancelado,      name="clip_pago_cancelado"),
+    path("webhooks/clip/",                    clip_webhook,        name="clip_webhook"),
 ]

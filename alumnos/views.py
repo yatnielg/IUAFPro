@@ -8,6 +8,7 @@ from django.contrib import messages
 from django.contrib.auth.models import User
 from django.contrib.auth import password_validation
 from django.core.exceptions import ValidationError
+from .models import Cargo, ClipPaymentOrder, Pago
 from .models import Financiamiento
 
 from django.utils import timezone
@@ -344,9 +345,15 @@ def alumnos_detalle(request, pk):
         .order_by("-fecha", "-id")
     )
     pagos_total = pagos.aggregate(total=Sum("monto"))["total"] or 0
-
     pagos_total = round(pagos_total, 2)
-    
+
+    cargos = (
+        Cargo.objects
+        .filter(alumno=alumno)
+        .select_related("concepto")
+        .order_by("-fecha_cargo", "-id")
+    )
+    cargos_pendientes = cargos.filter(pagado=False)
 
     return render(
         request,
@@ -355,6 +362,8 @@ def alumnos_detalle(request, pk):
             "alumno": alumno,
             "pagos": pagos,
             "pagos_total": pagos_total,
+            "cargos": cargos,
+            "cargos_pendientes": cargos_pendientes,
         },
     )
 
@@ -490,7 +499,6 @@ class PagoDiarioListView(ListView):
     paginate_by = None  # DataTables pagina en el cliente
 
     def get_queryset(self):
-        # Base
         qs = (
             PagoDiario.objects
             .select_related("alumno")
@@ -498,32 +506,34 @@ class PagoDiarioListView(ListView):
         )
 
         user = self.request.user
-
-        # --- Filtro por permisos de sede, inline (sin helper) ---
         if not user.is_authenticated:
             return qs.none()
 
+        # Intentamos leer el perfil (puede no existir)
+        profile = getattr(user, "profile", None)
+
+        # 1) Filtrado por sedes solo si NO es superuser
         if not user.is_superuser:
-            try:
-                profile = user.profile
-            except UserProfile.DoesNotExist:
+            if not profile:
                 return qs.none()
 
             sedes_ids = list(profile.sedes.values_list("id", flat=True))
             if not sedes_ids:
                 return qs.none()
 
-            # Filtra por la sede del plan del alumno
-            filtro = Q(alumno__informacionEscolar__sede_id__in=sedes_ids)
+            qs = qs.filter(Q(alumno__informacionEscolar__sede_id__in=sedes_ids))
 
-            # (Opcional) si tienes pagos sin alumno pero con 'sede' (texto) y quieres incluirlos:
-            # sede_nombres = list(profile.sedes.values_list("nombre", flat=True))
-            # filtro |= Q(sede__in=sede_nombres)
+        # 2) Mostrar todo si: superuser OR perfil tiene ver_todos_los_pagos=True
+        show_all = (profile and getattr(profile, "ver_todos_los_pagos", False))
+        
 
-            qs = qs.filter(filtro)
+        # 3) Si NO show_all => limitar a últimos 2 años
+        if not show_all:
+            hace_dos_anios = timezone.now().date() - timedelta(days=730)
+            qs = qs.filter(fecha__gte=hace_dos_anios)
 
-        # --- Búsqueda opcional por ?q= ---
-        q = self.request.GET.get("q", "").strip()
+        # 4) Búsqueda opcional
+        q = (self.request.GET.get("q") or "").strip()
         if q:
             qs = qs.filter(
                 Q(alumno__numero_estudiante__icontains=q) |
@@ -596,3 +606,227 @@ def alumnos_documentos_editar(request, pk):
         "alumno": alumno,
         "form": form,
     })
+
+###############################################################
+@login_required
+def documentos_alumnos_lista(request):
+    q = (request.GET.get("q") or "").strip()
+
+    base = (
+        DocumentosAlumno.objects
+        .select_related(
+            "alumno",
+            "alumno__informacionEscolar",
+            "alumno__informacionEscolar__programa",
+            "alumno__informacionEscolar__sede",
+        )
+        .order_by("-fecha_ultima_actualizacion", "alumno__numero_estudiante")
+    )
+
+    user = request.user
+    if not user.is_authenticated:
+        qs = base.none()
+    elif user.is_superuser:
+        qs = base
+    else:
+        # Igual que en PagoDiarioListView
+        try:
+            profile = user.profile
+        except UserProfile.DoesNotExist:
+            qs = base.none()
+        else:
+            sedes_ids = list(profile.sedes.values_list("id", flat=True))
+            if not sedes_ids:
+                qs = base.none()
+            else:
+                qs = base.filter(alumno__informacionEscolar__sede_id__in=sedes_ids)
+
+    # Búsqueda opcional
+    if q:
+        qs = qs.filter(
+            Q(alumno__numero_estudiante__icontains=q) |
+            Q(alumno__nombre__icontains=q) |
+            Q(alumno__apellido_p__icontains=q) |
+            Q(alumno__apellido_m__icontains=q) |
+            Q(alumno__curp__icontains=q) |
+            Q(alumno__email__icontains=q)
+        )
+
+    ctx = {"q": q, "documentos": qs}
+    return render(request, "alumnos/documentos_lista.html", ctx)
+
+###############################################################
+@login_required
+def config_panel(request):
+    return render(request, "panel/panel-configuracion.html")
+###############################################################
+
+from decimal import Decimal
+from django.db import transaction
+from django.http import HttpResponseBadRequest
+from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
+from django.contrib import messages
+from django.contrib.auth.decorators import login_required
+
+from .models import Cargo, ClipPaymentOrder, Pago
+from .clip_api import ClipClient
+
+@login_required
+def crear_pago_de_cargo(request, cargo_id):
+    cargo = get_object_or_404(Cargo.objects.select_related("alumno", "concepto"), pk=cargo_id)
+    alumno = cargo.alumno
+    if not alumno:
+        return HttpResponseBadRequest("El cargo no tiene alumno asignado.")
+
+    amount = cargo.monto.quantize(Decimal("0.01"))
+    description = f"{cargo.concepto.nombre} - Alumno {alumno.numero_estudiante}"
+
+    # 1) Crear la orden local
+    with transaction.atomic():
+        orden = ClipPaymentOrder.objects.create(
+            alumno=alumno,
+            cargo=cargo,
+            amount=amount,
+            description=description,
+            status="created",
+        )
+
+    # 2) URLs de retorno ABSOLUTAS
+    success_url = request.build_absolute_uri(reverse("clip_pago_exitoso", args=[orden.pk]))
+    cancel_url  = request.build_absolute_uri(reverse("clip_pago_cancelado", args=[orden.pk]))
+
+    # 3) Llamar a Clip (el cliente ya manda centavos y usa `reference`)
+    client = ClipClient()
+    data, code = client.create_payment_link(
+        amount=float(amount),
+        description=description,
+        order_id=str(orden.pk),   # se mapea a 'reference' en el cliente
+        success_url=success_url,
+        cancel_url=cancel_url,
+        metadata={
+            "alumno_id": alumno.pk,
+            "cargo_id": cargo.pk,
+            "numero_estudiante": alumno.numero_estudiante,
+        },
+        description_max_len=50,
+    )
+
+    # 4) Guardar request/response para auditoría
+    orden.raw_request = {
+        "amount": str(amount),
+        "description": description,
+        "order_id": str(orden.pk),
+        "success_url": success_url,
+        "cancel_url": cancel_url,
+        "metadata": {
+            "alumno_id": alumno.pk,
+            "cargo_id": cargo.pk,
+            "numero_estudiante": alumno.numero_estudiante,
+        }
+    }
+    orden.raw_response = data
+
+    # 5) Tomar IDs/URLs devueltos
+    orden.clip_payment_id = str(data.get("id") or data.get("payment_id") or "")
+    orden.checkout_url = str(
+        data.get("checkout_url")
+        or data.get("url")
+        or data.get("redirect_url")
+        or data.get("payment_url")
+        or ""
+    )
+
+    orden.status = "pending" if (code and 200 <= code < 300 and orden.checkout_url) else "failed"
+    orden.save(update_fields=["raw_request", "raw_response", "clip_payment_id", "checkout_url", "status"])
+
+    # 6) Manejo de error visible
+    if not orden.checkout_url:
+        msg = data.get("message") or data.get("error") or "No se pudo crear el pago."
+        # añade detalle si viene del backend para depurar rápido
+        detail = data.get("detail") or data.get("_raw_text") or ""
+        messages.error(request, f"Error al crear el pago ({code}): {msg}. {detail}")
+        return render(request, "pagos/crear_error.html", {
+            "orden": orden, "mensaje": msg, "respuesta": data, "status_code": code
+        })
+
+    # 7) Redirigir al checkout de Clip
+    return redirect(orden.checkout_url)
+
+
+@login_required
+def pago_exitoso(request, orden_id):
+    orden = get_object_or_404(ClipPaymentOrder, pk=orden_id)
+    return render(request, "pagos/exito.html", {"orden": orden})
+
+
+@login_required
+def pago_cancelado(request, orden_id):
+    orden = get_object_or_404(ClipPaymentOrder, pk=orden_id)
+    return render(request, "pagos/cancelado.html", {"orden": orden})
+
+
+from django.shortcuts import get_object_or_404, redirect, render
+from django.views.decorators.csrf import csrf_exempt
+from django.http import JsonResponse, HttpResponse, HttpResponseBadRequest
+from django.urls import reverse
+from django.db import transaction
+from decimal import Decimal
+
+
+from .clip_api import ClipClient, verify_webhook_signature
+from .utils import get_active_clip_credential
+
+@csrf_exempt
+def clip_webhook(request):
+    raw = request.body
+    sig = request.headers.get("X-Clip-Signature", "")  # ajusta si tu cuenta usa otro nombre
+
+    cred = get_active_clip_credential()
+    if not verify_webhook_signature(cred.secret_key or "", raw, sig):
+        return HttpResponse(status=400)
+
+    try:
+        data = json.loads(raw.decode("utf-8"))
+    except Exception:
+        return HttpResponseBadRequest("Payload inválido")
+
+    event_type = data.get("type") or data.get("event") or ""
+    payment_obj = data.get("data") or data.get("payment") or {}
+    clip_payment_id = str(payment_obj.get("id") or payment_obj.get("payment_id") or "")
+    ref = str(payment_obj.get("reference") or "")
+    status = str(payment_obj.get("status") or "").lower()
+
+    orden = (ClipPaymentOrder.objects
+             .filter(clip_payment_id=clip_payment_id)
+             .first()) or (ClipPaymentOrder.objects.filter(pk=ref).first())
+
+    if not orden:
+        return HttpResponse(status=200)
+
+    orden.last_webhook = data
+
+    if status in ("succeeded", "paid", "completed"):
+        with transaction.atomic():
+            orden.status = "paid"
+            orden.save(update_fields=["status", "last_webhook", "updated_at"])
+
+            if orden.cargo and not orden.cargo.pagado:
+                Pago.objects.create(
+                    alumno=orden.alumno,
+                    fecha=timezone.now().date(),
+                    monto=orden.amount,
+                    metodo="Tarjeta (Clip)",
+                    banco="",
+                    referencia=orden.clip_payment_id or ref,
+                    descripcion=orden.description,
+                    conciliado=True,
+                    cargo=orden.cargo,
+                )
+                orden.cargo.pagado = True
+                orden.cargo.save(update_fields=["pagado"])
+    elif status in ("canceled", "failed", "expired"):
+        orden.status = status
+        orden.save(update_fields=["status", "last_webhook", "updated_at"])
+
+    return HttpResponse(status=200)

@@ -71,11 +71,11 @@
             </a>
           </li>
 
-        <li class="nav-item {% if  request.resolver_match.url_name == 'categorias_panel' or request.resolver_match.url_name == 'formulario_agregar_categoria' %} active {% endif %}">
+        <li class="nav-item {% if  request.resolver_match.url_name == 'documentos_lista' or request.resolver_match.url_name == 'formulario_agregar_categoria' %} active {% endif %}">
             {% if alertas_global.negocio or alertas_global.state or alertas_global.municipality or alertas_global.warehouses %}
                 <a class="nav-link" href="{% url 'principal' %}">
             {% else %}
-              <a class="nav-link" href="">
+              <a class="nav-link" href="{% url 'documentos_alumnos_lista' %}">
             {% endif %}    
               <i class="material-icons">cloud_upload</i>
               <p> Subir Documentos </p>
@@ -89,8 +89,8 @@
             </a>
           </li>
 
-          <li class="nav-item {% if  request.resolver_match.url_name == 'pagostripe_list'  %} active {% endif %}">
-            <a class="nav-link" href="">
+          <li class="nav-item {% if  request.resolver_match.url_name == 'config_panel'  %} active {% endif %}">
+            <a class="nav-link" href=" {% url 'config_panel' %}">
               <i class="material-icons">settings</i>
               <p> Configuración </p>
             </a>

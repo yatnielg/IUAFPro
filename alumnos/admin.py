@@ -246,6 +246,52 @@ class PagoInline(admin.TabularInline):
 
 
 # ========= ALUMNO =========
+def borrar_todos_alumnos(modeladmin, request, queryset):
+    """
+    ⚠️ Elimina TODOS los registros de Alumno, ignorando la selección.
+    Antes, borra los archivos físicos de DocumentosAlumno para no dejar basura en el storage.
+    Usa con mucha precaución.
+    """
+    if not request.user.is_superuser:
+        messages.error(request, "Solo un superusuario puede ejecutar esta acción.")
+        return
+
+    from .models import Alumno, DocumentosAlumno  # import local para evitar ciclos
+
+    try:
+        with transaction.atomic():
+            # 1) Borrar archivos de DocumentosAlumno
+            total_archivos = 0
+            campos_file = [
+                "acta_nacimiento", "curp", "certificado_estudios", "titulo_grado",
+                "solicitud_registro", "validacion_autenticidad", "carta_compromiso",
+                "carta_interes", "identificacion_oficial", "otro_documento",
+            ]
+
+            for doc in DocumentosAlumno.objects.select_related("alumno").all():
+                for campo in campos_file:
+                    f = getattr(doc, campo, None)
+                    if f:
+                        try:
+                            f.delete(save=False)  # elimina del storage sin tocar DB
+                            total_archivos += 1
+                        except Exception:
+                            # Si falla un archivo, continúa con los demás
+                            pass
+
+            # 2) Borrar todos los alumnos (on_delete=CASCADE limpiará el resto)
+            borrados, _ = Alumno.objects.all().delete()
+
+        messages.success(
+            request,
+            f"Se eliminaron TODOS los alumnos ({borrados}) y {total_archivos} archivo(s) de documentos."
+        )
+    except Exception as e:
+        messages.error(request, f"Error al eliminar: {e}")
+
+borrar_todos_alumnos.short_description = "🧨 BORRAR TODOS los alumnos (incluye archivos de documentos)"
+
+
 @admin.register(Alumno)
 class AlumnoAdmin(admin.ModelAdmin):
     list_display = (
@@ -257,6 +303,7 @@ class AlumnoAdmin(admin.ModelAdmin):
         "programa_display", "sede_display",
         "creado_en",
     )
+    actions = [exportar_csv, borrar_todos_alumnos]  # ← aquí agregada
     list_filter = ("sexo", "pais", "estado")
     search_fields = (
         "numero_estudiante", "nombre", "apellido_p", "apellido_m",
@@ -268,7 +315,7 @@ class AlumnoAdmin(admin.ModelAdmin):
     autocomplete_fields = ("pais", "estado", "user", "informacionEscolar")
     readonly_fields = ("creado_en", "actualizado_en")
     inlines = [DocumentosAlumnoInline, CargoInline, PagoInline]
-    actions = [exportar_csv]
+   
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
@@ -325,12 +372,65 @@ class PagoAdmin(admin.ModelAdmin):
 
 
 # ========= DOCUMENTOS (si deseas gestionarlos también aparte) =========
+def borrar_todos_documentos(modeladmin, request, queryset):
+    """
+    ⚠️ Elimina TODOS los registros de DocumentosAlumno, ignorando la selección,
+    y borra los archivos físicos de los FileField.
+    Usa con mucha precaución.
+    """
+    from .models import DocumentosAlumno  # evita import circular
+
+    if not request.user.is_superuser:
+        messages.error(request, "Solo un superusuario puede ejecutar esta acción.")
+        return
+
+    # (Opcional) resguardar para entornos dev
+    # if not getattr(settings, "DEBUG", False):
+    #     messages.error(request, "Solo disponible con DEBUG=True.")
+    #     return
+
+    try:
+        with transaction.atomic():
+            total_archivos = 0
+            campos_file = [
+                "acta_nacimiento", "curp", "certificado_estudios", "titulo_grado",
+                "solicitud_registro", "validacion_autenticidad", "carta_compromiso",
+                "carta_interes", "identificacion_oficial", "otro_documento",
+            ]
+
+            # Borra archivos de cada fila
+            for doc in DocumentosAlumno.objects.all():
+                for campo in campos_file:
+                    f = getattr(doc, campo, None)
+                    if f:
+                        try:
+                            f.delete(save=False)  # elimina del storage sin tocar DB
+                            total_archivos += 1
+                        except Exception:
+                            # Si falla algún archivo, seguimos con los demás
+                            pass
+
+            # Borra todos los registros de la tabla
+            borrados, _ = DocumentosAlumno.objects.all().delete()
+
+        messages.success(
+            request,
+            f"Se eliminaron todos los DocumentosAlumno ({borrados} filas) y {total_archivos} archivo(s)."
+        )
+    except Exception as e:
+        messages.error(request, f"Error al eliminar: {e}")
+
+borrar_todos_documentos.short_description = "🧨 BORRAR TODOS los DocumentosAlumno (incluye archivos)"
+
+
 @admin.register(DocumentosAlumno)
 class DocumentosAlumnoAdmin(admin.ModelAdmin):
     list_display = ("alumno", "total_subidos", "fecha_ultima_actualizacion", "vista_rapida")
     search_fields = ("alumno__numero_estudiante", "alumno__nombre", "alumno__apellido_p")
     autocomplete_fields = ("alumno",)
     readonly_fields = ("fecha_ultima_actualizacion",)
+
+    actions = [exportar_csv, borrar_todos_documentos]  # ← agrega aquí la acción
 
     def vista_rapida(self, obj):
         # Muestra “chips” de cuáles están subidos
@@ -510,16 +610,47 @@ from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 
 @admin.register(UserProfile)
 class UserProfileAdmin(admin.ModelAdmin):
-    list_display = ("user", "puede_ver_todo", "puede_editar_todo", "sedes_list")
-    list_filter = ("puede_ver_todo", "puede_editar_todo", "sedes")
-    search_fields = ("user__username", "user__email", "user__first_name", "user__last_name")
+    list_display = (
+        "user",
+        "puede_ver_todo",
+        "puede_editar_todo",
+        "ver_todos_los_pagos",   # <- nuevo
+        "sedes_list",
+    )
+    list_filter = (
+        "puede_ver_todo",
+        "puede_editar_todo",
+        "ver_todos_los_pagos",   # <- nuevo
+        "sedes",
+    )
+    search_fields = (
+        "user__username",
+        "user__email",
+        "user__first_name",
+        "user__last_name",
+    )
     filter_horizontal = ("sedes",)
+
+    fieldsets = (
+        (None, {
+            "fields": ("user", "sedes"),
+        }),
+        ("Permisos", {
+            "fields": ("puede_ver_todo", "puede_editar_todo", "ver_todos_los_pagos"),
+            "description": (
+                "• <b>puede_ver_todo</b>: puede ver todos los alumnos/sedes.<br>"
+                "• <b>puede_editar_todo</b>: además de ver, puede editar todo.<br>"
+                "• <b>ver_todos_los_pagos</b>: ignora el recorte por años y muestra todos los pagos."
+            )
+        }),
+    )
 
     @admin.display(description="Sedes")
     def sedes_list(self, obj):
         return ", ".join(obj.sedes.values_list("nombre", flat=True))
 
-# --------- OPCIONAL: editar el perfil desde el admin de Usuario ---------
+
+# --------- Inline del perfil en el admin de Usuario ---------
 User = get_user_model()
 
 class UserProfileInline(admin.StackedInline):
@@ -527,8 +658,18 @@ class UserProfileInline(admin.StackedInline):
     can_delete = False
     fk_name = "user"
     filter_horizontal = ("sedes",)
+    extra = 0
 
-# Si el User ya está registrado por otra app, intenta reemplazarlo con inline
+    fieldsets = (
+        (None, {
+            "fields": ("sedes",),
+        }),
+        ("Permisos", {
+            "fields": ("puede_ver_todo", "puede_editar_todo", "ver_todos_los_pagos"),
+        }),
+    )
+
+# Si el User ya está registrado por otra app, lo reemplazamos para añadir el inline
 try:
     admin.site.unregister(User)
 except admin.sites.NotRegistered:
@@ -591,3 +732,28 @@ class ContadorAlumnoAdmin(admin.ModelAdmin):
                 ContadorAlumno.objects.filter(pk=obj.pk).update(ultimo_numero=F("ultimo_numero") + step)
                 updated += 1
         self.message_user(request, f"Incrementados +{step} en {updated} contador(es).", level=messages.SUCCESS)
+
+
+from .models import ClipCredential
+@admin.register(ClipCredential)
+class ClipCredentialAdmin(admin.ModelAdmin):
+    list_display = ("name", "is_sandbox", "active", "updated_at")
+    list_filter = ("is_sandbox", "active")
+    search_fields = ("name", "public_key")
+    readonly_fields = ("created_at", "updated_at")
+    fieldsets = (
+        (None, {
+            "fields": ("name", "public_key", "secret_key", "is_sandbox", "active")
+        }),
+        ("Timestamps", {
+            "fields": ("created_at", "updated_at"),
+        }),
+    )
+
+from .models import ClipPaymentOrder
+@admin.register(ClipPaymentOrder)
+class ClipPaymentOrderAdmin(admin.ModelAdmin):
+    list_display = ("id", "alumno", "cargo", "amount", "currency", "status", "clip_payment_id", "created_at")
+    list_filter  = ("status", "currency",)
+    search_fields = ("id", "clip_payment_id", "description")
+    readonly_fields = ("created_at", "updated_at", "raw_request", "raw_response", "last_webhook")    

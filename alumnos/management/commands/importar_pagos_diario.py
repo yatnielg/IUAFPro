@@ -234,3 +234,5 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(
             f"✅ Pagos DIARIO importados (solo creación) -> creados: {creados}"
         ))
+
+#python manage.py importar_pagos_diario "C:\Users\yatni\Downloads\copia IUAF Registro  de ingresos FINAL.xlsm" --sheet "DIARIO"

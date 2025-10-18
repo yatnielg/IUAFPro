@@ -1,0 +1,197 @@
+{% extends "panel/grafico.html" %}
+{% load static %}
+
+{% block main_content %}
+
+<style>
+  /* ====== Estilos de imagen (si los usaras) ====== */
+  .order-img {
+    width: 34px !important;
+    height: 34px !important;
+    object-fit: cover;
+    border-radius: 5px;
+    margin-right: 2px;
+    background: #f7f8fa;
+    transition: transform 0.2s;
+    cursor: pointer;
+  }
+  .order-img:hover {
+    transform: scale(2.5) translateX(5px);
+    z-index: 2;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+  }
+
+  /* ====== FIX Scroll Mouse ====== */
+  html, body { height: 100% !important; overflow-y: auto !important; overflow-x: hidden !important; }
+  .main-panel, .content, .card-body { overflow-y: visible !important; }
+
+  /* Scroll horizontal para DataTables */
+  .dataTables_wrapper { overflow-x: auto; overflow-y: visible; }
+  .table-responsive { width: 100%; overflow-x: auto !important; overflow-y: visible !important; -webkit-overflow-scrolling: touch; }
+
+  .doc-chip { display:inline-block; margin: 0 .35rem .35rem 0; }
+</style>
+
+<!-- ====== DataTables CSS/JS ====== -->
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
+<script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+
+<div class="content">
+  <div class="toolbar d-flex justify-content-between align-items-center mb-2">
+    <h1 class="h4 mb-0">Documentos de estudiantes</h1>
+
+    <form method="get" class="d-flex" style="gap:.5rem">
+      <input name="q" class="form-control form-control-sm"
+             placeholder="Buscar por No., nombre, apellidos, email o CURP…"
+             value="{{ q|default:'' }}" style="min-width:260px">
+      {% if q %}
+        <a class="btn btn-outline-secondary btn-sm" href="{% url 'documentos_alumnos_lista' %}">Limpiar</a>
+      {% endif %}
+      <button class="btn btn-outline-primary btn-sm">Buscar</button>
+    </form>
+  </div>
+
+  <div class="container-fluid">
+    <div class="row"><div class="col-md-12">
+
+      <div class="card">
+        <div class="card-header card-header-primary card-header-icon">
+          <div class="card-icon"><i class="material-icons">assignment</i></div>
+          <h4 class="card-title">Listado de documentos</h4>
+        </div>
+
+        <div class="card-body">
+          <div class="material-datatables table-responsive">
+            <table id="documentos-table" class="table table-striped table-no-bordered table-hover" cellspacing="0" width="100%">
+              <thead>
+                <tr>
+                  <th>No. Estudiante</th>
+                  <th>Nombre</th>
+                  <th>CURP</th>
+                  <th>Total cargados</th>
+                  <th>Última actualización</th>
+                  <th>Archivos</th>
+                  <th class="disabled-sorting text-right">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for d in documentos %}
+                <tr>
+                  <!-- No. Estudiante -->
+                  <td>
+                    {% if d.alumno %}
+                      <a href="{% url 'alumnos_detalle' d.alumno.pk %}" class="btn btn-link text-info btn-just-icon like" title="Ver ficha">
+                        {{ d.alumno.numero_estudiante }}
+                      </a>
+                    {% else %} — {% endif %}
+                  </td>
+
+                  <!-- Nombre -->
+                  <td>
+                    {% if d.alumno %}
+                      {{ d.alumno.nombre }} {{ d.alumno.apellido_p }} {{ d.alumno.apellido_m }}
+                    {% else %}<span class="text-muted">—</span>{% endif %}
+                  </td>
+
+                  <!-- CURP -->
+                  <td>
+                    {% if d.alumno and d.alumno.curp %}
+                      {{ d.alumno.curp }}
+                    {% else %}<span class="text-muted">—</span>{% endif %}
+                  </td>
+
+                  <!-- Total -->
+                  <td>{{ d.total_subidos|default:0 }}</td>
+
+                  <!-- Fecha -->
+                  <td>
+                    {% if d.fecha_ultima_actualizacion %}
+                      {{ d.fecha_ultima_actualizacion|date:"d/m/Y H:i" }}
+                    {% else %}<span class="text-muted">—</span>{% endif %}
+                  </td>
+
+                  <!-- Archivos: chips con “Ver” si existe -->
+                  <td style="min-width:320px; white-space:normal">
+                    {% if d.acta_nacimiento %}
+                      <a class="btn btn-sm btn-outline-primary doc-chip" href="{{ d.acta_nacimiento.url }}" target="_blank" rel="noopener">Acta</a>
+                    {% endif %}
+                    {% if d.curp %}
+                      <a class="btn btn-sm btn-outline-primary doc-chip" href="{{ d.curp.url }}" target="_blank" rel="noopener">CURP</a>
+                    {% endif %}
+                    {% if d.certificado_estudios %}
+                      <a class="btn btn-sm btn-outline-primary doc-chip" href="{{ d.certificado_estudios.url }}" target="_blank" rel="noopener">Certificado</a>
+                    {% endif %}
+                    {% if d.titulo_grado %}
+                      <a class="btn btn-sm btn-outline-primary doc-chip" href="{{ d.titulo_grado.url }}" target="_blank" rel="noopener">Título</a>
+                    {% endif %}
+                    {% if d.solicitud_registro %}
+                      <a class="btn btn-sm btn-outline-primary doc-chip" href="{{ d.solicitud_registro.url }}" target="_blank" rel="noopener">Solicitud</a>
+                    {% endif %}
+                    {% if d.validacion_autenticidad %}
+                      <a class="btn btn-sm btn-outline-primary doc-chip" href="{{ d.validacion_autenticidad.url }}" target="_blank" rel="noopener">Validación</a>
+                    {% endif %}
+                    {% if d.carta_compromiso %}
+                      <a class="btn btn-sm btn-outline-primary doc-chip" href="{{ d.carta_compromiso.url }}" target="_blank" rel="noopener">Compromiso</a>
+                    {% endif %}
+                    {% if d.carta_interes %}
+                      <a class="btn btn-sm btn-outline-primary doc-chip" href="{{ d.carta_interes.url }}" target="_blank" rel="noopener">Interés</a>
+                    {% endif %}
+                    {% if d.identificacion_oficial %}
+                      <a class="btn btn-sm btn-outline-primary doc-chip" href="{{ d.identificacion_oficial.url }}" target="_blank" rel="noopener">Identificación</a>
+                    {% endif %}
+                    {% if d.otro_documento %}
+                      <a class="btn btn-sm btn-outline-primary doc-chip" href="{{ d.otro_documento.url }}" target="_blank" rel="noopener">Otro</a>
+                    {% endif %}
+
+                    {% if not d.total_subidos %}
+                      <span class="text-muted">—</span>
+                    {% endif %}
+                  </td>
+
+                  <!-- Acciones -->
+                  <td class="text-right" style="min-width:120px">
+                    {% if d.alumno %}
+                      <a href="{% url 'alumnos_detalle' d.alumno.pk %}" class="btn btn-link text-info btn-just-icon like" title="Ver ficha">
+                        <i class="material-icons">visibility</i>
+                      </a>
+
+                       {% if request.user.profile.puede_editar_todo or request.user.is_superuser %}
+                        <a href="{% url 'alumnos_documentos_editar' d.alumno.pk %}" class="btn btn-link text-secondary btn-just-icon edit" title="Subir/actualizar">
+                          <i class="material-icons">upload_file</i>
+                        </a>
+                    {% endif %}
+
+
+                    {% endif %}
+                  </td>
+                </tr>
+                {% empty %}
+                <tr>
+                  <td colspan="7" class="text-center text-muted py-4">Sin resultados</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div> <!-- /table-responsive -->
+        </div> <!-- /card-body -->
+      </div>
+
+    </div></div>
+  </div>
+</div>
+
+<script>
+  $(document).ready(function() {
+    $('#documentos-table').DataTable({
+      language: { url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/es-ES.json' },
+      order: [[4, 'desc'], [0, 'desc']], // por fecha de actualización, luego No. Estudiante
+      pageLength: 10,
+      autoWidth: false,
+      scrollX: true,
+      scrollCollapse: true
+    });
+  });
+</script>
+
+{% endblock %}

@@ -17,14 +17,27 @@
   }
   .section-title .material-icons { font-size: 1.1rem; }
   .table-responsive { overflow-x:auto; }
+  .card-header-actions {
+    margin-left:auto; display:flex; gap:.5rem; align-items:center;
+  }
+  .doc-count-badge{
+    display:inline-flex; align-items:center; gap:.35rem;
+    background:rgba(0,0,0,.06); color:#5f6368; border-radius:999px;
+    padding:.25rem .6rem; font-size:.85rem;
+  }
+  .doc-count-badge .material-icons{ font-size:1rem; }
+
+  .mt-0 { margin-top:0!important; }
+  .card-compact .card-header{ padding-top:.6rem; padding-bottom:.6rem; }
 </style>
 
-<div class="d-flex justify-content-between align-items-center mb-3">
-  <h1 class="h4 m-0">
+<div class="d-flex justify-content-between align-items-center">
+  <h1 class="h4 m-0 text-white">
     <i class="material-icons align-middle mr-1">person</i>
     Alumno {{ alumno.numero_estudiante }}
   </h1>
-  <div>
+
+  <div class="btn-group">
     <a class="btn btn-outline-secondary" href="{% url 'estudiantes' %}">
       <i class="material-icons align-middle">arrow_back</i> Volver
     </a>
@@ -38,10 +51,21 @@
 </div>
 
 <div class="card">
-  <div class="card-header card-header-primary card-header-icon">
+  <div class="card-header card-header-primary card-header-icon d-flex align-items-center">
     <div class="card-icon"><i class="material-icons">badge</i></div>
-    <h4 class="card-title">Ficha del alumno</h4>
-    <p class="card-category">Resumen general</p>
+    <div>
+      <h4 class="card-title m-0">Ficha del alumno</h4>
+      <p class="card-category m-0">Resumen general</p>
+    </div>
+
+    <div class="card-header-actions mt-0 ml-auto d-flex align-items-center">
+      {% if alumno.documentos %}
+        <span class="doc-count-badge" title="Documentos cargados">
+          <i class="material-icons">attach_file</i>
+          {{ alumno.documentos.total_subidos|default:0 }} Documentos cargados
+        </span>
+      {% endif %}
+    </div>
   </div>
 
   <div class="card-body">
@@ -256,7 +280,6 @@
             </div>
           </div>
 
-          <!-- Equivalencia y Titulación -->
           <div class="col-sm-6 mb-2">
             <div class="text-muted small">Precio de equivalencia</div>
             <div>
@@ -281,7 +304,6 @@
             </div>
           </div>
 
-          <!-- Inicio y fin del programa -->
           <div class="col-sm-6 mb-2">
             <div class="text-muted small">Inicio del programa</div>
             <div>
@@ -300,7 +322,6 @@
             </div>
           </div>
 
-          <!-- NUEVO: ¿Requiere datos de facturación? -->
           <div class="col-sm-12 mb-2">
             <div class="text-muted small">¿Requiere datos de facturación?</div>
             <div>
@@ -313,12 +334,9 @@
               {% else %}—{% endif %}
             </div>
           </div>
-          <!-- /NUEVO -->
-
         </div>
       </div>
     </div> <!-- /row detalles -->
-
   </div>
 </div>
 
@@ -390,6 +408,205 @@
         </tbody>
       </table>
     </div>
+  </div>
+</div>
+
+<!-- ===================== CARGOS PENDIENTES (DEBAJO DE PAGOS) ===================== -->
+<div class="card mt-4">
+  <div class="card-header card-header-primary card-header-icon">
+    <div class="card-icon"><i class="material-icons">shopping_cart</i></div>
+    <h4 class="card-title">Cargos del alumno</h4>
+    <p class="card-category">
+      Pendientes: <strong>{{ cargos_pendientes|length }}</strong>
+    </p>
+  </div>
+
+  <div class="card-body table-responsive">
+    <table class="table table-hover">
+      <thead>
+        <tr>
+          <th>Fecha</th>
+          <th>Concepto</th>
+          <th class="text-right">Monto</th>
+          <th>Vence</th>
+          <th>Estado</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in cargos %}
+        <tr>
+          <td>{{ c.fecha_cargo|date:"d/m/Y" }}</td>
+          <td>{{ c.concepto.nombre }}</td>
+          <td class="text-right">$ {{ c.monto }}</td>
+          <td>{% if c.fecha_vencimiento %}{{ c.fecha_vencimiento|date:"d/m/Y" }}{% else %}—{% endif %}</td>
+          <td>
+            {% if c.pagado %}
+              <span class="badge badge-success">Pagado</span>
+            {% else %}
+              <span class="badge badge-warning text-dark">Pendiente</span>
+            {% endif %}
+          </td>
+          <td class="text-right">
+            {% if not c.pagado %}
+              <a class="btn btn-primary btn-sm"
+                 href="{% url 'clip_crear_pago_cargo' c.id %}">
+                 Pagar con tarjeta (Clip)
+              </a>
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6" class="text-center text-muted">Sin cargos.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ===================== DOCUMENTOS: SOLO LECTURA ===================== -->
+<div class="card mt-4">
+  <div class="card-header card-header-primary card-header-icon">
+    <div class="card-icon"><i class="material-icons">folder_open</i></div>
+    <h4 class="card-title">Documentos del alumno (solo lectura)</h4>
+    <p class="card-category">
+      {% if alumno.documentos %}
+        Cargados: <strong>{{ alumno.documentos.total_subidos }}</strong>
+        {% if alumno.documentos.fecha_ultima_actualizacion %}
+          &nbsp;•&nbsp; Última actualización:
+          <strong>{{ alumno.documentos.fecha_ultima_actualizacion|date:"d/m/Y H:i" }}</strong>
+        {% endif %}
+      {% else %}
+        Sin contenedor de documentos.
+      {% endif %}
+    </p>
+  </div>
+
+  <div class="card-body">
+    {% if alumno.documentos %}
+    <div class="table-responsive">
+      <table class="table table-hover">
+        <thead>
+          <tr>
+            <th style="width:60%">Documento</th>
+            <th style="width:40%">Archivo</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Acta de nacimiento</td>
+            <td>
+              {% if alumno.documentos.acta_nacimiento %}
+                <a class="btn btn-link p-0" href="{{ alumno.documentos.acta_nacimiento.url }}" target="_blank" rel="noopener">
+                  <i class="material-icons align-middle">open_in_new</i> Ver
+                </a>
+              {% else %}<span class="text-muted">—</span>{% endif %}
+            </td>
+          </tr>
+          <tr>
+            <td>CURP</td>
+            <td>
+              {% if alumno.documentos.curp %}
+                <a class="btn btn-link p-0" href="{{ alumno.documentos.curp.url }}" target="_blank" rel="noopener">
+                  <i class="material-icons align-middle">open_in_new</i> Ver
+                </a>
+              {% else %}<span class="text-muted">—</span>{% endif %}
+            </td>
+          </tr>
+          <tr>
+            <td>Certificado de estudios</td>
+            <td>
+              {% if alumno.documentos.certificado_estudios %}
+                <a class="btn btn-link p-0" href="{{ alumno.documentos.certificado_estudios.url }}" target="_blank" rel="noopener">
+                  <i class="material-icons align-middle">open_in_new</i> Ver
+                </a>
+              {% else %}<span class="text-muted">—</span>{% endif %}
+            </td>
+          </tr>
+          <tr>
+            <td>Título o grado</td>
+            <td>
+              {% if alumno.documentos.titulo_grado %}
+                <a class="btn btn-link p-0" href="{{ alumno.documentos.titulo_grado.url }}" target="_blank" rel="noopener">
+                  <i class="material-icons align-middle">open_in_new</i> Ver
+                </a>
+              {% else %}<span class="text-muted">—</span>{% endif %}
+            </td>
+          </tr>
+          <tr>
+            <td>Solicitud de registro</td>
+            <td>
+              {% if alumno.documentos.solicitud_registro %}
+                <a class="btn btn-link p-0" href="{{ alumno.documentos.solicitud_registro.url }}" target="_blank" rel="noopener">
+                  <i class="material-icons align-middle">open_in_new</i> Ver
+                </a>
+              {% else %}<span class="text-muted">—</span>{% endif %}
+            </td>
+          </tr>
+          <tr>
+            <td>Validación de autenticidad</td>
+            <td>
+              {% if alumno.documentos.validacion_autenticidad %}
+                <a class="btn btn-link p-0" href="{{ alumno.documentos.validacion_autenticidad.url }}" target="_blank" rel="noopener">
+                  <i class="material-icons align-middle">open_in_new</i> Ver
+                </a>
+              {% else %}<span class="text-muted">—</span>{% endif %}
+            </td>
+          </tr>
+          <tr>
+            <td>Carta compromiso</td>
+            <td>
+              {% if alumno.documentos.carta_compromiso %}
+                <a class="btn btn-link p-0" href="{{ alumno.documentos.carta_compromiso.url }}" target="_blank" rel="noopener">
+                  <i class="material-icons align-middle">open_in_new</i> Ver
+                </a>
+              {% else %}<span class="text-muted">—</span>{% endif %}
+            </td>
+          </tr>
+          <tr>
+            <td>Carta de interés académico</td>
+            <td>
+              {% if alumno.documentos.carta_interes %}
+                <a class="btn btn-link p-0" href="{{ alumno.documentos.carta_interes.url }}" target="_blank" rel="noopener">
+                  <i class="material-icons align-middle">open_in_new</i> Ver
+                </a>
+              {% else %}<span class="text-muted">—</span>{% endif %}
+            </td>
+          </tr>
+          <tr>
+            <td>Identificación oficial</td>
+            <td>
+              {% if alumno.documentos.identificacion_oficial %}
+                <a class="btn btn-link p-0" href="{{ alumno.documentos.identificacion_oficial.url }}" target="_blank" rel="noopener">
+                  <i class="material-icons align-middle">open_in_new</i> Ver
+                </a>
+              {% else %}<span class="text-muted">—</span>{% endif %}
+            </td>
+          </tr>
+          <tr>
+            <td>Otro documento</td>
+            <td>
+              {% if alumno.documentos.otro_documento %}
+                <a class="btn btn-link p-0" href="{{ alumno.documentos.otro_documento.url }}" target="_blank" rel="noopener">
+                  <i class="material-icons align-middle">open_in_new</i> Ver
+                </a>
+              {% else %}<span class="text-muted">—</span>{% endif %}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="text-right">
+      {% if request.user.profile.puede_editar_todo or request.user.is_superuser %}
+      <a class="btn btn-outline-info" href="{% url 'alumnos_documentos_editar' alumno.pk %}">
+        <i class="material-icons align-middle">upload_file</i> Subir/actualizar documentos
+      </a>
+      {% endif %}
+    </div>
+    {% else %}
+      <div class="text-muted">No hay contenedor de documentos para este alumno.</div>
+    {% endif %}
   </div>
 </div>
 

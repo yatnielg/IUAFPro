@@ -92,6 +92,11 @@ LOGIN_REDIRECT_URL = "principal"
 LOGOUT_REDIRECT_URL = "account_login"
 
 
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+MEDIA_URL = "/media/"
+MEDIA_ROOT = BASE_DIR / "media"
+
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
