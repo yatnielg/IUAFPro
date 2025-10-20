@@ -750,6 +750,7 @@ class ClipCredentialAdmin(admin.ModelAdmin):
         }),
     )
 
+#############################################################################
 from .models import ClipPaymentOrder
 @admin.register(ClipPaymentOrder)
 class ClipPaymentOrderAdmin(admin.ModelAdmin):
@@ -757,3 +758,87 @@ class ClipPaymentOrderAdmin(admin.ModelAdmin):
     list_filter  = ("status", "currency",)
     search_fields = ("id", "clip_payment_id", "description")
     readonly_fields = ("created_at", "updated_at", "raw_request", "raw_response", "last_webhook")    
+
+from .models import TwilioConfig
+
+@admin.register(TwilioConfig)
+class TwilioConfigAdmin(admin.ModelAdmin):
+    list_display = (
+        "name",
+        "env",
+        "masked_account_sid",
+        "has_msg_service",
+        "has_sms_from",
+        "has_whatsapp_from",
+        "active",
+        "updated_at",
+    )
+    list_filter = ("env", "active", "updated_at", "created_at")
+    search_fields = ("name", "account_sid", "messaging_service_sid", "sms_from", "whatsapp_from")
+    readonly_fields = ("updated_at", "created_at")
+    actions = ("marcar_como_activa",)
+
+    fieldsets = (
+        ("Identificación", {
+            "fields": ("name", "env", "active")
+        }),
+        ("Credenciales", {
+            "fields": ("account_sid", "auth_token"),
+            "description": "Tus credenciales de Twilio."
+        }),
+        ("Envío por SMS", {
+            "fields": ("messaging_service_sid", "sms_from", "default_sms_to"),
+            "description": "Se recomienda usar Messaging Service SID. 'sms_from' es alternativo."
+        }),
+        ("WhatsApp", {
+            "fields": ("whatsapp_from", "default_wa_to"),
+            "description": "Ejemplo sandbox: whatsapp:+14155238886"
+        }),
+        ("Tiempos", {
+            "classes": ("collapse",),
+            "fields": ("created_at", "updated_at"),
+        }),
+    )
+
+    # Helpers de presentación
+    def masked_account_sid(self, obj):
+        if not obj.account_sid:
+            return "—"
+        return f"...{obj.account_sid[-6:]}"
+    masked_account_sid.short_description = "Account SID"
+
+    def has_msg_service(self, obj):
+        return bool(obj.messaging_service_sid)
+    has_msg_service.boolean = True
+    has_msg_service.short_description = "Msg Service"
+
+    def has_sms_from(self, obj):
+        return bool(obj.sms_from)
+    has_sms_from.boolean = True
+    has_sms_from.short_description = "SMS From"
+
+    def has_whatsapp_from(self, obj):
+        return bool(obj.whatsapp_from)
+    has_whatsapp_from.boolean = True
+    has_whatsapp_from.short_description = "WA From"
+
+    @admin.action(description="Marcar como activa (desactiva otras del mismo entorno)")
+    def marcar_como_activa(self, request, queryset):
+        if queryset.count() != 1:
+            self.message_user(
+                request,
+                "Selecciona exactamente una configuración para activarla.",
+                level=messages.WARNING,
+            )
+            return
+        cfg = queryset.first()
+        with transaction.atomic():
+            TwilioConfig.objects.filter(env=cfg.env, active=True).exclude(pk=cfg.pk).update(active=False)
+            if not cfg.active:
+                cfg.active = True
+                cfg.save(update_fields=["active"])
+        self.message_user(
+            request,
+            f"'{cfg.name}' marcada como activa para entorno {cfg.env}. Las demás de ese entorno fueron desactivadas.",
+            level=messages.SUCCESS,
+        )

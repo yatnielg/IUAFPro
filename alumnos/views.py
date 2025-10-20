@@ -21,6 +21,27 @@ from django.db.models import Q
 from .models import  Pais, Estado
 
 from django.contrib.auth.decorators import login_required
+
+from django.contrib.auth.decorators import user_passes_test
+
+
+from alumnos.permisos import  user_can_edit_alumno, user_can_view_alumno
+
+def staff_or_admisiones(u):
+    return u.is_authenticated and (u.is_staff or u.groups.filter(name="admisiones").exists())
+
+def staff_or_admisiones_required(view_func):
+    return user_passes_test(staff_or_admisiones)(view_func)
+
+
+
+#EJEMPLO
+#@staff_or_admisiones_required
+#def alumnos_crear(request):
+
+
+
+
 # Create your views here.
 ####################################################################
 # views.py
@@ -28,23 +49,28 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.decorators import user_passes_test
 from .forms import AlumnoForm
 
+
+
+
+
+
 def admin_required(view_func):
     return user_passes_test(lambda u: u.is_active and u.is_staff)(view_func)
 ################################################################################
-from .utils import siguiente_numero_estudiante
+from .utils import send_simple_sms, send_simple_whatsapp, siguiente_numero_estudiante
 
 @admin_required
 def alumnos_crear(request):
     if request.method == "POST":
-        form = AlumnoForm(request.POST, crear=True)
+        form = AlumnoForm(request.POST, crear=True, request=request)
         if form.is_valid():
             alumno = form.save(commit=False)
-            alumno.numero_estudiante = siguiente_numero_estudiante()  # <- AQUÍ
+            alumno.numero_estudiante = siguiente_numero_estudiante()
             alumno.save()
             messages.success(request, "Alumno creado correctamente.")
             return redirect("alumnos_detalle", pk=alumno.pk)
     else:
-        form = AlumnoForm(crear=True)
+        form = AlumnoForm(crear=True, request=request)
 
     return render(request, "alumnos/editar_alumno.html", {
         "form": form,
@@ -57,59 +83,72 @@ def alumnos_crear(request):
 # views.py (o donde tengas alumnos_editar)
 from django.db.models import Sum
 from alumnos.models import Alumno, PagoDiario
-
+from django.http import HttpResponseForbidden
+# Mantén este decorador si solo staff puede editar:
 @admin_required
+# Si quieres staff o admisiones, usa este en su lugar:
+# @staff_or_admisiones_required
 def alumnos_editar(request, pk):
-    from django.http import HttpResponseForbidden
-    from alumnos.permisos import user_can_edit_alumno
     alumno = get_object_or_404(Alumno, pk=pk)
+
     if not user_can_edit_alumno(request.user, alumno):
         return HttpResponseForbidden("No tienes permiso para editar este alumno.")
 
-    plan_instance = alumno.informacionEscolar
-
-    from .models import DocumentosAlumno
+    plan_instance = alumno.informacionEscolar  # puede ser None
     docs_instance, _ = DocumentosAlumno.objects.get_or_create(alumno=alumno)
 
-    # NUEVO: pagos del alumno
-    pagos_qs = PagoDiario.objects.filter(alumno=alumno).order_by('-fecha', '-id')
-    pagos_total = pagos_qs.aggregate(total=Sum('monto'))['total'] or 0
+    # Pagos del alumno para el panel lateral
+    pagos_qs = PagoDiario.objects.filter(alumno=alumno).order_by("-fecha", "-id")
+    pagos_total = pagos_qs.aggregate(total=Sum("monto"))["total"] or 0
 
     if request.method == "POST":
-        form = AlumnoForm(request.POST, instance=alumno)
+        form = AlumnoForm(request.POST, instance=alumno, request=request)
         form_info = InformacionEscolarForm(
             request.POST,
             instance=plan_instance,
-            readonly_prices=True,   # <- bloque “Precios y reinscripciones” solo lectura
+            readonly_prices=True,     # bloque “Precios y reinscripciones” solo lectura
+            request=request,          # para chequear grupos de estatus
         )
         docs_form = DocumentosAlumnoForm(request.POST, request.FILES, instance=docs_instance)
 
         if form.is_valid() and form_info.is_valid() and docs_form.is_valid():
             alumno = form.save()
-            plan = form_info.save()          # crea o actualiza el plan
+
+            # Crea/actualiza plan escolar
+            plan = form_info.save()
             if not alumno.informacionEscolar_id:
                 alumno.informacionEscolar = plan
                 alumno.save(update_fields=["informacionEscolar"])
+
+            # Documentos
             docs_form.save()
+
             messages.success(request, "Alumno, plan y documentos actualizados.")
             return redirect("alumnos_detalle", pk=alumno.pk)
+        else:
+            messages.error(request, "Revisa los errores del formulario.")
     else:
-        form = AlumnoForm(instance=alumno)
+        form = AlumnoForm(instance=alumno, request=request)
         form_info = InformacionEscolarForm(
             instance=plan_instance,
-            readonly_prices=True,   # <- también en GET para que salgan deshabilitados en la UI
+            readonly_prices=True,     # también en GET para que salgan deshabilitados
+            request=request,
         )
         docs_form = DocumentosAlumnoForm(instance=docs_instance)
 
-    return render(request, "alumnos/editar_alumno.html", {
-        "form": form,
-        "form_info": form_info,
-        "docs_form": docs_form,
-        "alumno": alumno,
-        "modo": "editar",
-        "pagos": pagos_qs,
-        "pagos_total": pagos_total,
-    })
+    return render(
+        request,
+        "alumnos/editar_alumno.html",
+        {
+            "form": form,
+            "form_info": form_info,
+            "docs_form": docs_form,
+            "alumno": alumno,
+            "modo": "editar",
+            "pagos": pagos_qs,
+            "pagos_total": pagos_total,
+        },
+    )
 
 ####################################################################
 
@@ -170,25 +209,21 @@ def _filtrar_por_permisos_sede(qs, user):
     return qs.filter(filtro)
 
 ###############################################################
+# estudiantes()
 @login_required
 def estudiantes(request):
-    q = request.GET.get("q", "").strip()
+    q = (request.GET.get("q") or "").strip()
 
-    qs_base = (
-        Alumno.objects.all()
+    qs = (
+        Alumno.for_user(request.user)  # <- AQUÍ
         .select_related(
-            "pais",
-            "estado",
+            "pais", "estado",
             "informacionEscolar",
             "informacionEscolar__programa",
             "informacionEscolar__sede",
-            "user",
-            "documentos",
+            "user", "documentos",
         )
     )
-
-    # Filtramos por las sedes que el usuario puede ver
-    qs = _filtrar_por_permisos_sede(qs_base, request.user)
 
     if q:
         qs = qs.filter(
@@ -202,10 +237,25 @@ def estudiantes(request):
 
     return render(request, "panel/all_orders.html", {"alumnos": qs, "q": q})
 
+
 ###############################################################
-  
+
 @login_required   
 def principal(request):
+
+
+    
+    # SMS a un número específico:
+    #msg = send_simple_sms("Hola desde CampusIUAF 🚀", "+529931691530")
+    #print(msg.sid, msg.status)
+
+    # WhatsApp a un número específico:
+    #msg2 = send_simple_whatsapp("Hola por WhatsApp 👋", "+529931691530")
+    #print(msg2.sid, msg2.status)
+
+    # Forzar entorno 'prod' (si tienes dos TwilioConfig, una sandbox y otra prod):
+    #msg3 = send_simple_sms("Mensaje en prod", "+529931691530", env="prod")
+
     # =========================
     # 1) Ventas mensuales (Bar)
     # =========================
@@ -309,10 +359,11 @@ def principal(request):
 
 
 ###############################################################
-@login_required    
+# alumnos_lista()
+@login_required
 def alumnos_lista(request):
-    q = request.GET.get("q", "").strip()
-    qs = Alumno.objects.all()
+    q = (request.GET.get("q") or "").strip()
+    qs = Alumno.for_user(request.user)  # <- AQUÍ
     if q:
         qs = qs.filter(
             Q(numero_estudiante__icontains=q) |
@@ -324,21 +375,49 @@ def alumnos_lista(request):
         )
     return render(request, "alumnos/lista.html", {"alumnos": qs, "q": q})
 
+
 ###############################################################
 @login_required
 def alumnos_detalle(request, pk):
-    alumno = (
-        Alumno.objects
-        .select_related(
+    # Cargamos el alumno con todo lo necesario para evitar N+1
+    alumno = get_object_or_404(
+        Alumno.objects.select_related(
             "pais",
             "estado",
             "informacionEscolar",
             "informacionEscolar__programa",
             "informacionEscolar__sede",
-        )
-        .get(pk=pk)
+        ),
+        pk=pk,
     )
 
+    # ==========================
+    # Permisos de visualización
+    # ==========================
+    user = request.user
+    can_view = False
+
+    if user.is_superuser:
+        can_view = True
+    else:
+        # Si es del grupo "admisiones": solo ve alumnos que él creó
+        if user.groups.filter(name="admisiones").exists():
+            can_view = (alumno.created_by_id == user.id)
+        else:
+            # Resto de usuarios: por sedes asignadas
+            profile = getattr(user, "profile", None)
+            if profile:
+                # sede del alumno (defensivo si no hay informacionEscolar)
+                sede_id = getattr(getattr(alumno, "informacionEscolar", None), "sede_id", None)
+                if sede_id and profile.sedes.filter(id=sede_id).exists():
+                    can_view = True
+
+    if not can_view:
+        return HttpResponseForbidden("No tienes permiso para ver este alumno.")
+
+    # ==========================
+    # Datos relacionados (pagos, cargos)
+    # ==========================
     pagos = (
         PagoDiario.objects
         .filter(alumno=alumno)
@@ -355,6 +434,9 @@ def alumnos_detalle(request, pk):
     )
     cargos_pendientes = cargos.filter(pagado=False)
 
+    # ==========================
+    # Render
+    # ==========================
     return render(
         request,
         "alumnos/detalle.html",
@@ -366,7 +448,6 @@ def alumnos_detalle(request, pk):
             "cargos_pendientes": cargos_pendientes,
         },
     )
-
 
 ###############################################################
 @login_required   
@@ -509,30 +590,34 @@ class PagoDiarioListView(ListView):
         if not user.is_authenticated:
             return qs.none()
 
-        # Intentamos leer el perfil (puede no existir)
-        profile = getattr(user, "profile", None)
+        # ---- Admisiones: solo pagos de sus alumnos
+        if user.groups.filter(name="admisiones").exists():
+            qs = qs.filter(alumno__created_by=user)
+            # Si quieres también limitar por fecha a admisiones,
+            # descomenta el bloque de 2 años más abajo.
+        else:
+            # ---- No superuser: limitar por sedes
+            if not user.is_superuser:
+                profile = getattr(user, "profile", None)
+                if not profile:
+                    return qs.none()
 
-        # 1) Filtrado por sedes solo si NO es superuser
-        if not user.is_superuser:
-            if not profile:
-                return qs.none()
+                sedes_ids = list(profile.sedes.values_list("id", flat=True))
+                if not sedes_ids:
+                    return qs.none()
 
-            sedes_ids = list(profile.sedes.values_list("id", flat=True))
-            if not sedes_ids:
-                return qs.none()
+                qs = qs.filter(alumno__informacionEscolar__sede_id__in=sedes_ids)
 
-            qs = qs.filter(Q(alumno__informacionEscolar__sede_id__in=sedes_ids))
+            # ---- ver_todos_los_pagos
+            profile = getattr(user, "profile", None)
+            show_all = bool(profile and getattr(profile, "ver_todos_los_pagos", False))
 
-        # 2) Mostrar todo si: superuser OR perfil tiene ver_todos_los_pagos=True
-        show_all = (profile and getattr(profile, "ver_todos_los_pagos", False))
-        
+            # ---- Si NO show_all => limitar a últimos 2 años
+            if not show_all:
+                hace_dos_anios = timezone.now().date() - timedelta(days=730)
+                qs = qs.filter(fecha__gte=hace_dos_anios)
 
-        # 3) Si NO show_all => limitar a últimos 2 años
-        if not show_all:
-            hace_dos_anios = timezone.now().date() - timedelta(days=730)
-            qs = qs.filter(fecha__gte=hace_dos_anios)
-
-        # 4) Búsqueda opcional
+        # ---- Búsqueda opcional
         q = (self.request.GET.get("q") or "").strip()
         if q:
             qs = qs.filter(
@@ -547,6 +632,7 @@ class PagoDiarioListView(ListView):
             )
 
         return qs
+
 ############################################################################################################
 
 @login_required
@@ -628,18 +714,16 @@ def documentos_alumnos_lista(request):
         qs = base.none()
     elif user.is_superuser:
         qs = base
+    elif user.groups.filter(name="admisiones").exists():
+        # Admisiones: solo documentos de sus alumnos
+        qs = base.filter(alumno__created_by=user)
     else:
-        # Igual que en PagoDiarioListView
-        try:
-            profile = user.profile
-        except UserProfile.DoesNotExist:
+        profile = getattr(user, "profile", None)
+        if not profile:
             qs = base.none()
         else:
             sedes_ids = list(profile.sedes.values_list("id", flat=True))
-            if not sedes_ids:
-                qs = base.none()
-            else:
-                qs = base.filter(alumno__informacionEscolar__sede_id__in=sedes_ids)
+            qs = base.filter(alumno__informacionEscolar__sede_id__in=sedes_ids) if sedes_ids else base.none()
 
     # Búsqueda opcional
     if q:
@@ -654,6 +738,7 @@ def documentos_alumnos_lista(request):
 
     ctx = {"q": q, "documentos": qs}
     return render(request, "alumnos/documentos_lista.html", ctx)
+
 
 ###############################################################
 @login_required
@@ -674,15 +759,20 @@ from .clip_api import ClipClient
 
 @login_required
 def crear_pago_de_cargo(request, cargo_id):
-    cargo = get_object_or_404(Cargo.objects.select_related("alumno", "concepto"), pk=cargo_id)
+    # 1) Obtener el cargo + alumno
+    cargo = get_object_or_404(
+        Cargo.objects.select_related("alumno", "concepto"),
+        pk=cargo_id
+    )
     alumno = cargo.alumno
     if not alumno:
         return HttpResponseBadRequest("El cargo no tiene alumno asignado.")
 
+    # 2) Monto y descripción (evita guiones raros; el cliente vuelve a sanear)
     amount = cargo.monto.quantize(Decimal("0.01"))
     description = f"{cargo.concepto.nombre} - Alumno {alumno.numero_estudiante}"
 
-    # 1) Crear la orden local
+    # 3) Crear la orden local primero (para tener un ID de referencia)
     with transaction.atomic():
         orden = ClipPaymentOrder.objects.create(
             alumno=alumno,
@@ -692,16 +782,16 @@ def crear_pago_de_cargo(request, cargo_id):
             status="created",
         )
 
-    # 2) URLs de retorno ABSOLUTAS
+    # 4) URLs absolutas de retorno
     success_url = request.build_absolute_uri(reverse("clip_pago_exitoso", args=[orden.pk]))
     cancel_url  = request.build_absolute_uri(reverse("clip_pago_cancelado", args=[orden.pk]))
 
-    # 3) Llamar a Clip (el cliente ya manda centavos y usa `reference`)
+    # 5) Llamar a Clip (el cliente manda centavos y usa 'reference' internamente)
     client = ClipClient()
     data, code = client.create_payment_link(
         amount=float(amount),
         description=description,
-        order_id=str(orden.pk),   # se mapea a 'reference' en el cliente
+        order_id=str(orden.pk),     # map a 'reference' dentro del cliente
         success_url=success_url,
         cancel_url=cancel_url,
         metadata={
@@ -709,10 +799,11 @@ def crear_pago_de_cargo(request, cargo_id):
             "cargo_id": cargo.pk,
             "numero_estudiante": alumno.numero_estudiante,
         },
-        description_max_len=50,
+        description_max_len=50,     # seguro para la validación de descripción
+        # use_cents=True ya es el default en tu cliente
     )
 
-    # 4) Guardar request/response para auditoría
+    # 6) Persistir request/response para auditoría
     orden.raw_request = {
         "amount": str(amount),
         "description": description,
@@ -727,7 +818,7 @@ def crear_pago_de_cargo(request, cargo_id):
     }
     orden.raw_response = data
 
-    # 5) Tomar IDs/URLs devueltos
+    # 7) Extraer datos devueltos por Clip
     orden.clip_payment_id = str(data.get("id") or data.get("payment_id") or "")
     orden.checkout_url = str(
         data.get("checkout_url")
@@ -737,20 +828,22 @@ def crear_pago_de_cargo(request, cargo_id):
         or ""
     )
 
+    # 8) Estado local
     orden.status = "pending" if (code and 200 <= code < 300 and orden.checkout_url) else "failed"
     orden.save(update_fields=["raw_request", "raw_response", "clip_payment_id", "checkout_url", "status"])
 
-    # 6) Manejo de error visible
+    # 9) Manejo de error visible y depurable
     if not orden.checkout_url:
         msg = data.get("message") or data.get("error") or "No se pudo crear el pago."
-        # añade detalle si viene del backend para depurar rápido
-        detail = data.get("detail") or data.get("_raw_text") or ""
+        detail = data.get("detail") or data.get("_raw_text") or data.get("_content_type") or ""
         messages.error(request, f"Error al crear el pago ({code}): {msg}. {detail}")
-        return render(request, "pagos/crear_error.html", {
-            "orden": orden, "mensaje": msg, "respuesta": data, "status_code": code
-        })
+        return render(
+            request,
+            "pagos/crear_error.html",
+            {"orden": orden, "mensaje": msg, "respuesta": data, "status_code": code},
+        )
 
-    # 7) Redirigir al checkout de Clip
+    # 10) Redirigir al checkout
     return redirect(orden.checkout_url)
 
 
@@ -830,3 +923,44 @@ def clip_webhook(request):
         orden.save(update_fields=["status", "last_webhook", "updated_at"])
 
     return HttpResponse(status=200)
+################################################################
+from .utils import send_sms, send_whatsapp
+@login_required
+def enviar_sms(request):
+    to = request.GET.get("to")  # '+52...'
+    if not to:
+        return HttpResponseBadRequest("Falta parámetro to")
+    callback = request.build_absolute_uri(reverse("twilio_status_callback"))
+    # Si quieres forzar entorno: env="sandbox" o "prod"
+    m = send_sms(to, "Hola desde Twilio SMS 🚀", env=None, status_callback=callback)
+    return JsonResponse({"sid": m.sid, "status": m.status})
+
+@login_required
+def enviar_wa(request):
+    to = request.GET.get("to")
+    if not to:
+        return HttpResponseBadRequest("Falta parámetro to")
+    callback = request.build_absolute_uri(reverse("twilio_status_callback"))
+    m = send_whatsapp(to, "Hola por WhatsApp 👋", env=None, status_callback=callback)
+    return JsonResponse({"sid": m.sid, "status": m.status})
+
+@csrf_exempt
+def twilio_status_callback(request):
+    """
+    Twilio enviará POST con campos como:
+    MessageSid, SmsStatus (queued/sent/delivered/undelivered/failed), To, From, ErrorCode, ErrorMessage, etc.
+    """
+    if request.method != "POST":
+        return HttpResponse(status=405)
+
+    # Lee tanto form-encoded como JSON
+    payload = request.POST.dict()
+    if not payload:
+        try:
+            payload = json.loads(request.body.decode("utf-8"))
+        except Exception:
+            payload = {}
+
+    # TODO: aquí persiste en BD si quieres loguear estados
+    # Twilio recomienda responder 200 OK rápido
+    return JsonResponse({"ok": True})

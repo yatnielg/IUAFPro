@@ -234,8 +234,8 @@ class InformacionEscolar(models.Model):
     modalidad = models.CharField("Modalidad",max_length=15,choices=MODALIDAD_OPCIONES,default="en_linea")
     matricula = models.CharField("Matrícula",max_length=64, null=True, blank= True)
     # CAMBIA estos dos: ahora son selects con choices
-    estatus_academico = models.CharField("Estatus académico",max_length=20,choices=ESTATUS_OPCIONES_academico,blank=True,default="vigente")# deja en blanco si quieres
-    estatus_administrativo = models.CharField("Estatus administrativo",max_length=20,choices=ESTATUS_OPCIONES_administrativo,blank=True,default="vigente")
+    estatus_academico = models.CharField("Estatus académico",max_length=20,choices=ESTATUS_OPCIONES_academico,blank=True,default="VIGENTE")# deja en blanco si quieres
+    estatus_administrativo = models.CharField("Estatus administrativo",max_length=20,choices=ESTATUS_OPCIONES_administrativo,blank=True,default="VIGENTE")
 
     class Meta:
         verbose_name = "Informacion Escolar"
@@ -276,7 +276,7 @@ class Alumno(models.Model):
 
 
     # ID oficial: número de estudiante tal cual en Excel
-
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL,null=True, blank=True,on_delete=models.SET_NULL,related_name="alumnos_creados")
     numero_estudiante = models.BigIntegerField("Número de estudiante", primary_key=True)
     user = models.OneToOneField(settings.AUTH_USER_MODEL,on_delete=models.SET_NULL,null=True, blank=True,related_name="perfil_alumno")    
     nombre = models.CharField('Nombre(s)',max_length=120)
@@ -315,6 +315,36 @@ class Alumno(models.Model):
             models.Index(fields=["pais"]),
             models.Index(fields=["estado"]),
         ]
+
+    # opcional: helper
+    @staticmethod
+    def for_user(user):
+        qs = Alumno.objects.all()
+
+        if not user.is_authenticated:
+            return qs.none()
+
+        # superuser o flags globales
+        if user.is_superuser:
+            return qs
+        
+         # Grupo "admisiones": solo sus alumnos
+        if user.groups.filter(name="admisiones").exists():
+            return qs.filter(created_by=user)
+        
+        profile = getattr(user, "profile", None)
+        if not profile:
+            return qs.none()
+
+        sedes_ids = list(profile.sedes.values_list("id", flat=True))
+        if not sedes_ids:
+            return qs.none()
+
+        base = qs.filter(informacionEscolar__sede_id__in=sedes_ids)
+
+    
+
+        return base
 
 
     @property
@@ -619,3 +649,39 @@ class ClipPaymentOrder(models.Model):
 
     def __str__(self):
         return f"ClipOrder#{self.pk} {self.amount} {self.currency} [{self.status}]"
+
+##############################################################################################################
+class TwilioConfig(models.Model):
+    ENV_CHOICES = (("sandbox", "sandbox"), ("prod", "prod"))  # añade esto
+
+    name = models.CharField(max_length=64)
+    env = models.CharField(max_length=16, choices=ENV_CHOICES, default="sandbox")
+    account_sid = models.CharField(max_length=80)
+    auth_token = models.CharField(max_length=80)
+    messaging_service_sid = models.CharField(max_length=40, blank=True, null=True)
+    sms_from = models.CharField(max_length=20, blank=True, null=True)
+    whatsapp_from = models.CharField(max_length=25, blank=True, null=True)
+    default_sms_to = models.CharField(max_length=20, blank=True, null=True)
+    default_wa_to = models.CharField(max_length=25, blank=True, null=True)
+    active = models.BooleanField(default=False)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-updated_at",)
+        verbose_name = "Config de Twilio"
+        verbose_name_plural = "Configs de Twilio"
+
+    def __str__(self):
+        env_label = dict(self.ENV_CHOICES).get(self.env, self.env)
+        return f"{self.name} ({env_label}){' - activa' if self.active else ''}"
+
+    def clean(self):
+        # Asegura una sola activa por entorno
+        super().clean()
+        if self.active:
+            qs = TwilioConfig.objects.filter(env=self.env, active=True)
+            if self.pk:
+                qs = qs.exclude(pk=self.pk)
+            if qs.exists():
+                raise ValidationError("Ya hay otra configuración activa para este entorno.")

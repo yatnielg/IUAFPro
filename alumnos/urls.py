@@ -17,6 +17,8 @@ from .views import (
 )
 from alumnos import views as alumnos_views
 from . import views
+from django.views.decorators.csrf import csrf_exempt
+
 
 urlpatterns = [    
     path("", principal, name="principal"),
@@ -45,4 +47,9 @@ urlpatterns = [
     path("pagos/exito/<int:orden_id>/",       pago_exitoso,        name="clip_pago_exitoso"),
     path("pagos/cancelado/<int:orden_id>/",   pago_cancelado,      name="clip_pago_cancelado"),
     path("webhooks/clip/",                    clip_webhook,        name="clip_webhook"),
+
+
+    path("sms/send", views.enviar_sms, name="twilio_send_sms"),
+    path("wa/send", views.enviar_wa, name="twilio_send_wa"),
+    path("status-callback/", csrf_exempt(views.twilio_status_callback), name="twilio_status_callback"),
 ]

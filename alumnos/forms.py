@@ -59,6 +59,7 @@ class AlumnoForm(forms.ModelForm):
         crear=False -> en edición, numero_estudiante deshabilitado
         """
         super().__init__(*args, **kwargs)
+        self.request = request
 
         # En creación: estos campos son obligatorios
         if crear:
@@ -120,9 +121,22 @@ class AlumnoForm(forms.ModelForm):
         return curp or None
     
 
+    def save(self, commit=True):
+        obj = super().save(commit=False)
+        if not obj.pk and self.request and self.request.user.is_authenticated:
+            obj.created_by = self.request.user
+        if commit:
+            obj.save()
+        return obj
+    
+
 # ============ INFORMACION ESCOLAR ============
 from django import forms
 from .models import InformacionEscolar
+from alumnos.permisos import (
+    user_can_edit_estatus_academico,
+    user_can_edit_estatus_administrativo,
+)
 
 class InformacionEscolarForm(forms.ModelForm):
     # Fechas como <input type="date">
@@ -165,7 +179,7 @@ class InformacionEscolarForm(forms.ModelForm):
             "estatus_academico",
             "estatus_administrativo",
 
-            # === NUEVO ===
+            # Booleano extra
             "requiere_datos_de_facturacion",
         ]
         widgets = {
@@ -175,7 +189,6 @@ class InformacionEscolarForm(forms.ModelForm):
             "sede": forms.Select(attrs={"class": "selectpicker", "data-style": "select-with-transition"}),
             "estatus_academico": forms.Select(attrs={"class": "selectpicker", "data-style": "select-with-transition"}),
             "estatus_administrativo": forms.Select(attrs={"class": "selectpicker", "data-style": "select-with-transition"}),
-            # Checkbox para el booleano
             "requiere_datos_de_facturacion": forms.CheckboxInput(),
         }
 
@@ -190,8 +203,15 @@ class InformacionEscolarForm(forms.ModelForm):
         "numero_reinscripciones",
     ]
 
-    def __init__(self, *args, readonly_prices=True, **kwargs):
+    def __init__(self, *args, request=None, readonly_prices=True, **kwargs):
+        """
+        Pásame request=request en la vista para poder chequear grupos.
+        readonly_prices=True => pone los campos de precios en solo-lectura (UI) y (opcional) los protege en save().
+        """
         super().__init__(*args, **kwargs)
+        self.request = request
+        self._user = getattr(request, "user", None)
+        self._readonly_prices = bool(readonly_prices)
 
         # Añade clases a widgets (sin romper el checkbox)
         for name, field in self.fields.items():
@@ -202,12 +222,12 @@ class InformacionEscolarForm(forms.ModelForm):
                 css = field.widget.attrs.get("class", "")
                 field.widget.attrs["class"] = (css + " form-control").strip()
 
-        # Etiqueta bonita para programa
+        # Etiqueta para programa
         if "programa" in self.fields:
-            self.fields["programa"].label_from_instance = lambda p: f"{p.codigo} — {p.nombre}"
+            self.fields["programa"].label_from_instance = lambda p: f"{getattr(p, 'codigo', '')} — {p.nombre}"
 
-        # Solo lectura (UI) sin bloquear POST
-        if readonly_prices:
+        # Solo lectura (UI) para precios (no bloquea POST malicioso)
+        if self._readonly_prices:
             for name in self.READONLY_PRICE_FIELDS:
                 if name in self.fields:
                     self.fields[name].widget.attrs["readonly"] = "readonly"
@@ -215,10 +235,20 @@ class InformacionEscolarForm(forms.ModelForm):
                     css = self.fields[name].widget.attrs.get("class", "")
                     self.fields[name].widget.attrs["class"] = (css + " is-readonly").strip()
 
-        self._readonly_prices = readonly_prices
+        # Permisos de estatus
+        can_acad  = user_can_edit_estatus_academico(self._user) if self._user else False
+        can_admin = user_can_edit_estatus_administrativo(self._user) if self._user else False
+
+        if "estatus_academico" in self.fields and not can_acad:
+            self.fields["estatus_academico"].disabled = True
+
+        if "estatus_administrativo" in self.fields and not can_admin:
+            self.fields["estatus_administrativo"].disabled = True
 
     def clean(self):
         cleaned = super().clean()
+
+        # Recalcular precio_final simple (colegiatura - descuento)
         coleg = cleaned.get("precio_colegiatura") or 0
         desc  = cleaned.get("monto_descuento") or 0
         final = cleaned.get("precio_final")
@@ -227,7 +257,47 @@ class InformacionEscolarForm(forms.ModelForm):
                 cleaned["precio_final"] = coleg - desc
         except Exception:
             pass
+
+        # Refuerzo de permisos sobre estatus (en edición)
+        if self.instance and self.instance.pk:
+            can_acad  = user_can_edit_estatus_academico(self._user) if self._user else False
+            can_admin = user_can_edit_estatus_administrativo(self._user) if self._user else False
+
+            if "estatus_academico" in cleaned and not can_acad:
+                cleaned["estatus_academico"] = self.instance.estatus_academico
+
+            if "estatus_administrativo" in cleaned and not can_admin:
+                cleaned["estatus_administrativo"] = self.instance.estatus_administrativo
+
         return cleaned
+
+    def save(self, commit=True):
+        """
+        Protección extra en servidor:
+        - Si no puede editar estatus, conserva los valores previos.
+        - Si readonly_prices=True y es edición, conserva los campos de precios originales.
+        """
+        obj = super().save(commit=False)
+
+        if self.instance and self.instance.pk:
+            # Permisos de estatus
+            can_acad  = user_can_edit_estatus_academico(self._user) if self._user else False
+            can_admin = user_can_edit_estatus_administrativo(self._user) if self._user else False
+
+            if not can_acad:
+                obj.estatus_academico = self.instance.estatus_academico
+            if not can_admin:
+                obj.estatus_administrativo = self.instance.estatus_administrativo
+
+            # Protección de precios si marcaste solo-lectura
+            if self._readonly_prices:
+                for name in self.READONLY_PRICE_FIELDS:
+                    if hasattr(self.instance, name):
+                        setattr(obj, name, getattr(self.instance, name))
+
+        if commit:
+            obj.save()
+        return obj
 
 
 # forms.py
