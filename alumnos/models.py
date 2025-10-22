@@ -13,12 +13,162 @@ class UserProfile(models.Model):
 
     # flags de alcance global
     puede_ver_todo = models.BooleanField(default=False)
-    puede_editar_todo = models.BooleanField(default=False)  # si esto es True, ya implica ver_todo
+    puede_editar_todo = models.BooleanField("Puede editar",default=False)  # si esto es True, ya implica ver_todo
     # ver todos los pagos (ignora el recorte a 2 años)
     ver_todos_los_pagos = models.BooleanField(default=False,help_text="Si está activo, el usuario verá todos los pagos (sin límite de años).")
 
     def __str__(self):
         return f"Perfil de {self.user}"
+
+####################################################################################################
+from django.utils.functional import cached_property
+import re
+
+# Palabras que suelen aparecer en el texto pero NO son parte del nombre
+_STOPWORDS = {
+    "ABONO", "CARGO", "INTERBANCARIO", "SUCURSAL", "REFERENCIA", "NUMERICA",
+    "NUMÉRICA", "ALFANUMERICA", "ALFANUMÉRICA", "NOMBRE", "EMISOR",
+    "NO", "DE", "AUTORIZACION", "AUTORIZACIÓN", "FECHA", "TIPO", "MONTO",
+    "SPEI", "TRANSFERENCIA", "CLABE", "CUENTA", "DEPOSITO", "DEPÓSITO","COMISION","COMISION",
+    "IVA","RECEPCION","INSTITUTO","UNIVERSITARIO","FORMACIO","ADMINISTRACION","PAQUETE","SERVICIOS","PYME",
+}
+
+# Coincidir rótulos comunes en descripcion_raw:
+_LABEL_RE = re.compile(
+    r"(?:Referencia\s+alfanum(?:e|é)rica|Nombre\s+del\s+Emisor)\s*:\s*([^\n\r|]+)",
+    flags=re.IGNORECASE
+)
+
+# Secuencias “nombre” candidatas: 3–6 tokens de letras (incluye acentos/Ñ)
+# en mayúsculas (permitimos guiones y puntos ocasionales).
+_NAME_CANDIDATE_RE = re.compile(
+    r"\b([A-ZÁÉÍÓÚÑ]{2,}(?:[-\.]?[A-ZÁÉÍÓÚÑ]{2,})?(?:\s+[A-ZÁÉÍÓÚÑ]{2,}(?:[-\.]?[A-ZÁÉÍÓÚÑ]{2,})?){2,5})\b"
+)
+
+def _cleanup_spaces(s: str) -> str:
+    return re.sub(r"\s+", " ", s or "").strip()
+
+def _title_person(s: str) -> str:
+    """
+    Pasa a Title Case, pero deja partículas comunes en minúscula.
+    """
+    if not s:
+        return s
+    parts_lower = {"DE", "DEL", "LA", "LAS", "LOS", "Y", "MC", "VON", "VAN", "DA", "DI", "DOS", "DU"}
+    out = []
+    for w in s.split():
+        uw = w.upper()
+        if uw in parts_lower:
+            out.append(uw.lower())
+        else:
+            out.append(uw.capitalize())
+    return " ".join(out)
+
+def _best_name_span(text: str) -> str | None:
+    """
+    Devuelve la mejor coincidencia de nombre en el texto (si hay),
+    descartando tokens que sean stopwords y prefiriendo la secuencia más larga.
+    """
+    if not text:
+        return None
+    txt = _cleanup_spaces(text)
+    # Normaliza separadores tipo pipes
+    txt = txt.replace("|", " ")
+    best = None
+    best_len = 0
+    for m in _NAME_CANDIDATE_RE.finditer(txt):
+        cand = _cleanup_spaces(m.group(1))
+        tokens = [t for t in cand.split() if t.upper() not in _STOPWORDS]
+        # Queremos al menos 3 tokens reales
+        if len(tokens) >= 3:
+            cand2 = " ".join(tokens)
+            if len(tokens) > best_len:
+                best = cand2
+                best_len = len(tokens)
+    return best
+
+###########
+class MovimientoBanco(models.Model):
+    # Datos del movimiento
+    fecha = models.DateField(null=True, blank=True, db_index=True)
+    tipo = models.CharField(max_length=120, null=True, blank=True, db_index=True)
+
+    # monto puede ser grande y con decimales
+    monto = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True, db_index=True)
+
+    # 1 = abono, -1 = cargo; puede ser None si no se pudo inferir
+    SIGNO_CHOICES = (
+        (-1, "Cargo"),
+        (1, "Abono"),
+    )
+    signo = models.SmallIntegerField(choices=SIGNO_CHOICES, null=True, blank=True)
+
+    sucursal = models.CharField(max_length=50, null=True, blank=True, db_index=True)
+    referencia_numerica = models.CharField(max_length=50, null=True, blank=True, db_index=True)
+    referencia_alfanumerica = models.TextField(null=True, blank=True)
+    concepto = models.TextField(null=True, blank=True)
+    autorizacion = models.CharField(max_length=50, null=True, blank=True, db_index=True)
+    emisor_nombre = models.CharField(max_length=200, null=True, blank=True, db_index=True)
+    institucion_emisora = models.CharField(max_length=120, null=True, blank=True, db_index=True)
+
+    # Texto completo crudo para referencia/auditoría
+    descripcion_raw = models.TextField(null=True, blank=True)
+
+    # Metadatos de origen (opcionales pero útiles)
+    source_sheet_id = models.CharField(max_length=128, null=True, blank=True, db_index=True)
+    source_sheet_name = models.CharField(max_length=128, null=True, blank=True, db_index=True)
+    source_gid = models.CharField(max_length=32, null=True, blank=True, db_index=True)
+    source_row = models.IntegerField(null=True, blank=True)  # fila original (si la sabes)
+
+    # Hash idempotente para evitar duplicados al importar
+    uid_hash = models.CharField(max_length=40, unique=True, db_index=True)
+
+    # Auditoría
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["fecha", "tipo"]),
+            models.Index(fields=["referencia_numerica", "autorizacion"]),
+            models.Index(fields=["emisor_nombre"]),
+            models.Index(fields=["institucion_emisora"]),
+        ]
+        ordering = [ "id"]
+
+    def __str__(self):
+        return f"[{self.fecha}] {self.tipo or 'Movimiento'} ${self.monto or 0}"
+    
+    @cached_property
+    def nombre_detectado(self) -> str:
+        """
+        Intenta extraer un 'Nombre Apellido1 Apellido2 [Nombres extra]' desde:
+        1) referencia_alfanumerica
+        2) emisor_nombre
+        3) descripcion_raw (tras los rótulos)
+        Retorna string (Title Case) o cadena vacía si no encuentra.
+        """
+        # 1) Referencia alfanumérica (directo)
+        for source in (self.referencia_alfanumerica, self.emisor_nombre):
+            nm = _best_name_span(source or "")
+            if nm:
+                return _title_person(nm)
+
+        # 2) descripcion_raw -> intenta leer tras los rótulos
+        if self.descripcion_raw:
+            # Primero, capturar los valores que siguen a los labels
+            for lab in _LABEL_RE.findall(self.descripcion_raw):
+                nm = _best_name_span(lab)
+                if nm:
+                    return _title_person(nm)
+
+            # Si no hay rótulos o no funcionó, busca genérico en todo el raw
+            nm = _best_name_span(self.descripcion_raw)
+            if nm:
+                return _title_person(nm)
+
+        return ""  # no encontrado
+        
 ####################################################################################################
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.db import models
@@ -188,6 +338,29 @@ class Programa(models.Model):
     @property
     def nombre_ayuda(self):
         return self.nombre
+############################################################################
+class BaseEstatus(models.Model):
+    codigo = models.CharField(max_length=50, unique=True)     # p.ej. "VIGENTE"
+    nombre = models.CharField(max_length=100)                 # p.ej. "VIGENTE"
+    orden = models.PositiveIntegerField(default=0)            # para ordenar en selects
+    activo = models.BooleanField(default=True)
+
+    class Meta:
+        abstract = True
+        ordering = ["orden", "nombre"]
+
+    def __str__(self):
+        return self.nombre
+
+class EstatusAcademico(BaseEstatus):
+    class Meta(BaseEstatus.Meta):
+        verbose_name = "Estatus académico"
+        verbose_name_plural = "Estatus académicos"
+
+class EstatusAdministrativo(BaseEstatus):
+    class Meta(BaseEstatus.Meta):
+        verbose_name = "Estatus administrativo"
+        verbose_name_plural = "Estatus administrativos"    
 
 ############################################################################
 class InformacionEscolar(models.Model):
@@ -219,6 +392,7 @@ class InformacionEscolar(models.Model):
     monto_descuento = models.DecimalField("Monto de descuento", max_digits=12, decimal_places=2, default=Decimal("0.00"))
     meses_programa = models.PositiveIntegerField("Meses de programa")
     precio_inscripcion = models.DecimalField("Precio de inscripción", max_digits=12, decimal_places=2, default=Decimal("0.00"))
+    precio_reinscripcion = models.DecimalField("Precio de reinscripción", max_digits=12, decimal_places=2, default=Decimal("0.00"))
     precio_titulacion = models.DecimalField("Precio de titulación", max_digits=12, decimal_places=2, default=Decimal("0.00"))
     precio_equivalencia = models.DecimalField("Precio de equivalencia", max_digits=12, decimal_places=2, default=Decimal("-1.00"))
     numero_reinscripciones = models.PositiveIntegerField("No. de reinscripciones", default=0)
@@ -234,8 +408,24 @@ class InformacionEscolar(models.Model):
     modalidad = models.CharField("Modalidad",max_length=15,choices=MODALIDAD_OPCIONES,default="en_linea")
     matricula = models.CharField("Matrícula",max_length=64, null=True, blank= True)
     # CAMBIA estos dos: ahora son selects con choices
-    estatus_academico = models.CharField("Estatus académico",max_length=20,choices=ESTATUS_OPCIONES_academico,blank=True,default="VIGENTE")# deja en blanco si quieres
-    estatus_administrativo = models.CharField("Estatus administrativo",max_length=20,choices=ESTATUS_OPCIONES_administrativo,blank=True,default="VIGENTE")
+    #estatus_academico = models.CharField("Estatus académico",max_length=20,choices=ESTATUS_OPCIONES_academico,blank=True,default="VIGENTE")# deja en blanco si quieres
+    #estatus_administrativo = models.CharField("Estatus administrativo",max_length=20,choices=ESTATUS_OPCIONES_administrativo,blank=True,default="VIGENTE")
+
+    # NUEVO: ForeignKeys a catálogos configurables
+    estatus_academico = models.ForeignKey(
+            "EstatusAcademico",
+            on_delete=models.PROTECT,
+            related_name="informaciones_academicas",
+            verbose_name="Estatus académico",
+            null=True, blank=True
+        )
+    estatus_administrativo = models.ForeignKey(
+            "EstatusAdministrativo",
+            on_delete=models.PROTECT,
+            related_name="informaciones_administrativas",
+            verbose_name="Estatus administrativo",
+            null=True, blank=True
+        )
 
     class Meta:
         verbose_name = "Informacion Escolar"

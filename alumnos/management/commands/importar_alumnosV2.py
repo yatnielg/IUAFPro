@@ -6,9 +6,10 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 
 # IMPORTA TUS MODELOS
-from alumnos.models import Alumno, Pais, Programa, InformacionEscolar,Sede  # Estado lo dejamos en blanco por ahora
+from alumnos.models import Alumno, Pais, Programa, InformacionEscolar, Sede  # Estado lo dejamos en blanco por ahora
 from decimal import Decimal
 from datetime import datetime, date
+
 
 def to_date(v):
     if v is None or (isinstance(v, float) and pd.isna(v)) or v == "":
@@ -39,6 +40,19 @@ def to_decimal(v, default="0.00") -> Decimal:
         except Exception:
             return Decimal(default)
 
+
+def to_int(v, default=0) -> int:
+    if v is None or (isinstance(v, float) and pd.isna(v)) or v == "":
+        return int(default)
+    try:
+        return int(str(v).strip())
+    except Exception:
+        try:
+            # cuando viene "3.0" o "3,0"
+            s = str(v).replace(",", "").strip()
+            return int(float(s))
+        except Exception:
+            return int(default)
 
 
 # ========= Utilidades de normalización =========
@@ -161,7 +175,6 @@ def split_nombre_completo(fullname: str):
     return nice(nombres), nice(apellido_p), nice(apellido_m)
 
 
-
 def map_sexo(sexo_cell: str, curp: str):
     s = norm_text(sexo_cell)
     if s in ("H", "HOMBRE", "MASCULINO"):
@@ -176,6 +189,75 @@ def map_sexo(sexo_cell: str, curp: str):
         if ch == "M":
             return "Mujer"
     return ""  # vacío permitido en el modelo
+
+
+# --- Normalización y mapeo de estatus a instancias ---
+def norm_codigo_estatus(s: str) -> str:
+    # "BAJA TEMPORAL" -> "BAJA_TEMPORAL", sin acentos, mayúsculas
+    s = norm_text(s or "")
+    s = s.replace(" ", "_")
+    return s
+
+
+# Sinónimos/fuzzy para ACADÉMICO
+MAP_ACAD = {
+    "VIGENTE": "VIGENTE",
+    "EGRESADO": "EGRESADO",
+    "EN_TITULACION": "EN_TITULACION",
+    "EN_TITULACIÓN": "EN_TITULACION",
+    "BAJA": "BAJA_TEMPORAL",          # ajusta a tu preferencia
+    "BAJA_TEMPORAL": "BAJA_TEMPORAL",
+    "BAJA_DEFINITIVA": "BAJA_DEFINITIVA",
+}
+
+# Sinónimos/fuzzy para ADMINISTRATIVO
+MAP_ADMIN = {
+    "VIGENTE": "VIGENTE",
+    "EGRESADO": "EGRESADO",
+    "BAJA": "BAJA_DEFINITIVA",        # ajusta a tu preferencia
+    "BAJA_TEMPORAL": "BAJA_TEMPORAL",
+    "BAJA_DEFINITIVA": "BAJA_DEFINITIVA",
+}
+
+
+def map_estatus_academico(texto: str):
+    # import local para evitar dependencias en import-time
+    from alumnos.models import EstatusAcademico
+    cod_raw = norm_codigo_estatus(texto)
+    if not cod_raw:
+        return None
+    # heurística por contenido
+    if "DEFINIT" in cod_raw:
+        cod = "BAJA_DEFINITIVA"
+    elif "TEMP" in cod_raw:
+        cod = "BAJA_TEMPORAL"
+    elif "TITUL" in cod_raw:
+        cod = "EN_TITULACION"
+    else:
+        cod = MAP_ACAD.get(cod_raw, cod_raw)
+    obj, _ = EstatusAcademico.objects.get_or_create(
+        codigo=cod,
+        defaults={"nombre": cod.replace("_", " ")}
+    )
+    return obj
+
+
+def map_estatus_administrativo(texto: str):
+    from alumnos.models import EstatusAdministrativo
+    cod_raw = norm_codigo_estatus(texto)
+    if not cod_raw:
+        return None
+    if "DEFINIT" in cod_raw:
+        cod = "BAJA_DEFINITIVA"
+    elif "TEMP" in cod_raw:
+        cod = "BAJA_TEMPORAL"
+    else:
+        cod = MAP_ADMIN.get(cod_raw, cod_raw)
+    obj, _ = EstatusAdministrativo.objects.get_or_create(
+        codigo=cod,
+        defaults={"nombre": cod.replace("_", " ")}
+    )
+    return obj
 
 
 class Command(BaseCommand):
@@ -280,7 +362,7 @@ class Command(BaseCommand):
                     col_fechaPagoprimeraColegiatura = idx_map.get(objetivo_norm["Fecha Pago 1a Colegiatura"])
                     col_terminaPago = idx_map.get(objetivo_norm["Termina Pagos"])
                     col_grado = idx_map.get(objetivo_norm["Grado"])
-                    col_estatus_administrativo = idx_map.get(objetivo_norm["SITUACIÓN"]) #estado administrativo creo
+                    col_estatus_administrativo = idx_map.get(objetivo_norm["SITUACIÓN"])  # estado administrativo
                     col_precioGeneral = idx_map.get(objetivo_norm["Precio General"])
                     col_porcentajeBeca = idx_map.get(objetivo_norm["Porcentaje de la Beca"])
                     col_monto_descuento = idx_map.get(objetivo_norm["Monto del Descuento"])
@@ -288,10 +370,6 @@ class Command(BaseCommand):
                     col_precio_equivalencia = idx_map.get(objetivo_norm["Equivalencia"])
                     col_precio_titulacion = idx_map.get(objetivo_norm["Titulación"])
                     col_estatus_academico = idx_map.get(objetivo_norm["ESTATUS ACADÉMICO"])
-                    
-                    #col_sede = idx_map.get(objetivo_norm["SEDE"])
-
-          
 
                     numero_estudiante = fmt(row.get(col_no))
                     if not numero_estudiante:
@@ -316,11 +394,8 @@ class Command(BaseCommand):
                     # Partir nombre completo
                     nombres, ape_p, ape_m = split_nombre_completo(nombre_completo)
 
-
-                    sedes_obj = Sede.objects.filter(nombre = sede_val).first()
-                    programa = Programa.objects.filter(codigo = programa_val).first()
-                    
-           
+                    sedes_obj = Sede.objects.filter(nombre=sede_val).first()
+                    programa = Programa.objects.filter(codigo=programa_val).first()
 
                     try:
                         obj, was_created = Alumno.objects.update_or_create(
@@ -339,47 +414,51 @@ class Command(BaseCommand):
                             }
                         )
 
+                        # --- Campos de InformacionEscolar ---
+                        precio_colegiatura_txt = fmt(row.get(col_precio_colegiatura))
+                        monto_descuento_txt = fmt(row.get(col_monto_descuento))
+                        meses_programa_val = to_int(row.get(col_meses_programa))
+                        precio_inscripcion_txt = fmt(row.get(col_precio_inscripcion))
+                        precio_titulacion_txt = fmt(row.get(col_precio_titulacion))
+                        precio_equivalencia_txt = fmt(row.get(col_precio_equivalencia))
+                        numero_reinscripciones_val = to_int(row.get(col_numero_reinscripciones))
+                        fin_programa_txt = fmt(row.get(col_fin_programa))
 
-                    
-                        precio_colegiatura = fmt(row.get(col_precio_colegiatura))
-                        monto_descuento = fmt(row.get(col_monto_descuento))
-                        meses_programa = fmt(row.get(col_meses_programa))
-                        precio_inscripcion = fmt(row.get(col_precio_inscripcion))
-                        precio_titulacion = fmt(row.get(col_precio_titulacion))
-                        precio_equivalencia = fmt(row.get(col_precio_equivalencia))
-                        numero_reinscripciones = fmt(row.get(col_numero_reinscripciones))
-                        fin_programa = fmt(row.get(col_fin_programa))
+                        estatus_academico_txt = fmt(row.get(col_estatus_academico))
+                        estatus_administrativo_txt = fmt(row.get(col_estatus_administrativo))
 
-                        estatus_academico = fmt(row.get(col_estatus_academico))
-                        estatus_administrativo = fmt(row.get(col_estatus_administrativo))
+                        # Mapear a instancias (crea si no existe)
+                        ea = map_estatus_academico(estatus_academico_txt)
+                        ed = map_estatus_administrativo(estatus_administrativo_txt)
 
-                        fecha_alta = fmt(row.get(col_fechaInicioPrimeraClase))
+                        fecha_alta_txt = fmt(row.get(col_fechaInicioPrimeraClase))
                         matricula = fmt(row.get(col_matricula))
                         grupo = fmt(row.get(col_grupoClase))
 
-                        obj_infor = InformacionEscolar.objects.create(                            
-                            programa = programa if programa else None,
-                            precio_colegiatura = to_decimal(precio_colegiatura),  
-                            monto_descuento = to_decimal(monto_descuento), 
-                            meses_programa = to_decimal(meses_programa),
-                            precio_inscripcion = to_decimal(precio_inscripcion),
-                            precio_titulacion = to_decimal(precio_titulacion),
-                            precio_equivalencia = to_decimal(precio_equivalencia),
-                            numero_reinscripciones = to_decimal(numero_reinscripciones),
-                            fecha_alta= to_date(fecha_alta),
-                            sede = sedes_obj,
-                            precio_final=450,
-                            fin_programa=to_date(fin_programa),
-                            grupo= grupo,
-                            modalidad= "en_linea",
+                        obj_infor = InformacionEscolar.objects.create(
+                            programa=programa if programa else None,
+                            precio_colegiatura=to_decimal(precio_colegiatura_txt),
+                            monto_descuento=to_decimal(monto_descuento_txt),
+                            meses_programa=meses_programa_val,                     # ENTERO
+                            precio_inscripcion=to_decimal(precio_inscripcion_txt),
+                            precio_titulacion=to_decimal(precio_titulacion_txt),
+                            precio_equivalencia=to_decimal(precio_equivalencia_txt),
+                            numero_reinscripciones=numero_reinscripciones_val,      # ENTERO
+                            fecha_alta=to_date(fecha_alta_txt),
+                            sede=sedes_obj,
+                            precio_final=Decimal("450.00"),
+                            fin_programa=to_date(fin_programa_txt),
+                            grupo=grupo,
+                            modalidad="en_linea",
                             matricula=matricula,
-                            estatus_academico = estatus_academico,
-                            estatus_administrativo = estatus_administrativo,                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  
+                            estatus_academico=ea,            # INSTANCIA
+                            estatus_administrativo=ed,       # INSTANCIA
                         )
+
                         # ENLACE OneToOne (indispensable)
                         obj.informacionEscolar = obj_infor
                         obj.save(update_fields=["informacionEscolar"])
-              
+
                         if was_created:
                             created += 1
                         else:
@@ -398,5 +477,9 @@ class Command(BaseCommand):
         except Exception as e:
             self.stderr.write(self.style.ERROR(f"Error leyendo el archivo: {e}"))
 
-
+# Ejemplo:
+#python manage.py crear_sedes
+#python manage.py cargar_programas
+#python manage.py init_roles
 #python manage.py importar_alumnosV2 "C:\Users\yatni\Downloads\COPIA control alumnos totales 2022.xlsm"
+#python manage.py importar_pagos_diario "C:\Users\yatni\Downloads\copia IUAF Registro  de ingresos FINAL.xlsm" --sheet "DIARIO"

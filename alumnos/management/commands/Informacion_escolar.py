@@ -293,3 +293,4 @@ class Command(BaseCommand):
             self.stderr.write(self.style.ERROR(f"Error leyendo el archivo: {e}"))
 
 
+#python manage.py Informacion_escolar "C:\Users\yatni\Downloads\COPIA control alumnos totales 2022.xlsm"

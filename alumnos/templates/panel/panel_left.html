@@ -89,6 +89,18 @@
             </a>
           </li>
 
+
+
+         <li class="nav-item {% if  request.resolver_match.url_name == 'movimientos_banco_lista'  %} active {% endif %}">
+            <a class="nav-link" href=" {% url 'movimientos_banco_lista' %}">
+              <i class="material-icons">account_balance</i>
+              <p> Movimientos de Banco </p>
+            </a>
+          </li>
+
+
+
+
           <li class="nav-item {% if  request.resolver_match.url_name == 'config_panel'  %} active {% endif %}">
             <a class="nav-link" href=" {% url 'config_panel' %}">
               <i class="material-icons">settings</i>

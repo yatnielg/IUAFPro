@@ -52,7 +52,7 @@
 
 <div class="card">
   <div class="card-header card-header-primary card-header-icon d-flex align-items-center">
-    <div class="card-icon"><i class="material-icons">badge</i></div>
+    <div class="card-icon" title="Admisiones {{ alumno.created_by }}"><i class="material-icons">badge</i></div>
     <div>
       <h4 class="card-title m-0">Ficha del alumno</h4>
       <p class="card-category m-0">Resumen general</p>
@@ -340,6 +340,7 @@
   </div>
 </div>
 
+{% if can_view_pagos %}
 <!-- ===================== PAGOS DEL ALUMNO ===================== -->
 <div class="card mt-4">
   <div class="card-header card-header-primary card-header-icon">
@@ -463,23 +464,37 @@
     </table>
   </div>
 </div>
+{% endif %}
 
+{% if can_view_documentos %}
 <!-- ===================== DOCUMENTOS: SOLO LECTURA ===================== -->
 <div class="card mt-4">
-  <div class="card-header card-header-primary card-header-icon">
+  <!-- Header DE DOCUMENTOS con botón a la derecha -->
+  <div class="card-header card-header-primary card-header-icon d-flex align-items-center">
     <div class="card-icon"><i class="material-icons">folder_open</i></div>
-    <h4 class="card-title">Documentos del alumno (solo lectura)</h4>
-    <p class="card-category">
-      {% if alumno.documentos %}
-        Cargados: <strong>{{ alumno.documentos.total_subidos }}</strong>
-        {% if alumno.documentos.fecha_ultima_actualizacion %}
-          &nbsp;•&nbsp; Última actualización:
-          <strong>{{ alumno.documentos.fecha_ultima_actualizacion|date:"d/m/Y H:i" }}</strong>
+
+    <div>
+      <h4 class="card-title m-0">Documentos del alumno (solo lectura)</h4>
+      <p class="card-category m-0">
+        {% if alumno.documentos %}
+          Cargados: <strong>{{ alumno.documentos.total_subidos }}</strong>
+          {% if alumno.documentos.fecha_ultima_actualizacion %}
+            &nbsp;•&nbsp; Última actualización:
+            <strong>{{ alumno.documentos.fecha_ultima_actualizacion|date:"d/m/Y H:i" }}</strong>
+          {% endif %}
+        {% else %}
+          Sin contenedor de documentos.
         {% endif %}
-      {% else %}
-        Sin contenedor de documentos.
+      </p>
+    </div>
+
+    <div class="card-header-actions ml-auto mt-0">
+      {% if alumno and alumno.pk %}
+        <a class="btn btn-outline-primary" href="{% url 'alumnos_documentos_pdf' alumno.pk %}" target="_blank" rel="noopener">
+          Unificar en PDF
+        </a>
       {% endif %}
-    </p>
+    </div>
   </div>
 
   <div class="card-body">
@@ -609,6 +624,7 @@
     {% endif %}
   </div>
 </div>
+{% endif %}
 
 <script>
   $(function(){

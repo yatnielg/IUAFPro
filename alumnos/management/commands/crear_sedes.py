@@ -29,3 +29,5 @@ class Command(BaseCommand):
             else:
                 self.stdout.write(f"= Ya existía: {nombre}")
         self.stdout.write(self.style.WARNING(f"Sedes nuevas: {creadas}"))
+
+#python manage.py crear_sedes

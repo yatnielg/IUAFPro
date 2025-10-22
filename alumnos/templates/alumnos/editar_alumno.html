@@ -29,6 +29,17 @@
 </style>
 
 
+<style>
+  .curp-loading{
+    display:flex; align-items:center; gap:.5rem; margin-top:.25rem; 
+    font-size: .9rem; color:#9aa0a6;
+  }
+  .curp-spinner{
+    width:16px; height:16px; border:2px solid rgba(255,255,255,.2);
+    border-top-color:#9aa0a6; border-radius:50%; animation:curpSpin .9s linear infinite;
+  }
+  @keyframes curpSpin{ to { transform: rotate(360deg); } }
+</style>
 
 
 
@@ -68,11 +79,18 @@
               <i class="material-icons align-middle">payments</i> &nbsp;Plan (editar)
             </a>
           </li>
+
+
+
+
+{% if can_view_pagos %}
           <li class="nav-item">
             <a class="nav-link" id="tab-pagos" data-toggle="tab" href="#pane-pagos" role="tab">
               <i class="material-icons align-middle">receipt_long</i> &nbsp;Pagos (DIARIO)
             </a>
           </li>
+      {% endif %}    
+
           {% endif %}
         </ul>
 
@@ -105,14 +123,38 @@
                 {% for error in form.numero_estudiante.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
               </div>
 
-              <div class="form-group col-md-4">
-                <label for="{{ form.curp.id_for_label }}" class="md-label-floating {% if form.curp.field.required %}required{% endif %}">
-                  {{ form.curp.label }}
-                </label>
-                {{ form.curp }}
-                {% for error in form.curp.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
-              </div>
+
+<div class="form-group col-md-4">
+  <label for="{{ form.curp.id_for_label }}" class="md-label-floating {% if form.curp.field.required %}required{% endif %}">
+    {{ form.curp.label }}
+  </label>
+
+  <div class="input-group">
+    {{ form.curp }}
+    <div class="input-group-append">
+      <button class="btn btn-outline-primary btn-sm" type="button" id="btnCurpLookup" title="Buscar datos por CURP">
+        <i class="material-icons" style="font-size:18px;vertical-align:middle;">search</i>
+      </button>
+    </div>
+  </div>
+  <small id="curpLookupStatus" class="form-text text-muted" style="display:none;"></small>
+  {% for error in form.curp.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
+
+  <div id="curpLoading" class="curp-loading" style="display:none;" aria-live="polite">
+  <div class="curp-spinner" aria-hidden="true"></div>
+    <span>Cargando datos…</span>
+  </div>
+
+</div>
+
+
+
+
+
             </div>
+
+
+
 
             <div class="section-title"><i class="material-icons">account_circle</i> Datos personales</div>
             <div class="row">
@@ -184,11 +226,14 @@
 
             <div class="d-flex justify-content-between mt-3">
               <div>
+{% if can_view_documentos %}
                 {% if alumno and alumno.pk %}
                   <a class="btn btn-outline-primary" href="{% url 'alumnos_documentos_editar' alumno.pk %}">
                     Documentos
                   </a>
                 {% endif %}
+{% endif %}
+
               </div>
               <button class="btn btn-primary" type="button" data-next="#tab-ubicacion">
                 Siguiente <i class="material-icons align-middle">arrow_forward</i>
@@ -612,4 +657,175 @@
 })();
 </script>
 
+
+
+
+
+
+{% comment %} funcion ejax buscar por CURP {% endcomment %}
+<script>
+(function() {
+  const btn        = document.getElementById("btnCurpLookup");
+  const inputCurp  = document.getElementById("{{ form.curp.auto_id }}");
+  const inputNombre= document.getElementById("{{ form.nombre.auto_id }}");
+  const inputApP   = document.getElementById("{{ form.apellido_p.auto_id }}");
+  const inputApM   = document.getElementById("{{ form.apellido_m.auto_id }}");
+  const inputFN    = document.getElementById("{{ form.fecha_nacimiento.auto_id }}");
+  const inputSexo  = document.getElementById("{{ form.sexo.auto_id }}");
+  const statusEl   = document.getElementById("curpLookupStatus");
+  const loadingEl  = document.getElementById("curpLoading");
+  const url        = "{% url 'api_curp_lookup' %}";
+
+  let countdownTimer = null;
+
+  function showStatus(msg, isError=false) {
+    if (!statusEl) return;
+    statusEl.style.display = "block";
+    statusEl.className = "form-text " + (isError ? "text-danger" : "text-muted");
+    statusEl.textContent = msg;
+  }
+  function hideStatus() {
+    if (!statusEl) return;
+    statusEl.style.display = "none";
+  }
+  function showLoading(){ if (loadingEl) loadingEl.style.display = "flex"; }
+  function hideLoading(){ if (loadingEl) loadingEl.style.display = "none"; }
+
+  function startCountdown(seconds) {
+    if (countdownTimer) clearInterval(countdownTimer);
+    let remaining = Number(seconds) || 40;
+    const update = () => {
+      showStatus(`Consultando datos en gob.mx… esto puede tardar ~${remaining}s.`, false);
+      remaining -= 1;
+      if (remaining < 0) {
+        clearInterval(countdownTimer);
+        countdownTimer = null;
+      }
+    };
+    update();
+    countdownTimer = setInterval(update, 1000);
+  }
+  function stopCountdown() {
+    if (countdownTimer) {
+      clearInterval(countdownTimer);
+      countdownTimer = null;
+    }
+  }
+
+  function toYmd(fechaDdMmYyyy) {
+    if (!fechaDdMmYyyy || !fechaDdMmYyyy.includes("/")) return "";
+    const [dd, mm, yyyy] = fechaDdMmYyyy.split("/");
+    if (!dd || !mm || !yyyy) return "";
+    return `${yyyy.padStart(4,"0")}-${mm.padStart(2,"0")}-${dd.padStart(2,"0")}`;
+  }
+
+  function getCookie(name) {
+    const m = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+    return m ? m.pop() : '';
+  }
+
+  async function lookup() {
+    const curp = (inputCurp?.value || "").trim().toUpperCase();
+    if (!curp) { showStatus("Escribe un CURP primero.", true); return; }
+
+    btn.disabled = true;
+    showLoading();               // ← muestra el loader
+    startCountdown(60);          // ← inicia el contador visible
+
+    const ctrl = new AbortController();
+    const timeoutId = setTimeout(() => ctrl.abort(), 60000); // 60s
+
+    try {
+      const resp = await fetch(url, {
+        method: "POST",
+        headers: {
+          "X-CSRFToken": getCookie("csrftoken"),
+          "X-Requested-With": "XMLHttpRequest",
+          "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"
+        },
+        body: new URLSearchParams({curp}),
+        signal: ctrl.signal
+      });
+
+      clearTimeout(timeoutId);
+      const data = await resp.json();
+
+      if (!resp.ok || !data.ok) {
+        const msg = (data && data.error) ? data.error : "Falla desconocida en la consulta.";
+        stopCountdown();
+        showStatus(msg, true);
+        return;
+      }
+
+      const d = data.data || {};
+      if (inputNombre && d["Nombre"])           setValueAndFloat(inputNombre, d["Nombre"]);
+      if (inputApP    && d["PrimerApellido"])   setValueAndFloat(inputApP,    d["PrimerApellido"]);
+      if (inputApM    && d["SegundoApellido"])  setValueAndFloat(inputApM,    d["SegundoApellido"]);
+      if (inputFN && d["FechaNacimiento"]) {
+        const ymd = toYmd(d["FechaNacimiento"]);
+        if (ymd) setValueAndFloat(inputFN, ymd);
+      }
+      if (inputSexo && d["Sexo"]) {
+        const raw = String(d["Sexo"] || "").trim();
+        const normalized = raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
+        let target = null;
+        const canon = normalized.toLowerCase();
+        if (["h","hombre"].includes(canon)) target = "Hombre";
+        else if (["m","mujer"].includes(canon)) target = "Mujer";
+        if (target) {
+          const opt = Array.from(inputSexo.options || []).find(o => o.value === target);
+          if (opt) {
+            setValueAndFloat(inputSexo, opt.value);
+            inputSexo.dispatchEvent(new Event("change", { bubbles: true }));
+          }
+        }
+      }
+
+      stopCountdown();
+      showStatus("Datos cargados correctamente.", false);
+      setTimeout(hideStatus, 6000);
+    } catch (err) {
+      const aborted = err?.name === "AbortError";
+      stopCountdown();
+      showStatus(aborted ? "Tiempo agotado al consultar (60s)." : ("Error: " + err), true);
+    } finally {
+      hideLoading();             // ← oculta el loader al finalizar
+      btn.disabled = false;
+    }
+  }
+
+  if (btn) btn.addEventListener("click", lookup);
+})();
+</script>
+
+
+
+
+<script>
+// Marca el form-group como lleno y dispara eventos para el label flotante
+function setValueAndFloat(el, value) {
+  if (!el) return;
+  el.value = value ?? "";
+  // Dispara eventos para que cualquier binding/validación/label se actualice
+  el.dispatchEvent(new Event("input",  { bubbles: true }));
+  el.dispatchEvent(new Event("change", { bubbles: true }));
+  // Marca el contenedor como "filled" (soporta .bmd-form-group o .form-group)
+  const group = el.closest('.bmd-form-group, .form-group');
+  if (group) {
+    group.classList.add('is-filled');
+    group.classList.remove('is-empty');
+  }
+}
+</script>
+
+
+
+
+
+
+
 {% endblock %}
+
+
+
+

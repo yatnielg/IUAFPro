@@ -1,0 +1,17 @@
+[
+  {"model": "alumnos.estatusacademico", "pk": 1, "fields": {"codigo": "VIGENTE", "nombre": "VIGENTE", "orden": 1, "activo": true}},
+  {"model": "alumnos.estatusacademico", "pk": 2, "fields": {"codigo": "EGRESADO", "nombre": "EGRESADO", "orden": 2, "activo": true}},
+  {"model": "alumnos.estatusacademico", "pk": 3, "fields": {"codigo": "BAJA_TEMPORAL", "nombre": "BAJA TEMPORAL", "orden": 3, "activo": true}},
+  {"model": "alumnos.estatusacademico", "pk": 4, "fields": {"codigo": "BAJA_DEFINITIVA", "nombre": "BAJA DEFINITIVA", "orden": 4, "activo": true}},
+  {"model": "alumnos.estatusacademico", "pk": 5, "fields": {"codigo": "EN_TITULACION", "nombre": "EN TITULACIÓN", "orden": 5, "activo": true}},
+
+  {"model": "alumnos.estatusadministrativo", "pk": 1, "fields": {"codigo": "VIGENTE", "nombre": "VIGENTE", "orden": 1, "activo": true}},
+  {"model": "alumnos.estatusadministrativo", "pk": 2, "fields": {"codigo": "EGRESADO", "nombre": "EGRESADO", "orden": 2, "activo": true}},
+  {"model": "alumnos.estatusadministrativo", "pk": 3, "fields": {"codigo": "BAJA_TEMPORAL", "nombre": "BAJA TEMPORAL", "orden": 3, "activo": true}},
+  {"model": "alumnos.estatusadministrativo", "pk": 4, "fields": {"codigo": "BAJA_DEFINITIVA", "nombre": "BAJA DEFINITIVA", "orden": 4, "activo": true}}
+]
+
+
+
+/* python manage.py loaddata apps/alumnos/fixtures/estatus.json */
+

@@ -216,3 +216,290 @@ def send_simple_whatsapp(text: str, to: str, *, env: Optional[str] = None,
 
     return client.messages.create(**kwargs)
 ###############################################################
+
+
+# pip install pdfminer.six
+from pdfminer.high_level import extract_text
+import re
+
+def datos_desde_constancia_pdf(path_pdf: str):
+    texto = extract_text(path_pdf)
+    # Los rótulos suelen ser así; ajusta si tu plantilla cambia
+    get = lambda label: re.search(rf"{label}\s*:\s*(.+)", texto, re.IGNORECASE)
+    def g(lbl):
+        m = get(lbl)
+        return m.group(1).strip() if m else ""
+
+    return {
+        "curp": g(r"CURP"),
+        "nombre": g(r"Nombre\(s\)|Nombres"),
+        "apellido_p": g(r"Primer apellido"),
+        "apellido_m": g(r"Segundo apellido"),
+        "sexo": g(r"Sexo"),
+        "fecha_nacimiento": g(r"Fecha de nacimiento"),
+        "nacionalidad": g(r"Nacionalidad"),
+        "entidad_nacimiento": g(r"Entidad de nacimiento"),
+    }
+
+
+
+def datos_desde_gobmx_curp(curp_v2 = "GOHY840512HNENRT05"):
+    from selenium import webdriver
+    from selenium.webdriver.common.by import By
+    from selenium.webdriver.chrome.service import Service
+    from selenium.webdriver.chrome.options import Options
+    from selenium.webdriver.support.ui import WebDriverWait
+    from selenium.webdriver.support import expected_conditions as EC
+    from webdriver_manager.chrome import ChromeDriverManager
+    from selenium.common.exceptions import TimeoutException, NoSuchElementException
+    from bs4 import BeautifulSoup
+    from datetime import datetime, timedelta
+    import time
+
+    CURP = curp_v2
+
+    opts = Options()
+    # Si quieres ver el navegador activa/descomenta la siguiente línea:
+    # opts.add_argument("--headless=new")
+    opts.add_argument("--disable-gpu")
+    opts.add_argument("--no-sandbox")
+    # Menos huellas (no garantiza que pase todos los bloqueos)
+    opts.add_experimental_option("excludeSwitches", ["enable-automation"])
+    opts.add_experimental_option("useAutomationExtension", False)
+    opts.add_argument(
+        "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    )
+
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=opts)
+    wait = WebDriverWait(driver, 20)
+
+    try:
+        driver.get("https://www.gob.mx/curp/")
+
+        # ---- 1) Esperar que desaparezca overlay de seguridad (si existe) ----
+        try:
+            wait.until(EC.invisibility_of_element_located((By.ID, "sec-overlay")))
+        except TimeoutException:
+            # Si permanece, es muy probable que haya un challenge/captcha que bloquee la automatización
+            raise RuntimeError("Overlay de seguridad activo (captcha). No se puede automatizar sin intervención humana.")
+
+        # ---- 2) Buscar campo CURP (probamos varios selectores) ----
+        possible_selectors = [
+            (By.ID, "curpInput"),
+            (By.CSS_SELECTOR, "input#curpInput"),
+            (By.CSS_SELECTOR, "input[name='curp']"),
+            (By.CSS_SELECTOR, "input[formcontrolname='curp']"),
+            (By.CSS_SELECTOR, "input[type='text']"),
+        ]
+
+        curp_input = None
+        for how, sel in possible_selectors:
+            try:
+                curp_input = wait.until(EC.presence_of_element_located((how, sel)))
+                wait.until(EC.element_to_be_clickable((how, sel)))
+                break
+            except TimeoutException:
+                continue
+
+        if not curp_input:
+            raise NoSuchElementException("No se encontró el campo CURP en la página (posible cambio de DOM o captcha).")
+
+        # ---- 3) Ingresar CURP y enviar ----
+        curp_input.clear()
+        curp_input.send_keys(CURP)
+
+        # Intentamos varios botones posibles
+        clicked = False
+        for how, sel in [
+            (By.ID, "btnBuscar"),
+            (By.CSS_SELECTOR, "button#btnBuscar"),
+            (By.XPATH, "//button[contains(translate(., 'BUSCAR', 'buscar'), 'buscar')]"),
+            (By.XPATH, "//button[contains(., 'Buscar')]"),
+            (By.CSS_SELECTOR, "button[type='submit']"),
+        ]:
+            try:
+                btn = driver.find_element(how, sel)
+                btn.click()
+                clicked = True
+                break
+            except Exception:
+                continue
+
+        if not clicked:
+            # a veces el sitio usa JS que escucha ENTER en el input
+            curp_input.send_keys("\n")
+
+        # ---- 4) Esperar a que aparezcan los resultados ----
+        try:
+            wait.until(EC.presence_of_element_located((By.XPATH, "//*[contains(., 'Datos del solicitante')]")))
+        except TimeoutException:
+            # quizás la página volvió distinto; dump del page_source te ayudará a depurar
+            raise RuntimeError("No aparecieron los resultados (posible bloqueo o cambio en la página). Revisa driver.page_source para depurar.")
+
+        # Pequeña espera extra para que todo renderice
+        time.sleep(1)
+
+        # ---- 5) Parsear resultado con BeautifulSoup (más robusto para extraer texto limpio) ----
+        soup = BeautifulSoup(driver.page_source, "lxml")
+
+        # Buscamos el encabezado "Datos del solicitante" y extraemos la tabla asociada
+        h4 = soup.find("h4", string=lambda s: s and "Datos del solicitante" in s)
+        datos = {}
+
+        if h4:
+            panel_div = h4.find_parent("div", class_="panel")
+            if panel_div:
+                rows = panel_div.select("table tr")
+                for row in rows:
+                    tds = row.find_all("td")
+                    if len(tds) == 2:
+                        etiqueta = tds[0].get_text(strip=True).rstrip(":")
+                        valor = tds[1].get_text(strip=True)
+                        datos[etiqueta] = valor
+
+        # ---- 6) Si BS no encontró nada, fallback con Selenium directo (texto visible en DOM) ----
+        if not datos:
+            try:
+                panel_elem = driver.find_element(By.XPATH, "//h4[contains(., 'Datos del solicitante')]/ancestor::div[contains(@class,'panel')]")
+                rows_elems = panel_elem.find_elements(By.CSS_SELECTOR, "table tr")
+                for r in rows_elems:
+                    tds = r.find_elements(By.TAG_NAME, "td")
+                    if len(tds) == 2:
+                        etiqueta = tds[0].text.strip().rstrip(":")
+                        valor = tds[1].text.strip()
+                        datos[etiqueta] = valor
+            except Exception:
+                pass  # dejamos datos vacíos si no se puede
+
+        # ---- 7) Imprimir solo los campos importantes (si existen) ----
+        salida = {
+            "CURP": datos.get("CURP") or datos.get("Curp"),
+            "Nombre": datos.get("Nombre(s)"),
+            "PrimerApellido": datos.get("Primer apellido"),
+            "SegundoApellido": datos.get("Segundo apellido"),
+            "Sexo": datos.get("Sexo"),
+            "FechaNacimiento": datos.get("Fecha de nacimiento"),
+            "Nacionalidad": datos.get("Nacionalidad"),
+            "EntidadNacimiento": datos.get("Entidad de nacimiento"),
+        }
+
+        # Filtrar claves que sean None (opcional)
+        salida_limpia = {k: v for k, v in salida.items() if v}
+
+        for key, value in salida_limpia.items():
+            print(f"{key}: {value}")
+
+        return salida_limpia
+
+    except Exception as e:
+        print("Fallo:", repr(e))
+    finally:
+        try:
+            driver.quit()
+        except Exception:
+            pass
+
+
+
+#########################################
+# alumnos/utils_pdf.py
+from io import BytesIO
+from pypdf import PdfReader, PdfWriter
+from PIL import Image
+import os
+
+IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif", ".webp"}
+
+def _image_to_pdf_bytes(django_file) -> BytesIO:
+    """
+    Convierte una imagen subida (Django File) a PDF (1 página) y
+    devuelve un buffer listo para leer con PdfReader.
+    """
+    django_file.open("rb")
+    img = Image.open(django_file)
+    if img.mode != "RGB":
+        img = img.convert("RGB")
+    out = BytesIO()
+    img.save(out, format="PDF")
+    out.seek(0)
+    return out
+
+def documentos_a_pdf(documentos, titulo="Documentos del alumno") -> bytes:
+    """
+    Recibe una instancia de DocumentosAlumno y retorna bytes de un PDF unificado.
+    - Une PDFs tal cual
+    - Convierte imágenes a PDF y las añade
+    - Ignora campos vacíos
+    """
+    writer = PdfWriter()
+
+    # Orden opcional de documentos (ajústalo como prefieras)
+    campos = [
+        "acta_nacimiento",
+        "curp",
+        "certificado_estudios",
+        "titulo_grado",
+        "solicitud_registro",
+        "validacion_autenticidad",
+        "carta_compromiso",
+        "carta_interes",
+        "identificacion_oficial",
+        "otro_documento",
+    ]
+
+    for nombre in campos:
+        f = getattr(documentos, nombre, None)
+        if not f:
+            continue
+
+        _, ext = os.path.splitext(f.name or "")
+        ext = ext.lower()
+
+        try:
+            if ext == ".pdf":
+                f.open("rb")
+                reader = PdfReader(f)
+                for page in reader.pages:
+                    writer.add_page(page)
+            elif ext in IMAGE_EXTS:
+                # convierte imagen a PDF y agrega su(s) página(s)
+                img_pdf = _image_to_pdf_bytes(f)
+                reader = PdfReader(img_pdf)
+                for page in reader.pages:
+                    writer.add_page(page)
+            else:
+                # Extensión no soportada: lo puedes loggear o añadir una “hoja separadora”
+                # con reportlab si quieres. Por ahora lo ignoramos.
+                continue
+        finally:
+            try:
+                f.close()
+            except Exception:
+                pass
+
+    # Metadatos
+    writer.add_metadata({
+        "/Title": titulo,
+        "/Author": "Sistema de alumnos",
+    })
+
+    out = BytesIO()
+    if len(writer.pages) == 0:
+        # Si no hay páginas, generamos un PDF vacío para evitar respuesta corrupta
+        from reportlab.pdfgen import canvas
+        from reportlab.lib.pagesizes import A4
+        buf = BytesIO()
+        c = canvas.Canvas(buf, pagesize=A4)
+        c.setFont("Helvetica", 12)
+        c.drawString(72, 800, "No hay documentos para mostrar.")
+        c.showPage()
+        c.save()
+        buf.seek(0)
+        reader = PdfReader(buf)
+        for page in reader.pages:
+            writer.add_page(page)
+
+    writer.write(out)
+    out.seek(0)
+    return out.read()

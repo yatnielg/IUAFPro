@@ -4,6 +4,9 @@ from django.contrib.auth.models import Group
 GRUPO_EDITAR_ESTATUS_ACADEMICO = "editar_estatus_academico"
 GRUPO_EDITAR_ESTATUS_ADMIN = "editar_estatus_administrativo"
 
+GRUPO_PAGOS = "pagos"
+GRUPO_DOCUMENTOS = "documentos"
+
 def user_can_edit_estatus_academico(user):
     return user.is_authenticated and (
         user.is_superuser or user.groups.filter(name=GRUPO_EDITAR_ESTATUS_ACADEMICO).exists()
@@ -12,6 +15,17 @@ def user_can_edit_estatus_academico(user):
 def user_can_edit_estatus_administrativo(user):
     return user.is_authenticated and (
         user.is_superuser or user.groups.filter(name=GRUPO_EDITAR_ESTATUS_ADMIN).exists()
+    )
+
+
+def user_can_view_pagos(user):
+    return user.is_authenticated and (
+        user.is_superuser or user.groups.filter(name=GRUPO_PAGOS).exists()
+    )
+
+def user_can_view_documentos(user):
+    return user.is_authenticated and (
+        user.is_superuser or user.groups.filter(name=GRUPO_DOCUMENTOS).exists()
     )
 
 

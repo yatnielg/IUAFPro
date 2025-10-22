@@ -192,15 +192,31 @@ class ProgramaAdmin(admin.ModelAdmin):
 
 
 # ========= INFORMACION ESCOLAR =========
+from .models import EstatusAcademico, EstatusAdministrativo
+
+@admin.register(EstatusAcademico)
+class EstatusAcademicoAdmin(admin.ModelAdmin):
+    list_display = ("nombre", "codigo", "orden", "activo")
+    list_filter = ("activo",)
+    search_fields = ("nombre", "codigo")
+    ordering = ("orden", "nombre")
+
+@admin.register(EstatusAdministrativo)
+class EstatusAdministrativoAdmin(admin.ModelAdmin):
+    list_display = ("nombre", "codigo", "orden", "activo")
+    list_filter = ("activo",)
+    search_fields = ("nombre", "codigo")
+    ordering = ("orden", "nombre")
+######
 @admin.register(InformacionEscolar)
 class InformacionEscolarAdmin(admin.ModelAdmin):
     list_display = (
-        "num_alumno", "programa", "sede", "modalidad",
+        "num_alumno", "programa","estatus_academico","estatus_administrativo", "sede", "modalidad",
         "precio_colegiatura", "monto_descuento", "precio_final",
         "meses_programa", "numero_reinscripciones",
         "fin_programa", "creado_en",
     )
-    list_filter = ("modalidad", "programa", "sede")
+    list_filter = ("modalidad", "programa", "sede", "estatus_academico", "estatus_administrativo")
     search_fields = (
         "programa__codigo", "programa__nombre",
         "sede__nombre", "sede__pais__nombre",
@@ -842,3 +858,40 @@ class TwilioConfigAdmin(admin.ModelAdmin):
             f"'{cfg.name}' marcada como activa para entorno {cfg.env}. Las demás de ese entorno fueron desactivadas.",
             level=messages.SUCCESS,
         )
+###########################################################################
+def borrar_todos_mov_banco(modeladmin, request, queryset):
+    """
+    ⚠️ Borra TODOS los registros de MovimientoBanco (ignora la selección).
+    Requiere superusuario. (Opcional) Restringido a DEBUG=True.
+    """
+    if not request.user.is_superuser:
+        messages.error(request, "Solo un superusuario puede ejecutar esta acción.")
+        return
+
+    # Si quieres limitar a entornos de desarrollo, descomenta:
+    # if not getattr(settings, "DEBUG", False):
+    #     messages.error(request, "Solo disponible con DEBUG=True.")
+    #     return
+
+    from .models import MovimientoBanco  # import local por si hay dependencias
+
+    try:
+        with transaction.atomic():
+            borrados, _ = MovimientoBanco.objects.all().delete()
+        messages.success(request, f"Se eliminaron TODOS los movimientos ({borrados} filas).")
+    except Exception as e:
+        messages.error(request, f"Error al eliminar: {e}")
+
+borrar_todos_mov_banco.short_description = "🧨 BORRAR TODOS los movimientos"
+
+from .models import MovimientoBanco
+@admin.register(MovimientoBanco)
+class MovimientoBancoAdmin(admin.ModelAdmin):
+    list_display = ("fecha", "tipo", "monto", "signo", "sucursal",
+                    "referencia_numerica", "autorizacion", "emisor_nombre",
+                    "institucion_emisora","nombre_detectado")
+    list_filter = ("tipo", "signo", "institucion_emisora", "sucursal", "source_sheet_name")
+    search_fields = ("descripcion_raw", "emisor_nombre", "concepto", "referencia_numerica",
+                     "autorizacion", "institucion_emisora")
+    date_hierarchy = "fecha"
+    actions = [exportar_csv, borrar_todos_mov_banco]  # ← aquí

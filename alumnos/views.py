@@ -25,7 +25,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.decorators import user_passes_test
 
 
-from alumnos.permisos import  user_can_edit_alumno, user_can_view_alumno
+from alumnos.permisos import user_can_view_pagos, user_can_view_documentos, user_can_edit_alumno, user_can_view_alumno
 
 def staff_or_admisiones(u):
     return u.is_authenticated and (u.is_staff or u.groups.filter(name="admisiones").exists())
@@ -239,12 +239,51 @@ def estudiantes(request):
 
 
 ###############################################################
+# views.py
+import re
+from django.http import JsonResponse
+from django.views.decorators.http import require_POST
+from django.contrib.auth.decorators import login_required
+
+# importa tu función real:
+# from .curp_scraper import datos_desde_gobmx_curp
+
+CURP_RE = re.compile(r"^[A-Z]{4}\d{6}[HM][A-Z]{5}[A-Z0-9]\d$")
+
+@login_required
+@require_POST
+def api_curp_lookup(request):
+    from alumnos.utils import datos_desde_gobmx_curp
+
+    curp = (request.POST.get("curp") or "").strip().upper()
+
+    if not CURP_RE.match(curp):
+        return JsonResponse({"ok": False, "error": "CURP inválido."}, status=400)
+
+    try:
+        # Llama a tu scraper/lógica que devuelve un dict:
+        # {
+        #   "CURP": "...",
+        #   "Nombre": "YATNIEL",
+        #   "PrimerApellido": "GONZÁLEZ",
+        #   "SegundoApellido": "HERNÁNDEZ",
+        #   "Sexo": "HOMBRE",
+        #   "FechaNacimiento": "12/05/1984",
+        #   "Nacionalidad": "...",
+        #   "EntidadNacimiento": "..."
+        # }
+        data = datos_desde_gobmx_curp(curp)
+        if not data or "Nombre" not in data:
+            return JsonResponse({"ok": False, "error": "No se pudo obtener datos para ese CURP."}, status=502)
+
+        return JsonResponse({"ok": True, "data": data})
+    except Exception as e:
+        return JsonResponse({"ok": False, "error": f"Falla al consultar: {e}"}, status=500)
+
+###############################################################
 
 @login_required   
 def principal(request):
-
-
-    
     # SMS a un número específico:
     #msg = send_simple_sms("Hola desde CampusIUAF 🚀", "+529931691530")
     #print(msg.sid, msg.status)
@@ -379,75 +418,55 @@ def alumnos_lista(request):
 ###############################################################
 @login_required
 def alumnos_detalle(request, pk):
-    # Cargamos el alumno con todo lo necesario para evitar N+1
+    from django.http import HttpResponseForbidden
     alumno = get_object_or_404(
         Alumno.objects.select_related(
-            "pais",
-            "estado",
-            "informacionEscolar",
-            "informacionEscolar__programa",
-            "informacionEscolar__sede",
-        ),
-        pk=pk,
+            "pais","estado","informacionEscolar",
+            "informacionEscolar__programa","informacionEscolar__sede",
+        ), pk=pk,
     )
 
-    # ==========================
-    # Permisos de visualización
-    # ==========================
+    # Permiso de ver alumno (el tuyo actual)
     user = request.user
     can_view = False
-
     if user.is_superuser:
         can_view = True
+    elif user.groups.filter(name="admisiones").exists():
+        can_view = (alumno.created_by_id == user.id)
     else:
-        # Si es del grupo "admisiones": solo ve alumnos que él creó
-        if user.groups.filter(name="admisiones").exists():
-            can_view = (alumno.created_by_id == user.id)
-        else:
-            # Resto de usuarios: por sedes asignadas
-            profile = getattr(user, "profile", None)
-            if profile:
-                # sede del alumno (defensivo si no hay informacionEscolar)
-                sede_id = getattr(getattr(alumno, "informacionEscolar", None), "sede_id", None)
-                if sede_id and profile.sedes.filter(id=sede_id).exists():
-                    can_view = True
-
+        profile = getattr(user, "profile", None)
+        if profile:
+            sede_id = getattr(getattr(alumno, "informacionEscolar", None), "sede_id", None)
+            if sede_id and profile.sedes.filter(id=sede_id).exists():
+                can_view = True
     if not can_view:
         return HttpResponseForbidden("No tienes permiso para ver este alumno.")
 
-    # ==========================
-    # Datos relacionados (pagos, cargos)
-    # ==========================
-    pagos = (
-        PagoDiario.objects
-        .filter(alumno=alumno)
-        .order_by("-fecha", "-id")
-    )
-    pagos_total = pagos.aggregate(total=Sum("monto"))["total"] or 0
-    pagos_total = round(pagos_total, 2)
+    # 🔒 NUEVO: flags por grupo
+    can_view_pagos = user_can_view_pagos(user)
+    can_view_docs  = user_can_view_documentos(user)
 
-    cargos = (
-        Cargo.objects
-        .filter(alumno=alumno)
-        .select_related("concepto")
-        .order_by("-fecha_cargo", "-id")
-    )
-    cargos_pendientes = cargos.filter(pagado=False)
+    # Pagos (solo si puede ver)
+    from django.db.models import Sum
+    pagos = cargos = cargos_pendientes = None
+    pagos_total = 0
+    if can_view_pagos:
+        pagos = PagoDiario.objects.filter(alumno=alumno).order_by("-fecha", "-id")
+        pagos_total = round(pagos.aggregate(total=Sum("monto"))["total"] or 0, 2)
+        cargos = (Cargo.objects.filter(alumno=alumno)
+                  .select_related("concepto")
+                  .order_by("-fecha_cargo", "-id"))
+        cargos_pendientes = cargos.filter(pagado=False)
 
-    # ==========================
-    # Render
-    # ==========================
-    return render(
-        request,
-        "alumnos/detalle.html",
-        {
-            "alumno": alumno,
-            "pagos": pagos,
-            "pagos_total": pagos_total,
-            "cargos": cargos,
-            "cargos_pendientes": cargos_pendientes,
-        },
-    )
+    return render(request, "alumnos/detalle.html", {
+        "alumno": alumno,
+        "pagos": pagos,
+        "pagos_total": pagos_total,
+        "cargos": cargos,
+        "cargos_pendientes": cargos_pendientes,
+        "can_view_pagos": can_view_pagos,     # <- usa esto en el template
+        "can_view_documentos": can_view_docs, # <- idem
+    })
 
 ###############################################################
 @login_required   
@@ -577,50 +596,59 @@ class PagoDiarioListView(ListView):
     model = PagoDiario
     template_name = "alumnos/pagos_diario_list.html"
     context_object_name = "pagos"
-    paginate_by = None  # DataTables pagina en el cliente
+    paginate_by = None
 
     def get_queryset(self):
+        # Base + evitar filas sin alumno
         qs = (
             PagoDiario.objects
             .select_related("alumno")
+            .filter(alumno__isnull=False)
             .order_by("-fecha", "-id")
         )
 
         user = self.request.user
-        if not user.is_authenticated:
+
+        # Debe pertenecer al grupo "pagos" (salvo superuser)
+        if not user.is_superuser and not user.groups.filter(name="pagos").exists():
             return qs.none()
 
-        # ---- Admisiones: solo pagos de sus alumnos
-        if user.groups.filter(name="admisiones").exists():
-            qs = qs.filter(alumno__created_by=user)
-            # Si quieres también limitar por fecha a admisiones,
-            # descomenta el bloque de 2 años más abajo.
+        # Superuser: ve todo
+        if user.is_superuser:
+            base_qs = qs
         else:
-            # ---- No superuser: limitar por sedes
-            if not user.is_superuser:
-                profile = getattr(user, "profile", None)
-                if not profile:
-                    return qs.none()
+            allowed = None  # ⚠️ NO usar Q() vacío
 
-                sedes_ids = list(profile.sedes.values_list("id", flat=True))
-                if not sedes_ids:
-                    return qs.none()
+            # Si es admisiones: solo pagos de alumnos creados por él
+            if user.groups.filter(name="admisiones").exists():
+                cond = Q(alumno__created_by=user)
+                allowed = cond if allowed is None else (allowed | cond)
 
-                qs = qs.filter(alumno__informacionEscolar__sede_id__in=sedes_ids)
-
-            # ---- ver_todos_los_pagos
+            # Además: pagos de sedes asociadas a su perfil (si tiene)
             profile = getattr(user, "profile", None)
-            show_all = bool(profile and getattr(profile, "ver_todos_los_pagos", False))
+            if profile:
+                sedes_ids = list(profile.sedes.values_list("id", flat=True))
+                if sedes_ids:
+                    cond = Q(alumno__informacionEscolar__sede_id__in=sedes_ids)
+                    allowed = cond if allowed is None else (allowed | cond)
 
-            # ---- Si NO show_all => limitar a últimos 2 años
-            if not show_all:
-                hace_dos_anios = timezone.now().date() - timedelta(days=730)
-                qs = qs.filter(fecha__gte=hace_dos_anios)
+            # Si no hay nada permitido => nada
+            if allowed is None:
+                return qs.none()
 
-        # ---- Búsqueda opcional
+            base_qs = qs.filter(allowed).distinct()
+
+        # Límite temporal (2 años) salvo flag en perfil
+        profile = getattr(user, "profile", None)
+        show_all = bool(profile and getattr(profile, "ver_todos_los_pagos", False))
+        if not show_all:
+            hace_dos_anios = timezone.now().date() - timedelta(days=730)
+            base_qs = base_qs.filter(fecha__gte=hace_dos_anios)
+
+        # Búsqueda libre
         q = (self.request.GET.get("q") or "").strip()
         if q:
-            qs = qs.filter(
+            base_qs = base_qs.filter(
                 Q(alumno__numero_estudiante__icontains=q) |
                 Q(alumno__nombre__icontains=q) |
                 Q(alumno__apellido_p__icontains=q) |
@@ -631,8 +659,8 @@ class PagoDiarioListView(ListView):
                 Q(programa__icontains=q)
             )
 
-        return qs
-
+        return base_qs
+    
 ############################################################################################################
 
 @login_required
@@ -672,6 +700,8 @@ def api_financiamiento(request, pk):
 ###########################################################################
 @login_required
 def alumnos_documentos_editar(request, pk):
+    if not user_can_view_documentos(request.user):
+        return HttpResponseForbidden("No tienes permiso para ver documentos.")
     alumno = get_object_or_404(Alumno, pk=pk)
     # crea si no existe
     docs, _ = DocumentosAlumno.objects.get_or_create(alumno=alumno)
@@ -710,20 +740,23 @@ def documentos_alumnos_lista(request):
     )
 
     user = request.user
-    if not user.is_authenticated:
+
+    # Si NO tiene permiso para ver documentos, mostramos lista vacía
+    if not user_can_view_documentos(user):
         qs = base.none()
-    elif user.is_superuser:
-        qs = base
-    elif user.groups.filter(name="admisiones").exists():
-        # Admisiones: solo documentos de sus alumnos
-        qs = base.filter(alumno__created_by=user)
     else:
-        profile = getattr(user, "profile", None)
-        if not profile:
-            qs = base.none()
+        if user.is_superuser:
+            qs = base
+        elif user.groups.filter(name="admisiones").exists():
+            # Admisiones: solo docs de sus alumnos
+            qs = base.filter(alumno__created_by=user)
         else:
-            sedes_ids = list(profile.sedes.values_list("id", flat=True))
-            qs = base.filter(alumno__informacionEscolar__sede_id__in=sedes_ids) if sedes_ids else base.none()
+            profile = getattr(user, "profile", None)
+            if not profile:
+                qs = base.none()
+            else:
+                sedes_ids = list(profile.sedes.values_list("id", flat=True))
+                qs = base.filter(alumno__informacionEscolar__sede_id__in=sedes_ids) if sedes_ids else base.none()
 
     # Búsqueda opcional
     if q:
@@ -738,7 +771,6 @@ def documentos_alumnos_lista(request):
 
     ctx = {"q": q, "documentos": qs}
     return render(request, "alumnos/documentos_lista.html", ctx)
-
 
 ###############################################################
 @login_required
@@ -964,3 +996,194 @@ def twilio_status_callback(request):
     # TODO: aquí persiste en BD si quieres loguear estados
     # Twilio recomienda responder 200 OK rápido
     return JsonResponse({"ok": True})
+
+###############################################################
+# alumnos/views.py
+from alumnos.utils import documentos_a_pdf
+
+@login_required
+def documentos_unificados_pdf(request, alumno_id):
+    # Ajusta tus reglas de acceso (permiso o staff, etc.)
+    # @permission_required('alumnos.view_documentosalumno', raise_exception=True)  # opcional
+
+    alumno = get_object_or_404(Alumno, pk=alumno_id)
+    try:
+        documentos = alumno.documentos
+    except DocumentosAlumno.DoesNotExist:
+        raise Http404("Este alumno no tiene set de documentos.")
+
+    content = documentos_a_pdf(documentos, titulo=f"Documentos — {alumno}")
+    response = HttpResponse(content, content_type="application/pdf")
+    # inline para abrir en el navegador; usa 'attachment' si quieres forzar descarga
+    response["Content-Disposition"] = f'inline; filename="documentos_alumno_{alumno_id}.pdf"'
+    return response
+################################################################
+from django.contrib.admin.views.decorators import staff_member_required
+from django.views.decorators.http import require_http_methods
+from django.core.management import call_command
+import io
+from pathlib import Path
+# Si vas a guardar en DB:
+from alumnos.services.movimientos_loader import upsert_movimientos
+
+@staff_member_required
+@require_http_methods(["GET", "POST"])
+def run_leer_google_sheet(request):
+    """
+    Muestra un botón y, al hacer POST, ejecuta el management command
+    leer_google_sheet con los defaults (Sheet ID / hoja "2022" puestos en el comando).
+    Opcional: guarda los movimientos en DB leyendo el JSON resultante.
+    """
+    context = {}
+    if request.method == "POST":
+        # 1) Ruta de salida (carpeta del proyecto /salidas/)
+        out_path = Path("salidas/movimientos_2022.json")
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # 2) Buffers para capturar salida del comando (útil en debug)
+        stdout_buf = io.StringIO()
+        stderr_buf = io.StringIO()
+
+        # 3) Flags
+        save_db = request.POST.get("save_db") == "1"  # pon un input hidden si quieres activar esto desde el template
+
+        try:
+            # 4) Ejecutar management command
+            call_command(
+                "leer_google_sheet",
+                "--por", "nombre",
+                "--out-json", str(out_path),
+                "--debug",            # quítalo si no quieres verbosidad
+                stdout=stdout_buf,
+                stderr=stderr_buf,
+            )
+
+            messages.success(request, f"¡Listo! JSON guardado en: {out_path}")
+            context["output"] = stdout_buf.getvalue()
+
+            # 5) Si se solicita, cargar el JSON y guardar en DB (upsert)
+            if save_db:
+                try:
+                    data = json.loads(out_path.read_text(encoding="utf-8"))
+                except Exception as e_json:
+                    messages.error(request, f"No pude leer el JSON de salida ({out_path}): {e_json}")
+                else:
+                    try:
+                        res = upsert_movimientos(
+                            data,
+                            source_sheet_id="1G0P64LVOfxG4siNXmTm0gCORoaPby2W2_wu0Z869Dvk",
+                            source_sheet_name="2022",
+                            source_gid="1206699819",
+                        )
+                        messages.success(
+                            request,
+                            f"DB → creados {res['created']}, actualizados {res['updated']}."
+                        )
+                    except Exception as e_db:
+                        messages.error(request, f"Error guardando en DB: {e_db}")
+
+        except Exception as e:
+            # Si el call_command truena, mostramos stderr + excepción
+            err = stderr_buf.getvalue()
+            messages.error(request, f"Error al ejecutar el comando: {e}")
+            context["output"] = f"{err}\n{e}"
+
+    return render(request, "alumnos/run_leer_google_sheet.html", context)
+
+
+################################################################
+from .models import MovimientoBanco 
+class MovimientoBancoListView(ListView):
+    model = MovimientoBanco
+    template_name = "panel/movimientos_list.html"  # ver plantilla abajo
+    context_object_name = "movimientos"
+    paginate_by = None  # DataTables pagina en el cliente
+
+    def get_queryset(self):
+        qs = MovimientoBanco.objects.all().order_by( "id")
+
+        # Filtros opcionales por GET
+        signo = self.request.GET.get("signo")      # "1" = Abono, "-1" = Cargo
+        tipo = self.request.GET.get("tipo")        # substring
+        fmin = self.request.GET.get("desde")       # "YYYY-MM-DD"
+        fmax = self.request.GET.get("hasta")       # "YYYY-MM-DD"
+
+        if signo in ("1", "-1"):
+            qs = qs.filter(signo=int(signo))
+        if tipo:
+            qs = qs.filter(tipo__icontains=tipo)
+        if fmin:
+            qs = qs.filter(fecha__gte=fmin)
+        if fmax:
+            qs = qs.filter(fecha__lte=fmax)
+        return qs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        qs = self.object_list
+        ctx["total_registros"] = qs.count()
+        ctx["total_abonos"] = qs.filter(signo=1).aggregate(s=Sum("monto"))["s"] or Decimal("0")
+        ctx["total_cargos"] = qs.filter(signo=-1).aggregate(s=Sum("monto"))["s"] or Decimal("0")
+        return ctx
+    
+
+###############################################################
+SHEET_ID = "1G0P64LVOfxG4siNXmTm0gCORoaPby2W2_wu0Z869Dvk"
+SHEET_NAME = "2022"
+SHEET_GID = "1206699819"
+
+@staff_member_required
+@require_POST
+def run_movimientos_banco_update(request):
+    """
+    Ejecuta el comando que lee el Google Sheet (hoja '2022'),
+    guarda un JSON y luego hace upsert en DB.
+    No renderiza salida; solo mensajes y redirige al listado.
+    """
+    out_path = Path("salidas/movimientos_2022.json")
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    stdout_buf = io.StringIO()
+    stderr_buf = io.StringIO()
+
+    try:
+        # 1) Ejecutar el management command que genera el JSON
+        call_command(
+            "leer_google_sheet",
+            "--por", "nombre",
+            "--out-json", str(out_path),
+            # sin --debug para no llenar buffers (aun así capturamos por si hay error)
+            stdout=stdout_buf,
+            stderr=stderr_buf,
+        )
+
+        # 2) Cargar JSON
+        try:
+            data = json.loads(out_path.read_text(encoding="utf-8"))
+        except Exception as e_json:
+            messages.error(request, f"No pude leer el JSON ({out_path}): {e_json}")
+            return redirect("movimientos_banco_lista")
+
+        # 3) Guardar/actualizar en DB
+        try:
+            res = upsert_movimientos(
+                data,
+                source_sheet_id=SHEET_ID,
+                source_sheet_name=SHEET_NAME,
+                source_gid=SHEET_GID,
+            )
+            created = res.get("created", 0)
+            updated = res.get("updated", 0)
+            messages.success(request, f"Movimientos actualizados. Creados: {created} · Actualizados: {updated}.")
+        except Exception as e_db:
+            messages.error(request, f"Error guardando en BD: {e_db}")
+
+    except Exception as e_cmd:
+        # Si el comando falla, mostramos su stderr resumido
+        err = stderr_buf.getvalue().strip()
+        if err:
+            messages.error(request, f"Error al ejecutar importación: {e_cmd}. Detalle: {err[:500]}")
+        else:
+            messages.error(request, f"Error al ejecutar importación: {e_cmd}")
+
+    return redirect("movimientos_banco_lista")    

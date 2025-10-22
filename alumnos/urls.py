@@ -32,6 +32,8 @@ urlpatterns = [
     
     path("pagos-diario/", PagoDiarioListView.as_view(), name="pagos_diario_lista"),
 
+    path("alumnos/api/curp-lookup/", views.api_curp_lookup, name="api_curp_lookup"),
+
  
     path("alumnos/<int:pk>/documentos/", views.alumnos_documentos_editar, name="alumnos_documentos_editar"),
 
@@ -48,8 +50,17 @@ urlpatterns = [
     path("pagos/cancelado/<int:orden_id>/",   pago_cancelado,      name="clip_pago_cancelado"),
     path("webhooks/clip/",                    clip_webhook,        name="clip_webhook"),
 
+    path("alumnos/<int:alumno_id>/documentos/pdf/", views.documentos_unificados_pdf, name="alumnos_documentos_pdf"),
+
 
     path("sms/send", views.enviar_sms, name="twilio_send_sms"),
     path("wa/send", views.enviar_wa, name="twilio_send_wa"),
     path("status-callback/", csrf_exempt(views.twilio_status_callback), name="twilio_status_callback"),
+
+
+    path("tools/leer-google-sheet/", views.run_leer_google_sheet, name="run_leer_google_sheet"),
+    path("banco/movimientos/", views.MovimientoBancoListView.as_view(), name="movimientos_banco_lista"),
+    path("banco/movimientos/run-update/", views.run_movimientos_banco_update, name="movimientos_banco_update"),
+
+    path("banco/movimientos/", views.MovimientoBancoListView.as_view(), name="movimientos_banco_lista"),
 ]
