@@ -198,7 +198,7 @@ def _best_name_span(text: str) -> str | None:
 
 class MovimientoBanco(models.Model):
     alumno_asignado = models.ForeignKey('Alumno', null=True, blank=True, on_delete=models.SET_NULL, related_name='movimientos_banco')
-    pago_creado = models.OneToOneField('PagoDiario', null=True, blank=True, on_delete=models.SET_NULL,related_name='movimiento_banco')
+    pago_creado = models.ForeignKey('PagoDiario', null=True, blank=True, on_delete=models.SET_NULL,related_name='movimiento_banco')    
     conciliado = models.BooleanField(default=False, db_index=True)
     conciliado_por = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,related_name='conciliaciones_banco')
     conciliado_en = models.DateTimeField(null=True, blank=True)
@@ -230,6 +230,7 @@ class MovimientoBanco(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
+    nombre_detectado_save = models.CharField(max_length=200, null=True, blank=True, db_index=True)
 
     class Meta:
         indexes = [
@@ -258,6 +259,32 @@ class MovimientoBanco(models.Model):
             if nm:
                 return _title_person(nm)
         return ""
+    
+    @property
+    def total_pagos_conciliados(self):
+        return sum((p.monto or 0) for p in self.pagos_creados.all())
+
+    @property
+    def restante_por_conciliar(self):
+        return (self.monto or 0) - self.total_pagos_conciliados
+    
+    def deshacer_conciliacion(self):
+        """Deshace la conciliación: elimina pagos y resetea banderas."""
+        if not self.conciliado:
+            return False, "Este movimiento no está conciliado."
+
+        # elimina los pagos asociados (si hay uno o varios)
+        pagos = PagoDiario.objects.filter(movimiento_banco=self)
+        num = pagos.count()
+        pagos.delete()
+
+        # resetea campos
+        self.conciliado = False
+        self.conciliado_por = None
+        self.conciliado_en = None
+        self.pago_creado = None
+        self.save(update_fields=["conciliado", "conciliado_por", "conciliado_en", "pago_creado"])
+        return True, f"Conciliación revertida. Se eliminaron {num} pagos."
 
 # ============================================================
 # Catálogos financieros y geográficos
@@ -675,6 +702,7 @@ class Sede(models.Model):
 # ============================================================
 
 class PagoDiario(models.Model):
+    movimiento = models.ForeignKey('MovimientoBanco', null=True, blank=True, on_delete=models.SET_NULL, related_name="pagos_creados")
     folio = models.CharField(max_length=32, null=True, blank=True, db_index=True)
     sede = models.CharField(max_length=120, null=True, blank=True)
     nombre = models.CharField(max_length=200, null=True, blank=True)

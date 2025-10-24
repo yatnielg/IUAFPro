@@ -2079,53 +2079,197 @@ def movimientos_abonos_pendientes(request):
         )
     return render(request, "pagos/abonos_pendientes.html", {"movs": qs, "q": q})
 
+
+
+###############################################################################
+from  .models import ConceptoPago
+def get_programa_text(alumno):
+    """Devuelve texto legible del programa del alumno (string o FK)."""
+    prog = getattr(alumno, "programa", None)
+    if prog is None:
+        return None
+    if isinstance(prog, str):
+        return prog.strip() or None
+    for attr in ("nombre", "codigo", "clave", "descripcion"):
+        val = getattr(prog, attr, None)
+        if val:
+            return str(val)
+    return str(prog)
+
+def get_sede_text(alumno):
+    """Devuelve texto legible de la sede/cede del alumno (string o FK)."""
+    for attr_name in ("sede", "cede"):
+        val = getattr(alumno, attr_name, None)
+        if val is None:
+            continue
+        if isinstance(val, str):
+            return val.strip() or None
+        for attr in ("nombre", "codigo", "clave", "descripcion"):
+            v2 = getattr(val, attr, None)
+            if v2:
+                return str(v2)
+        return str(val)
+    return None
+
+######################################
+from django.forms import formset_factory
+class LineaConciliacionForm(forms.Form):
+    alumno_id   = forms.IntegerField(min_value=1, required=True)
+    concepto_id = forms.IntegerField(min_value=1, required=True)
+    monto       = forms.DecimalField(max_digits=12, decimal_places=2, min_value=Decimal("0.01"))
+
+    def clean_alumno_id(self):
+        from .models import Alumno
+        pk = self.cleaned_data["alumno_id"]
+        if not Alumno.objects.filter(pk=pk).exists():
+            raise forms.ValidationError("Alumno inválido.")
+        return pk
+
+    def clean_concepto_id(self):
+        from .models import ConceptoPago
+        pk = self.cleaned_data["concepto_id"]
+        if not ConceptoPago.objects.filter(pk=pk).exists():
+            raise forms.ValidationError("Concepto inválido.")
+        return pk
+
+
+LineaFormSet = formset_factory(LineaConciliacionForm, extra=1, can_delete=True)
+
 @login_required
 @user_passes_test(puede_conciliar)
 def conciliar_movimiento(request, mov_id):
     mov = get_object_or_404(MovimientoBanco, pk=mov_id)
 
-    # Texto base para buscar: nombre_detectado o emisor_nombre
-    base = mov.nombre_detectado or mov.emisor_nombre or mov.referencia_alfanumerica or ""
+    base = (
+        mov.nombre_detectado_save
+        or mov.nombre_detectado
+        or mov.emisor_nombre
+        or mov.referencia_alfanumerica
+        or ""
+    )
+
+    conceptos = ConceptoPago.objects.all().order_by("nombre")
     candidatos = buscar_alumnos_candidatos(base)
 
     if request.method == "POST":
-        alumno_id = request.POST.get("alumno_id")
-        alumno = get_object_or_404(Alumno, pk=alumno_id)
+        nds_input = (request.POST.get("nombre_detectado_save") or "").strip() or None
+
+        formset = LineaFormSet(request.POST, prefix="lineas")
+
+        if not formset.is_valid():
+            messages.error(request, "Revisa las líneas: hay errores en los datos.")
+            return render(request, "pagos/conciliar_movimiento_split.html", {
+                "mov": mov, "conceptos": conceptos, "candidatos": candidatos, "base": base,
+                "formset": formset,
+            })
+
+        # Calcula suma
+        total = Decimal("0.00")
+        lineas_validas = []
+        for f in formset:
+            if getattr(f, "cleaned_data", None) and not f.cleaned_data.get("DELETE", False):
+                total += f.cleaned_data["monto"]
+                lineas_validas.append(f.cleaned_data)
+
+        # Validación de monto
+        if total != (mov.monto or Decimal("0.00")):
+            messages.error(request, f"La suma de montos ({total}) debe ser igual al monto del movimiento ({mov.monto}).")
+            return render(request, "pagos/conciliar_movimiento_split.html", {
+                "mov": mov, "conceptos": conceptos, "candidatos": candidatos, "base": base,
+                "formset": formset,
+            })
 
         try:
             with transaction.atomic():
-                # Crear PagoDiario
-                pago = PagoDiario.objects.create(
-                    alumno=alumno,
-                    fecha=mov.fecha,
-                    monto=mov.monto,
-                    forma_pago="Transferencia/Depósito",
-                    concepto=mov.tipo or "Pago desde banco",
-                    pago_detalle=(mov.concepto or "")[:200],
-                    folio=(mov.autorizacion or mov.referencia_numerica or "")[:32],
-                    curp=alumno.curp or None,
-                    numero_alumno=alumno.numero_estudiante,
-                    nombre=f"{alumno.nombre} {alumno.apellido_p} {alumno.apellido_m}".strip(),
-                )
+                # crea un PagoDiario por línea
+                for data in lineas_validas:
+                    alumno   = Alumno.objects.get(pk=data["alumno_id"])
+                    concepto = ConceptoPago.objects.get(pk=data["concepto_id"])
 
-                # Marcar conciliación en el movimiento
-                mov.alumno_asignado = alumno
-                mov.pago_creado = pago
+                    programa_txt = get_programa_text(alumno)
+                    sede_txt     = get_sede_text(alumno)
+
+                    PagoDiario.objects.create(
+                        movimiento=mov,               # ← enlace al movimiento
+                        alumno=alumno,
+                        fecha=mov.fecha,
+                        monto=data["monto"],          # ← monto por línea
+                        forma_pago="Transferencia/Depósito",
+                        concepto=concepto.codigo,     # o concepto.nombre
+                        pago_detalle=(mov.concepto or "")[:200],
+                        folio=(mov.autorizacion or mov.referencia_numerica or "")[:32],
+                        curp=alumno.curp or None,
+                        numero_alumno=alumno.numero_estudiante,
+                        nombre=f"{alumno.nombre} {alumno.apellido_p} {alumno.apellido_m}".strip(),
+                        programa=alumno.informacionEscolar,
+                        sede=alumno.informacionEscolar.sede,
+                    )
+
+                # guarda el nombre editado y marca conciliado
+                mov.nombre_detectado_save = nds_input
                 mov.conciliado = True
                 mov.conciliado_por = request.user
                 mov.conciliado_en = timezone.now()
-                mov.save(update_fields=[
-                    "alumno_asignado","pago_creado","conciliado",
-                    "conciliado_por","conciliado_en"
-                ])
+                mov.save(update_fields=["nombre_detectado_save","conciliado","conciliado_por","conciliado_en"])
 
-            messages.success(request, f"Conciliado con {alumno.numero_estudiante} y pago #{pago.id} creado.")
+            messages.success(request, f"Conciliado. Se generaron {len(lineas_validas)} pagos.")
             return redirect(reverse("movimientos_abonos_pendientes"))
+
         except Exception as e:
             messages.error(request, f"Error al conciliar: {e}")
 
-    return render(
-        request,
-        "pagos/conciliar_movimiento.html",
-        {"mov": mov, "candidatos": candidatos, "base": base}
-    )
+    else:
+        # GET: inicializa una línea por defecto con el total del movimiento
+        formset = LineaFormSet(
+            initial=[{"monto": mov.monto}],
+            prefix="lineas",
+        )
+
+    return render(request, "pagos/conciliar_movimiento.html", {
+        "mov": mov, "conceptos": conceptos, "candidatos": candidatos, "base": base,
+        "formset": formset,
+    })
+
+#############################################################################################
+@login_required
+@user_passes_test(puede_conciliar)
+@require_POST
+def set_nombre_detectado_save(request, pk):
+    """Actualiza por AJAX el nombre_detectado_save de un MovimientoBanco."""
+    mov = get_object_or_404(MovimientoBanco, pk=pk)
+
+    # Obtén valor desde JSON o form-encoded
+    value = request.POST.get("value")
+    if value is None:
+        try:
+            import json
+            data = json.loads(request.body.decode("utf-8") or "{}")
+            value = data.get("value")
+        except Exception:
+            value = None
+
+    # Normaliza un poco
+    if value is not None:
+        value = (value or "").strip()
+        if not value:
+            value = None
+
+    # Valida longitud (tu modelo max_length=200)
+    if value and len(value) > 200:
+        return JsonResponse(
+            {"ok": False, "error": "El nombre no puede exceder 200 caracteres."},
+            status=400,
+        )
+
+    mov.nombre_detectado_save = value
+    mov.save(update_fields=["nombre_detectado_save", "updated_at"])
+
+    return JsonResponse({"ok": True, "value": mov.nombre_detectado_save})
+
+############################################################################
+@login_required
+def deshacer_conciliacion(request, mov_id):
+    mov = get_object_or_404(MovimientoBanco, pk=mov_id)
+    ok, msg = mov.deshacer_conciliacion()
+    messages.success(request, msg) if ok else messages.warning(request, msg)
+    return redirect("movimientos_abonos_pendientes")

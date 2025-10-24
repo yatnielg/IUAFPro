@@ -70,5 +70,10 @@ urlpatterns = [
     path("banco/abonos/", views.movimientos_abonos_pendientes, name="movimientos_abonos_pendientes"),
     path("banco/conciliar/<int:mov_id>/", views.conciliar_movimiento, name="conciliar_movimiento"),
 
+    path("banco/movimientos/<int:pk>/set-nds/",views.set_nombre_detectado_save,name="mov_set_nds"),
+
+    path('movimiento/<int:mov_id>/deshacer/', views.deshacer_conciliacion, name='mov_deshacer_conciliacion'),
+
+
     #path("banco/movimientos/", views.MovimientoBancoListView.as_view(), name="movimientos_banco_lista"),
 ]

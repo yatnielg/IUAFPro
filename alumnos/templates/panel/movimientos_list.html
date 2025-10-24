@@ -50,6 +50,17 @@
         </button>
       </form>
 
+       <!-- Abonos pendientes -->
+    <a href="{% url 'movimientos_abonos_pendientes' %}"
+       class="btn btn-warning btn-sm mr-3"
+       title="Ver abonos pendientes">
+      <i class="material-icons" style="vertical-align:middle">playlist_add_check</i>
+      Abonos pendientes
+    </a>
+
+
+
+
       <div class="text-right">
         <span class="badge badge-success">Abonos: $ {{ total_abonos|floatformat:2 }}</span>
         <span class="badge badge-danger">Cargos: $ {{ total_cargos|floatformat:2 }}</span>

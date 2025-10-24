@@ -330,12 +330,12 @@ class PagoDiarioAdmin(admin.ModelAdmin):
     desvincular_alumno.short_description = "Desvincular Alumno"
 
     # Si ya usas una acción exportar_csv en otros admins, déjala disponible aquí
-    def exportar_csv(self, request, queryset):
+   # def exportar_csv(self, request, queryset):
         # Reutiliza tu implementación existente si ya la tienes importada.
         # Esto es un placeholder por si quieres mantener la API uniforme.
-        from .admin_utils import exportar_csv_queryset  # ajusta a tu helper real
-        return exportar_csv_queryset(self, request, queryset, filename_prefix="pagos_diario")
-    exportar_csv.short_description = "Exportar CSV seleccionado(s)"
+        #from .admin_utils import exportar_csv_queryset  # ajusta a tu helper real
+       # return exportar_csv_queryset(self, request, queryset, filename_prefix="pagos_diario")
+    #exportar_csv.short_description = "Exportar CSV seleccionado(s)"
 
     # ===== Lógica útil al guardar =====
     def save_model(self, request, obj, form, change):
@@ -377,6 +377,7 @@ class MovimientoBancoAdmin(admin.ModelAdmin):
         "tipo",
         "emisor_nombre",
         "nombre_detectado",
+        "nombre_detectado_save",
         "alumno_link",
         "pago_link",
         "conciliado",
@@ -429,7 +430,7 @@ class MovimientoBancoAdmin(admin.ModelAdmin):
             "fields": (
                 ("fecha", "signo", "monto", "tipo"),
                 ("sucursal", "institucion_emisora"),
-                ("emisor_nombre", "nombre_detectado"),
+                ("emisor_nombre", "nombre_detectado", "nombre_detectado_save"),
                 ("referencia_numerica", "autorizacion"),
                 "referencia_alfanumerica",
                 "concepto",

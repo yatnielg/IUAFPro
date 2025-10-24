@@ -478,6 +478,7 @@ class Command(BaseCommand):
             self.stderr.write(self.style.ERROR(f"Error leyendo el archivo: {e}"))
 
 # Ejemplo:
+#python manage.py seed_conceptos_pago
 #python manage.py crear_sedes
 #python manage.py cargar_programas
 #python manage.py init_roles

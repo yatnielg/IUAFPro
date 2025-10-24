@@ -3,40 +3,289 @@
 
 <h3>Conciliar movimiento #{{ mov.id }}</h3>
 
+{% if messages %}
+  {% for message in messages %}
+    <div class="alert alert-{{ message.tags }} mb-3" role="alert">{{ message }}</div>
+  {% endfor %}
+{% endif %}
+
 <div class="card mb-3">
   <div class="card-body">
     <p><strong>Fecha:</strong> {{ mov.fecha|default:"—" }}</p>
-    <p><strong>Monto:</strong> ${{ mov.monto|default:"—" }}</p>
-    <p><strong>Emisor:</strong> {{ mov.emisor_nombre|default:"—" }}</p>
-    <p><strong>Detectado:</strong> {{ mov.nombre_detectado|default:"—" }}</p>
-    <p><strong>Referencia:</strong> {{ mov.referencia_numerica|default:"—" }} / {{ mov.autorizacion|default:"—" }}</p>
-    <p><strong>Concepto:</strong> {{ mov.concepto|default:"—" }}</p>
+    <p><strong>Monto del movimiento:</strong> ${{ mov.monto|default:"—" }}</p>
+
+    <div class="mb-2">
+      <label class="form-label d-block"><strong>Nombre detectado (editable):</strong></label>
+      <div class="input-group input-group-sm" style="max-width: 520px;">
+        <input type="text" class="form-control"
+               id="nombre-detectado-input"
+               value="{{ mov.nombre_detectado_save|default_if_none:mov.nombre_detectado|default:'' }}"
+               placeholder="Escribe el nombre correcto…"
+               readonly>
+        <button class="btn btn-outline-secondary" type="button" id="toggle-edit-nds" title="Editar">
+          <i class="material-icons" style="vertical-align:middle">edit</i>
+        </button>
+      </div>
+      <small class="text-muted">Este valor se guardará en el movimiento para futuras conciliaciones.</small>
+    </div>
+
+    <p class="mb-0"><strong>Emisor:</strong> {{ mov.emisor_nombre|default:"—" }}</p>
+    <p class="mb-0"><strong>Detectado (solo lectura):</strong> {{ mov.nombre_detectado|default:"—" }}</p>
+    <p class="mb-0"><strong>Referencia:</strong> {{ mov.referencia_numerica|default:"—" }} / {{ mov.autorizacion|default:"—" }}</p>
+    <p class="mb-0"><strong>Concepto banco:</strong> {{ mov.concepto|default:"—" }}</p>
   </div>
 </div>
 
-<h5>Candidatos encontrados</h5>
-<form method="post">
+<form method="post" id="conciliar-form">
   {% csrf_token %}
-  <table class="table table-hover">
-    <thead><tr><th></th><th>No.</th><th>Nombre</th><th>CURP</th><th>Email</th><th>Teléfono</th></tr></thead>
-    <tbody>
-      {% for a in candidatos %}
-      <tr>
-        <td><input type="radio" name="alumno_id" value="{{ a.pk }}" required></td>
-        <td>{{ a.numero_estudiante }}</td>
-        <td>{{ a.nombre }} {{ a.apellido_p }} {{ a.apellido_m }}</td>
-        <td>{{ a.curp|default:"—" }}</td>
-        <td>{{ a.email|default:"—" }}</td>
-        <td>{{ a.telefono|default:"—" }}</td>
-      </tr>
-      {% empty %}
-      <tr><td colspan="6" class="text-muted">No se encontraron coincidencias automáticas. Prueba a buscar por nombre/curp en otra pestaña y vuelve.</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  <input type="hidden" name="nombre_detectado_save" id="nds-hidden"
+         value="{{ mov.nombre_detectado_save|default_if_none:mov.nombre_detectado|default:'' }}">
 
-  <button class="btn btn-primary" type="submit">Asignar y crear pago</button>
-  <a class="btn btn-light" href="{% url 'movimientos_abonos_pendientes' %}">Cancelar</a>
+  {{ formset.management_form }}
+
+  <div class="table-responsive">
+    <table class="table table-sm align-middle">
+      <thead>
+        <tr>
+          <th style="width:28%">Alumno</th>
+          <th style="width:32%">Concepto</th>
+          <th style="width:20%">Monto</th>
+          <th style="width:10%"></th>
+        </tr>
+      </thead>
+      <tbody id="lineas-body">
+        {% for form in formset.forms %}
+        <tr class="linea">
+          <td>
+            <select name="{{ form.prefix }}-alumno_id" class="form-select form-select-sm" required>
+              <option value="" hidden>Elige alumno…</option>
+              {% for a in candidatos %}
+                <option value="{{ a.pk }}">{{ a.numero_estudiante }} — {{ a.nombre }} {{ a.apellido_p }} {{ a.apellido_m }}</option>
+              {% endfor %}
+            </select>
+          </td>
+          <td>
+            <select name="{{ form.prefix }}-concepto_id" class="form-select form-select-sm" required>
+              <option value="" hidden>Elige concepto…</option>
+              {% for c in conceptos %}
+                <option value="{{ c.pk }}">{{ c.codigo }} — {{ c.nombre }}</option>
+              {% endfor %}
+            </select>
+          </td>
+          <td>
+            <input type="number" step="0.01" min="0.01"
+                   name="{{ form.prefix }}-monto"
+                   class="form-control form-control-sm monto-input"
+                   value="{{ form.initial.monto|default_if_none:'' }}"
+                   required>
+          </td>
+          <td class="text-end">
+            <button class="btn btn-sm btn-outline-danger btn-del" type="button">Quitar</button>
+          </td>
+          <input type="hidden" name="{{ form.prefix }}-DELETE" class="del-flag" value="">
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr>
+          <td colspan="2" class="text-end fw-semibold">Total de líneas:</td>
+          <td><input type="text" class="form-control form-control-sm" id="total-lineas" value="0.00" readonly></td>
+          <td></td>
+        </tr>
+        <tr>
+          <td colspan="2" class="text-end fw-semibold">Debe igualar a:</td>
+          <td><input type="text" class="form-control form-control-sm" id="monto-debe" value="{{ mov.monto }}" readonly></td>
+          <td></td>
+        </tr>
+        <tr>
+          <td colspan="2" class="text-end fw-semibold">Falta por conciliar:</td>
+          <td>
+            <input type="text" class="form-control form-control-sm" id="faltante-lineas" value="0.00" readonly>
+          </td>
+          <td></td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+
+  <div class="d-flex gap-2 mb-3">
+    <button class="btn btn-sm btn-outline-primary" id="add-linea" type="button">+ Agregar línea</button>
+  </div>
+
+  <button class="btn btn-primary" type="submit">Conciliar y crear pagos</button>
+  <a class="btn btn-subtle" href="{% url 'movimientos_abonos_pendientes' %}">Cancelar</a>
 </form>
+
+<table class="d-none">
+  <tbody>
+    <tr id="tpl-linea">
+      <td>
+        <select class="form-select form-select-sm alumno-select" required>
+          <option value="" hidden>Elige alumno…</option>
+          {% for a in candidatos %}
+            <option value="{{ a.pk }}">{{ a.numero_estudiante }} — {{ a.nombre }} {{ a.apellido_p }} {{ a.apellido_m }}</option>
+          {% endfor %}
+        </select>
+      </td>
+      <td>
+        <select class="form-select form-select-sm concepto-select" required>
+          <option value="" hidden>Elige concepto…</option>
+          {% for c in conceptos %}
+            <option value="{{ c.pk }}">{{ c.codigo }} — {{ c.nombre }}</option>
+          {% endfor %}
+        </select>
+      </td>
+      <td>
+        <input type="number" step="0.01" min="0.01" class="form-control form-control-sm monto-input" required>
+      </td>
+      <td class="text-end">
+        <button class="btn btn-sm btn-outline-danger btn-del" type="button">Quitar</button>
+      </td>
+      <input type="hidden" class="del-flag" value="">
+    </tr>
+  </tbody>
+</table>
+
+<script>
+  // ================= UTILIDADES NUMÉRICAS =================
+  function toFloat(val) {
+    let s = String(val ?? '').trim();
+    if (s.includes(',') && !s.includes('.')) {
+      s = s.replace(/\./g, '').replace(',', '.');
+    } else {
+      s = s.replace(/,/g, '');
+    }
+    s = s.replace(/[^\d.+-]/g, '');
+    const n = parseFloat(s);
+    return isNaN(n) ? 0 : n;
+  }
+
+  // ================= RECÁLCULO AUTOMÁTICO =================
+  (function(){
+    const addBtn = document.getElementById('add-linea');
+    const body   = document.getElementById('lineas-body');
+    const totalI = document.getElementById('total-lineas');
+    const faltI  = document.getElementById('faltante-lineas');
+    const mgmtTotal = document.getElementById('id_lineas-TOTAL_FORMS');
+    const debeInput = document.getElementById('monto-debe');
+
+    function getDebe() {
+      return toFloat(debeInput.value);
+    }
+
+    function recalc() {
+      let total = 0;
+      body.querySelectorAll('tr.linea').forEach(tr => {
+        if (tr.querySelector('.del-flag').value === 'on') return;
+        total += toFloat(tr.querySelector('.monto-input').value);
+      });
+      totalI.value = total.toFixed(2);
+
+      const faltante = getDebe() - total;
+      faltI.value = faltante.toFixed(2);
+
+      faltI.classList.remove('is-valid', 'is-invalid');
+      if (Math.abs(faltante) < 0.005) faltI.classList.add('is-valid');
+      else faltI.classList.add('is-invalid');
+    }
+
+    function wireRow(tr) {
+      tr.querySelectorAll('.monto-input').forEach(inp => inp.addEventListener('input', recalc));
+      tr.querySelector('.btn-del').addEventListener('click', () => {
+        const delFlag = tr.querySelector('.del-flag');
+        if (delFlag && delFlag.name) {
+          delFlag.value = 'on'; tr.style.display = 'none';
+        } else {
+          tr.remove();
+          mgmtTotal.value = String(parseInt(mgmtTotal.value) - 1);
+        }
+        recalc();
+      });
+    }
+
+    body.querySelectorAll('tr.linea').forEach(wireRow);
+    recalc();
+
+    addBtn.addEventListener('click', () => {
+      const idx = parseInt(mgmtTotal.value);
+      const tpl = document.getElementById('tpl-linea');
+      const tr = tpl.cloneNode(true);
+      tr.id = ''; tr.classList.add('linea');
+      tr.querySelector('.alumno-select').name = `lineas-${idx}-alumno_id`;
+      tr.querySelector('.concepto-select').name = `lineas-${idx}-concepto_id`;
+      tr.querySelector('.monto-input').name = `lineas-${idx}-monto`;
+      tr.querySelector('.del-flag').name = `lineas-${idx}-DELETE`;
+      body.appendChild(tr);
+      mgmtTotal.value = String(idx + 1);
+      wireRow(tr);
+      recalc();
+    });
+
+    document.getElementById('conciliar-form').addEventListener('submit', (e) => {
+      const total = toFloat(totalI.value);
+      const debe = getDebe();
+      if (Math.abs(total - debe) > 0.009) {
+        e.preventDefault();
+        alert(`La suma de líneas (${total.toFixed(2)}) debe ser igual al monto del movimiento (${debe.toFixed(2)}).`);
+      }
+    });
+  })();
+
+  // ================= AJAX PARA GUARDAR NOMBRE =================
+  function getFormCsrf() {
+    const form = document.getElementById('conciliar-form');
+    const input = form.querySelector('input[name=csrfmiddlewaretoken]');
+    return input ? input.value : '';
+  }
+
+  (function(){
+    const btn = document.getElementById('toggle-edit-nds');
+    const input = document.getElementById('nombre-detectado-input');
+    const hidden = document.getElementById('nds-hidden');
+    if (!btn || !input || !hidden) return;
+
+    const saveUrl = "{% url 'mov_set_nds' mov.id %}";
+
+    let editing = false;
+    btn.addEventListener('click', async function(){
+      editing = !editing;
+      input.readOnly = !editing;
+
+      if (editing) {
+        input.focus();
+        btn.innerHTML = '<i class="material-icons">done</i>';
+        btn.classList.replace('btn-outline-secondary', 'btn-outline-success');
+        return;
+      }
+
+      hidden.value = input.value;
+      btn.disabled = true;
+      const originalHTML = btn.innerHTML;
+      btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+
+      try {
+        const resp = await fetch(saveUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-CSRFToken": getFormCsrf(),
+          },
+          body: JSON.stringify({ value: input.value })
+        });
+        const data = await resp.json();
+        if (!data.ok) throw new Error(data.error || "No se pudo guardar el nombre.");
+        window.location.reload();
+      } catch (err) {
+        alert(err.message);
+        input.readOnly = false;
+        btn.innerHTML = originalHTML;
+        btn.classList.replace('btn-outline-secondary', 'btn-outline-success');
+        editing = true;
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  })();
+</script>
 
 {% endblock %}
