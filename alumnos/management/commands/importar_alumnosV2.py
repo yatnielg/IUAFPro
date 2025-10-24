@@ -483,3 +483,5 @@ class Command(BaseCommand):
 #python manage.py init_roles
 #python manage.py importar_alumnosV2 "C:\Users\yatni\Downloads\COPIA control alumnos totales 2022.xlsm"
 #python manage.py importar_pagos_diario "C:\Users\yatni\Downloads\copia IUAF Registro  de ingresos FINAL.xlsm" --sheet "DIARIO"
+#python manage.py seed_documentos
+

@@ -222,7 +222,7 @@
                   <a class="dropdown-item" href="">
                     <i class="material-icons" style="vertical-align: middle;">person</i> Perfil
                   </a>
-                    {% if  url_change_tarjeta and data_api_subscription_global.status == 'active' %}
+                   {% comment %}  {% if  url_change_tarjeta and data_api_subscription_global.status == 'active' %}
                         <a class="dropdown-item" href="{% url 'cambiar_plan_view' %}">
                           <i class="material-icons" style="vertical-align: middle;">credit_card</i>  Membresia ({{data_api_subscription_global.days_left}} días restantes)
                         </a>
@@ -241,7 +241,7 @@
                         <a class="dropdown-item" href="">                    
                           <i class="material-icons" style="vertical-align: middle;">credit_card</i> Membresía (Sin plan)
                         </a>
-                    {% endif %} 
+                    {% endif %}  {% endcomment %}
                   
 
 

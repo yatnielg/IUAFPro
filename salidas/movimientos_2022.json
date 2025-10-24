@@ -1,5 +1,19 @@
 [
   {
+    "fecha": "2025-10-22",
+    "tipo": "Pago de servicio",
+    "monto": 6969.0,
+    "signo": -1,
+    "sucursal": "519",
+    "referencia_numerica": "168012",
+    "referencia_alfanumerica": null,
+    "concepto": null,
+    "autorizacion": "00168012",
+    "emisor_nombre": null,
+    "institucion_emisora": null,
+    "descripcion_raw": " |  | 22/10/2025 | Pago de servicio\nSucursal: 519\nReferencia Numérica: 168012\nReferencia alfanumérica: PAGO DE IMPUESTOS REFERENCIADO S.A.T.\nNo. de Autorización: 00168012 |  | 6,969.00 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | "
+  },
+  {
     "fecha": "2025-10-21",
     "tipo": "| | 21/10/2025",
     "monto": 272.0,

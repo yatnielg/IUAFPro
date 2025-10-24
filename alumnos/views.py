@@ -1,7 +1,7 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.urls import reverse
 from django import forms
-from .models import Alumno, DocumentosAlumno, Programa
+from .models import Alumno, Programa
 from django.contrib.auth.models import User, Group
 
 from django.contrib import messages
@@ -15,7 +15,7 @@ from django.utils import timezone
 from django.http import JsonResponse, Http404
 from datetime import date
 
-from .forms import DocumentosAlumnoForm, InformacionEscolarForm
+from .forms import  InformacionEscolarForm
 
 from django.db.models import Q
 from .models import  Pais, Estado
@@ -64,8 +64,17 @@ def alumnos_crear(request):
     if request.method == "POST":
         form = AlumnoForm(request.POST, crear=True, request=request)
         if form.is_valid():
-            alumno = form.save(commit=False)
+            alumno = form.save(commit=False)  # OJO: con commit=False no se setea created_by en el form
             alumno.numero_estudiante = siguiente_numero_estudiante()
+
+            # Parche defensivo por si la columna en BD quedó NOT NULL sin auto_now_add efectivo
+            if not getattr(alumno, "creado_en", None):
+                alumno.creado_en = timezone.now()
+
+            # Como hicimos commit=False, aseguramos created_by manualmente
+            if request.user.is_authenticated and not getattr(alumno, "created_by_id", None):
+                alumno.created_by = request.user
+
             alumno.save()
             messages.success(request, "Alumno creado correctamente.")
             return redirect("alumnos_detalle", pk=alumno.pk)
@@ -76,7 +85,6 @@ def alumnos_crear(request):
         "form": form,
         "alumno": None,
         "modo": "crear",
-        # opcional: una vista previa NO reservada
         # "preview_numero": (ContadorAlumno.objects.first().ultimo_numero + 1) if ContadorAlumno.objects.exists() else 1,
     })
 ####################################################################################
@@ -85,70 +93,287 @@ from django.db.models import Sum
 from alumnos.models import Alumno, PagoDiario
 from django.http import HttpResponseForbidden
 # Mantén este decorador si solo staff puede editar:
+
+
+
+
+import logging
+from django.db import transaction
+from django.forms.models import model_to_dict
+from django.http import HttpResponseForbidden
+from django.shortcuts import get_object_or_404, redirect, render
+from django.contrib import messages
+from django.db.models import Q, Sum
+
+logger = logging.getLogger(__name__)
+
+# ---- helper de debug para ver campos clave de InformacionEscolar ----
+_INFO_FIELDS_DEBUG = [
+    "programa_id", "financiamiento_id",
+    "precio_colegiatura", "monto_descuento", "precio_final",
+    "meses_programa", "precio_inscripcion", "precio_titulacion",
+    "precio_equivalencia", "numero_reinscripciones",
+    "sede_id", "inicio_programa", "fin_programa",
+    "grupo", "modalidad", "matricula",
+    "estatus_academico_id", "estatus_administrativo_id",
+    "requiere_datos_de_facturacion",
+]
+
+def _snap_info(info):
+    if not info:
+        return None
+    out = {}
+    for f in _INFO_FIELDS_DEBUG:
+        out[f] = getattr(info, f, None)
+    return out
+
+######################################################################
+
 @admin_required
-# Si quieres staff o admisiones, usa este en su lugar:
-# @staff_or_admisiones_required
 def alumnos_editar(request, pk):
-    alumno = get_object_or_404(Alumno, pk=pk)
+    alumno = get_object_or_404(
+        Alumno.objects.select_related(
+            "pais", "estado",
+            "informacionEscolar",
+            "informacionEscolar__programa",
+            "informacionEscolar__sede",
+        ),
+        pk=pk,
+    )
 
     if not user_can_edit_alumno(request.user, alumno):
         return HttpResponseForbidden("No tienes permiso para editar este alumno.")
 
-    plan_instance = alumno.informacionEscolar  # puede ser None
-    docs_instance, _ = DocumentosAlumno.objects.get_or_create(alumno=alumno)
-
-    # Pagos del alumno para el panel lateral
+    # Panel lateral: pagos
     pagos_qs = PagoDiario.objects.filter(alumno=alumno).order_by("-fecha", "-id")
     pagos_total = pagos_qs.aggregate(total=Sum("monto"))["total"] or 0
 
-    if request.method == "POST":
-        form = AlumnoForm(request.POST, instance=alumno, request=request)
-        form_info = InformacionEscolarForm(
-            request.POST,
-            instance=plan_instance,
-            readonly_prices=True,     # bloque “Precios y reinscripciones” solo lectura
-            request=request,          # para chequear grupos de estatus
+    # Info escolar (puede no existir)
+    info = getattr(alumno, "informacionEscolar", None)
+
+    # Documentos del plan
+    docs_qs = DocumentoAlumno.objects.none()
+    if info:
+        docs_qs = (
+            DocumentoAlumno.objects
+            .filter(info_escolar=info)
+            .select_related("tipo", "subido_por", "verificado_por")
+            .order_by("-actualizado_en", "-creado_en")
         )
-        docs_form = DocumentosAlumnoForm(request.POST, request.FILES, instance=docs_instance)
+    docs = list(docs_qs)
+    docs_total = len(docs)
+    docs_last_update = docs[0].actualizado_en if docs else None
 
-        if form.is_valid() and form_info.is_valid() and docs_form.is_valid():
-            alumno = form.save()
+    # Requisitos y faltantes
+    faltantes, tipos_requeridos = [], []
+    if info and info.programa_id:
+        reqs_qs = ProgramaDocumentoRequisito.objects.filter(
+            programa=info.programa, activo=True, tipo__activo=True
+        ).select_related("tipo").order_by("tipo__nombre")
+        reqs_qs = reqs_qs.filter(
+            Q(aplica_a="todos") |
+            Q(aplica_a="solo_extranjeros" if _es_extranjero(info) else "solo_nacionales")
+        )
+        tipos_requeridos = [r.tipo for r in reqs_qs]
+        tipos_subidos_ids = {d.tipo_id for d in docs}
+        faltantes = [t for t in tipos_requeridos if t.id not in tipos_subidos_ids]
 
-            # Crea/actualiza plan escolar
-            plan = form_info.save()
-            if not alumno.informacionEscolar_id:
-                alumno.informacionEscolar = plan
-                alumno.save(update_fields=["informacionEscolar"])
+    active_tab = "#pane-personales"
 
-            # Documentos
-            docs_form.save()
+    # ============================ DEBUG INICIAL =============================
+    logger.debug("== alumnos_editar(%s) %s ==", pk, request.method)
+    logger.debug("Alumno pk=%s, tiene info_escolar? %s (id=%s)",
+                 alumno.pk, bool(info), getattr(info, "id", None))
+    logger.debug("POST keys: %s", sorted(list(request.POST.keys())))
+    print("[DEBUG] alumnos_editar:", request.method, "POST keys:", sorted(list(request.POST.keys())))
 
-            messages.success(request, "Alumno, plan y documentos actualizados.")
-            return redirect("alumnos_detalle", pk=alumno.pk)
+    DOCS_PREFIX = "docs"
+
+    # =============================================================
+    # POST
+    # =============================================================
+    if request.method == "POST":
+        if "add" in request.POST:
+            # --------- A) AGREGAR DOCUMENTO ----------
+            if not info or not info.programa_id:
+                messages.error(
+                    request,
+                    "Asigna primero un Programa en Información Escolar para agregar documentos."
+                )
+                return redirect("alumnos_editar", pk=alumno.pk)
+
+            create_form = DocumentoAlumnoCreateForm(request.POST, request.FILES, info_escolar=info)
+            form = AlumnoForm(instance=alumno, request=request)
+            form_info = InformacionEscolarForm(instance=info, request=request, readonly_prices=False)
+            # Para re-render, mantenemos el mismo prefix
+            formset = DocumentoAlumnoFormSet(queryset=docs_qs, prefix=DOCS_PREFIX)
+
+            logger.debug("CreateForm valid? %s", create_form.is_valid())
+            if not create_form.is_valid():
+                logger.debug("CreateForm errors: %s", create_form.errors)
+                print("[DEBUG] CreateForm errors:", create_form.errors)
+
+            if create_form.is_valid():
+                nuevo = create_form.save(commit=False)
+                if getattr(nuevo, "archivo", None) and not nuevo.subido_por_id:
+                    nuevo.subido_por = request.user
+                nuevo.info_escolar = info
+                nuevo.save()
+                messages.success(request, f"Documento '{nuevo.tipo.nombre}' subido correctamente.")
+                return redirect("alumnos_editar", pk=alumno.pk)
+
+            messages.error(request, "Revisa los errores al agregar el documento.")
+            active_tab = "#pane-plan"
+
         else:
-            messages.error(request, "Revisa los errores del formulario.")
+            # --------- B) GUARDAR CAMBIOS (alumno + info + formset) ----------
+            form = AlumnoForm(request.POST, instance=alumno, request=request)
+            form_info = InformacionEscolarForm(
+                request.POST,
+                instance=info,
+                request=request,
+                readonly_prices=False,
+            )
+
+            # Detecta si realmente viene el formset en el POST (management form)
+            has_docs_in_post = any(k.startswith(f"{DOCS_PREFIX}-") for k in request.POST.keys())
+
+            if has_docs_in_post:
+                formset = DocumentoAlumnoFormSet(
+                    request.POST, request.FILES, queryset=docs_qs, prefix=DOCS_PREFIX
+                )
+            else:
+                # No viene el formset: no debe bloquear validación ni guardado
+                formset = DocumentoAlumnoFormSet(queryset=docs_qs, prefix=DOCS_PREFIX)
+
+            create_form = DocumentoAlumnoCreateForm(info_escolar=info)
+
+            # ---- DEBUG de valores que llegan para info escolar ----
+            campos_info_post = [k for k in request.POST.keys() if k.startswith("inicio_programa") or k in [
+                "programa", "financiamiento",
+                "precio_colegiatura", "monto_descuento", "precio_final",
+                "meses_programa",
+                "precio_inscripcion", "precio_reinscripcion",
+                "precio_titulacion", "precio_equivalencia",
+                "numero_reinscripciones",
+                "sede", "fin_programa", "grupo", "modalidad",
+                "matricula",
+                "estatus_academico", "estatus_administrativo",
+                "requiere_datos_de_facturacion",
+            ]]
+            logger.debug("POST (campos info escolar) -> %s", {k: request.POST.get(k) for k in campos_info_post})
+            print("[DEBUG] POST info-escolar ->", {k: request.POST.get(k) for k in campos_info_post})
+
+            # === VALIDACIONES ===
+            is_valid_alumno  = form.is_valid()
+            is_valid_info    = form_info.is_valid()
+            is_valid_formset = formset.is_valid() if has_docs_in_post else True
+
+            logger.debug("AlumnoForm is_valid? %s", is_valid_alumno)
+            logger.debug("AlumnoForm errors: %s", form.errors)
+
+            logger.debug("InfoForm is_valid? %s", is_valid_info)
+            logger.debug("InfoForm errors: %s", form_info.errors)
+            logger.debug("InfoForm non_field_errors: %s", form_info.non_field_errors())
+
+            logger.debug("DocsFormset (checked=%s) is_valid? %s", has_docs_in_post, is_valid_formset)
+            if has_docs_in_post and not is_valid_formset:
+                logger.debug("DocsFormset errors: %s", formset.errors)
+
+            if is_valid_alumno and is_valid_info and is_valid_formset:
+                pre_snap = _snap_info(info)
+                logger.debug("SNAP antes de save() -> %s", pre_snap)
+                print("[DEBUG] SNAP antes de save:", pre_snap)
+
+                try:
+                    with transaction.atomic():
+                        alumno = form.save()
+
+                        # Guardar o crear info escolar
+                        info_obj = form_info.save(commit=False)
+                        info_obj.alumno = alumno
+                        logger.debug("InfoForm cleaned_data -> %s", form_info.cleaned_data)
+                        print("[DEBUG] InfoForm cleaned_data ->", form_info.cleaned_data)
+
+                        info_obj.save()
+                        logger.debug("Info obj guardado id=%s", info_obj.id)
+                        print("[DEBUG] Info obj guardado id=", info_obj.id)
+
+                        # Enlazar si no estaba enlazado aún
+                        if not alumno.informacionEscolar_id:
+                            alumno.informacionEscolar = info_obj
+                            alumno.save(update_fields=["informacionEscolar"])
+                            logger.debug("Alumno enlazado a info_escolar id=%s", info_obj.id)
+                            print("[DEBUG] Alumno enlazado a info_escolar id=", info_obj.id)
+
+                        # Guardar documentos existentes (formset) SOLO si vino en POST
+                        if has_docs_in_post:
+                            instances = formset.save(commit=False)
+                            for inst in instances:
+                                if getattr(inst, "archivo", None) and not inst.subido_por_id:
+                                    inst.subido_por = request.user
+                                inst.info_escolar = info_obj
+                                inst.save()
+                            for f in formset.deleted_forms:
+                                if f.instance.pk:
+                                    f.instance.delete()
+
+                    # Refetch info para snapshot posterior
+                    info_refetch = getattr(alumno, "informacionEscolar", None)
+                    post_snap = _snap_info(info_refetch)
+                    logger.debug("SNAP después de save() -> %s", post_snap)
+                    print("[DEBUG] SNAP después de save:", post_snap)
+
+                except Exception as e:
+                    logger.exception("Excepción guardando alumno/info: %s", e)
+                    print("[DEBUG][EXCEPTION] guardando alumno/info:", repr(e))
+                    messages.error(request, f"Error al guardar: {e}")
+                else:
+                    messages.success(request, "Alumno e información escolar actualizados correctamente.")
+                    #return redirect("alumnos_editar", pk=alumno.pk)
+                    return redirect("alumnos_detalle", pk=alumno.pk) 
+
+            # Si hubo errores, decidir tab activo
+            if not is_valid_info or (has_docs_in_post and not is_valid_formset):
+                active_tab = "#pane-plan"
+            elif not is_valid_alumno:
+                active_tab = "#pane-personales"
+
+    # =============================================================
+    # GET
+    # =============================================================
     else:
         form = AlumnoForm(instance=alumno, request=request)
-        form_info = InformacionEscolarForm(
-            instance=plan_instance,
-            readonly_prices=True,     # también en GET para que salgan deshabilitados
-            request=request,
-        )
-        docs_form = DocumentosAlumnoForm(instance=docs_instance)
+        form_info = InformacionEscolarForm(instance=info, request=request, readonly_prices=False)
+        formset = DocumentoAlumnoFormSet(queryset=docs_qs, prefix=DOCS_PREFIX)
+        create_form = DocumentoAlumnoCreateForm(info_escolar=info)
 
+        logger.debug("GET: snapshot info escolar -> %s", _snap_info(info))
+        print("[DEBUG] GET snapshot info escolar:", _snap_info(info))
+
+    # =============================================================
+    # RENDER
+    # =============================================================
     return render(
         request,
         "alumnos/editar_alumno.html",
         {
+            "modo": "editar",
+            "alumno": alumno,
             "form": form,
             "form_info": form_info,
-            "docs_form": docs_form,
-            "alumno": alumno,
-            "modo": "editar",
+            "formset": formset,
+            "create_form": create_form,
+            "docs_total": docs_total,
+            "docs_last_update": docs_last_update,
+            "faltantes": faltantes,
+            "tipos_requeridos": tipos_requeridos,
             "pagos": pagos_qs,
             "pagos_total": pagos_total,
+            "active_tab": active_tab,
         },
     )
+
 
 ####################################################################
 
@@ -215,13 +440,14 @@ def estudiantes(request):
     q = (request.GET.get("q") or "").strip()
 
     qs = (
-        Alumno.for_user(request.user)  # <- AQUÍ
+        Alumno.for_user(request.user)
         .select_related(
             "pais", "estado",
             "informacionEscolar",
             "informacionEscolar__programa",
             "informacionEscolar__sede",
-            "user", "documentos",
+            "user",  # <- OK
+            # "documentos",  # <- QUITAR: no existe FK/OneToOne llamado así para select_related
         )
     )
 
@@ -235,7 +461,14 @@ def estudiantes(request):
             Q(curp__icontains=q)
         )
 
-    return render(request, "panel/all_orders.html", {"alumnos": qs, "q": q})
+    # pasa el perfil de forma segura al template
+    profile = getattr(request.user, "profile", None)
+
+    return render(
+        request,
+        "panel/all_orders.html",
+        {"alumnos": qs, "q": q, "p": profile},
+    )
 
 
 ###############################################################
@@ -416,17 +649,20 @@ def alumnos_lista(request):
 
 
 ###############################################################
+from .models import  ProgramaDocumentoRequisito, DocumentoAlumno
+from django.db.models import Max
+
 @login_required
 def alumnos_detalle(request, pk):
-    from django.http import HttpResponseForbidden
     alumno = get_object_or_404(
         Alumno.objects.select_related(
-            "pais","estado","informacionEscolar",
-            "informacionEscolar__programa","informacionEscolar__sede",
-        ), pk=pk,
+            "pais", "estado", "informacionEscolar",
+            "informacionEscolar__programa", "informacionEscolar__sede",
+        ),
+        pk=pk,
     )
 
-    # Permiso de ver alumno (el tuyo actual)
+    # -------- Permisos de visualización del alumno --------
     user = request.user
     can_view = False
     if user.is_superuser:
@@ -442,31 +678,80 @@ def alumnos_detalle(request, pk):
     if not can_view:
         return HttpResponseForbidden("No tienes permiso para ver este alumno.")
 
-    # 🔒 NUEVO: flags por grupo
+    # -------- Flags por permiso/grupo --------
     can_view_pagos = user_can_view_pagos(user)
     can_view_docs  = user_can_view_documentos(user)
 
-    # Pagos (solo si puede ver)
-    from django.db.models import Sum
+    # -------- Pagos / Cargos (solo si puede ver) --------
     pagos = cargos = cargos_pendientes = None
     pagos_total = 0
     if can_view_pagos:
         pagos = PagoDiario.objects.filter(alumno=alumno).order_by("-fecha", "-id")
         pagos_total = round(pagos.aggregate(total=Sum("monto"))["total"] or 0, 2)
-        cargos = (Cargo.objects.filter(alumno=alumno)
-                  .select_related("concepto")
-                  .order_by("-fecha_cargo", "-id"))
+        cargos = (
+            Cargo.objects.filter(alumno=alumno)
+            .select_related("concepto")
+            .order_by("-fecha_cargo", "-id")
+        )
         cargos_pendientes = cargos.filter(pagado=False)
 
-    return render(request, "alumnos/detalle.html", {
-        "alumno": alumno,
-        "pagos": pagos,
-        "pagos_total": pagos_total,
-        "cargos": cargos,
-        "cargos_pendientes": cargos_pendientes,
-        "can_view_pagos": can_view_pagos,     # <- usa esto en el template
-        "can_view_documentos": can_view_docs, # <- idem
-    })
+    # -------- Documentos DINÁMICOS por programa --------
+    docs = []
+    docs_total = 0
+    docs_last_update = None
+    faltantes = []
+
+    info = getattr(alumno, "informacionEscolar", None)
+    prog = getattr(info, "programa", None)
+
+    if can_view_docs and info and prog:
+        # Documentos subidos para el plan escolar del alumno
+        docs_qs = (
+            DocumentoAlumno.objects
+            .filter(info_escolar=info)
+            .select_related("tipo", "verificado_por", "subido_por")
+            .order_by("-actualizado_en")              # <- CAMBIO: usar actualizado_en
+        )
+        docs = list(docs_qs)
+        docs_total = len(docs)
+        agg = docs_qs.aggregate(ultima=Max("actualizado_en"))  # <- CAMBIO
+        docs_last_update = agg["ultima"]
+
+        # Tipos requeridos por el PROGRAMA (activos)
+        reqs = (
+            ProgramaDocumentoRequisito.objects
+            .filter(programa=prog, activo=True)
+            .select_related("tipo")
+        )
+        req_tipos = [r.tipo for r in reqs]
+
+        # Ids de tipos ya subidos
+        subidos_tipo_ids = {d.tipo_id for d in docs if d.tipo_id}
+
+        # Faltantes = tipos requeridos cuyo id no está en subidos
+        faltantes = [t for t in req_tipos if t.id not in subidos_tipo_ids]
+
+    return render(
+        request,
+        "alumnos/detalle.html",
+        {
+            "alumno": alumno,
+
+            # pagos/cargos
+            "pagos": pagos,
+            "pagos_total": pagos_total,
+            "cargos": cargos,
+            "cargos_pendientes": cargos_pendientes,
+            "can_view_pagos": can_view_pagos,
+
+            # documentos dinámicos
+            "can_view_documentos": can_view_docs,
+            "docs": docs,
+            "docs_total": docs_total,
+            "docs_last_update": docs_last_update,
+            "faltantes": faltantes,
+        },
+    )
 
 ###############################################################
 @login_required   
@@ -569,23 +854,126 @@ def alumnos_crear_usuario(request, pk):
     return render(request, "alumnos/crear_usuario.html", {"alumno": alumno, "form": form})    
 
 #################################################
+@login_required
 def documentos_alumno_editar(request, numero_estudiante):
+    """
+    Pantalla de documentos:
+      - Alta de un nuevo documento (tipo + archivo)
+      - Edición / reemplazo / eliminación de documentos existentes (formset)
+    """
+    # Si numero_estudiante es realmente el PK, esto está bien.
+    # Si tu clave es otro campo (p.ej. numero_estudiante único), cambia la línea:
+    # alumno = get_object_or_404(Alumno, numero_estudiante=numero_estudiante)
     alumno = get_object_or_404(Alumno, pk=numero_estudiante)
-    docs, _ = DocumentosAlumno.objects.get_or_create(alumno=alumno)
 
-    if request.method == "POST":
-        form = DocumentosAlumnoForm(request.POST, request.FILES, instance=docs)
-        if form.is_valid():
-            form.save()
-            messages.success(request, "Documentos actualizados.")
-            return redirect("alumnos_detalle", alumno.pk)  # ajusta el nombre de tu url
+    # Permiso de acceso a documentos
+    if not user_can_view_documentos(request.user):
+        return HttpResponseForbidden("No tienes permiso para ver documentos.")
+
+    info = getattr(alumno, "informacionEscolar", None)
+
+    # Documentos existentes del plan escolar
+    docs_qs = DocumentoAlumno.objects.none()
+    if info:
+        docs_qs = (
+            DocumentoAlumno.objects
+            .filter(info_escolar=info)
+            .select_related("tipo", "subido_por")
+            .order_by("-actualizado_en", "-id")
+        )
+
+    # Métricas rápidas
+    docs_total = docs_qs.count()
+    docs_last_update = docs_qs.aggregate(m=Max("actualizado_en"))["m"]
+
+    # Tipos faltantes según requisitos y nacionalidad
+    faltantes = []
+    if info and info.programa_id:
+        reqs = (
+            ProgramaDocumentoRequisito.objects
+            .filter(programa=info.programa, activo=True, tipo__activo=True)
+            .select_related("tipo")
+        )
+        if _es_extranjero(info):
+            reqs = reqs.filter(Q(aplica_a="todos") | Q(aplica_a="solo_extranjeros"))
+        else:
+            reqs = reqs.filter(Q(aplica_a="todos") | Q(aplica_a="solo_nacionales"))
+
+        tipos_requeridos_ids = set(reqs.values_list("tipo_id", flat=True))
+        tipos_presentes_ids  = set(docs_qs.values_list("tipo_id", flat=True))
+        faltantes_ids = tipos_requeridos_ids - tipos_presentes_ids
+        if faltantes_ids:
+            faltantes = list(
+                DocumentoTipo.objects.filter(id__in=faltantes_ids).order_by("nombre")
+            )
+
+    # ------------ Formularios ------------
+    # Alta de un documento
+    if request.method == "POST" and "add" in request.POST:
+        create_form = DocumentoAlumnoCreateForm(request.POST, request.FILES, info_escolar=info)
     else:
-        form = DocumentosAlumnoForm(instance=docs)
+        create_form = DocumentoAlumnoCreateForm(info_escolar=info)
 
-    return render(request, "alumnos/documentos_form.html", {
-        "alumno": alumno,
-        "form": form,
-    })
+    # Formset edición/eliminación (nota: usamos prefix fijo "docs")
+    if request.method == "POST" and "add" not in request.POST:
+        formset = DocumentoAlumnoFormSet(request.POST, request.FILES, queryset=docs_qs, prefix="docs")
+    else:
+        formset = DocumentoAlumnoFormSet(queryset=docs_qs, prefix="docs")
+
+    # ------------ POST ------------
+    if request.method == "POST":
+        # A) Alta
+        if "add" in request.POST:
+            if not info or not info.programa_id:
+                messages.error(request, "El alumno no tiene un Programa asignado.")
+            elif create_form.is_valid():
+                obj = create_form.save(commit=False)
+                obj.subido_por = request.user
+                obj.info_escolar = info
+                obj.save()
+                messages.success(request, "Documento agregado correctamente.")
+                return redirect("alumnos_documentos_editar", pk=alumno.pk)
+            else:
+                messages.error(request, "Revisa los errores del formulario de alta.")
+        # B) Edición / eliminación
+        else:
+            if formset.is_valid():
+                # 1) Eliminar los marcados (en ModelFormSet se usa deleted_forms)
+                for f in formset.deleted_forms:
+                    if f.instance.pk:
+                        f.instance.delete()
+
+                # 2) Guardar los restantes que cambiaron
+                for f in formset.forms:
+                    if f in formset.deleted_forms:
+                        continue
+                    if f.has_changed():
+                        inst = f.save(commit=False)
+                        # Si reemplazaron archivo, marcar quién sube
+                        if f.cleaned_data.get("archivo"):
+                            inst.subido_por = request.user
+                        inst.info_escolar = info  # por seguridad
+                        inst.save()
+
+                messages.success(request, "Cambios guardados.")
+                return redirect("alumnos_documentos_editar", pk=alumno.pk)
+            else:
+                messages.error(request, "Revisa los errores de los documentos cargados.")
+
+    # Render
+    return render(
+        request,
+        "alumnos/documentos_form.html",
+        {
+            "alumno": alumno,
+            "info": info,
+            "create_form": create_form,
+            "formset": formset,
+            "docs_total": docs_total,
+            "docs_last_update": docs_last_update,
+            "faltantes": faltantes,
+        },
+    )
 ###########################################################################################################
 from django.utils.decorators import method_decorator
 from django.views.generic import ListView
@@ -665,21 +1053,26 @@ class PagoDiarioListView(ListView):
 
 @login_required
 def programa_info(request, pk):
-    """Devuelve los valores por defecto del programa elegido."""
-    try:
-        p = Programa.objects.get(pk=pk)
-    except Programa.DoesNotExist:
-        return JsonResponse({"error": "Programa no encontrado"}, status=404)
+    p = get_object_or_404(Programa, pk=pk)
+
+    # soporta p.reinscripcion o p.precio_reinscripcion
+    rein_val = getattr(p, "reinscripcion", None)
+    if rein_val is None:
+        rein_val = getattr(p, "precio_reinscripcion", None)
+    if rein_val is None:
+        rein_val = Decimal("0.00")
 
     data = {
         "meses_programa": p.meses_programa,
         "precio_colegiatura": str(p.colegiatura),
         "precio_inscripcion": str(p.inscripcion),
+        "precio_reinscripcion": str(rein_val),  # ⬅️
         "precio_titulacion": str(p.titulacion),
         "precio_equivalencia": str(p.equivalencia),
-        "numero_reinscripciones": 0,  # si tienes un valor base, cámbialo
+        "numero_reinscripciones": 0,
     }
-    return JsonResponse(data)    
+    return JsonResponse(data)
+
 ###############################################################
 @admin_required
 def api_financiamiento(request, pk):
@@ -698,78 +1091,213 @@ def api_financiamiento(request, pk):
 
 
 ###########################################################################
+# views.py
+#from django.contrib import messages
+#from django.contrib.auth.decorators import login_required
+#from django.db.models import Q
+#from django.http import HttpResponseForbidden
+#from django.shortcuts import get_object_or_404, redirect, render
+
+from .models import (
+ #   Alumno,
+    InformacionEscolar,
+ #   DocumentoAlumno,
+    DocumentoTipo,
+ #   ProgramaDocumentoRequisito,
+)
+from .forms import (
+    DocumentoAlumnoCreateForm,
+    DocumentoAlumnoFormSet,
+)
+from .permisos import user_can_view_documentos  # ya lo usas
+
+def _es_extranjero(info: InformacionEscolar) -> bool:
+    if not info:
+        return False
+    alumno = getattr(info, "alumno", None)
+    if not alumno or not alumno.pais:
+        return False
+    iso2 = (alumno.pais.codigo_iso2 or "").upper()
+    return bool(iso2 and iso2 != "MX")
+
+
 @login_required
 def alumnos_documentos_editar(request, pk):
     if not user_can_view_documentos(request.user):
         return HttpResponseForbidden("No tienes permiso para ver documentos.")
-    alumno = get_object_or_404(Alumno, pk=pk)
-    # crea si no existe
-    docs, _ = DocumentosAlumno.objects.get_or_create(alumno=alumno)
+
+    alumno = get_object_or_404(
+        Alumno.objects.select_related(
+            "pais",
+            "informacionEscolar",
+            "informacionEscolar__programa",
+        ),
+        pk=pk,
+    )
+    info = alumno.informacionEscolar
+
+    if not info or not info.programa_id:
+        messages.warning(request, "Este alumno no tiene Programa asignado; no hay requisitos para mostrar.")
+        return render(request, "alumnos/documentos_form.html", {
+            "alumno": alumno,
+            "info": info,
+            "create_form": None,
+            "formset": None,
+            "docs": [],
+            "faltantes": [],
+            "docs_total": 0,
+            "docs_last_update": None,
+            "tipos_requeridos": [],
+        })
+
+    docs_qs = (DocumentoAlumno.objects
+               .filter(info_escolar=info)
+               .select_related("tipo", "subido_por", "verificado_por")
+               .order_by("-actualizado_en", "-creado_en"))
+    docs = list(docs_qs)
+
+    # requisitos (filtrados por nacionalidad)
+    reqs_qs = ProgramaDocumentoRequisito.objects.filter(
+        programa=info.programa, activo=True, tipo__activo=True
+    ).select_related("tipo").order_by("tipo__nombre")
+    reqs_qs = reqs_qs.filter(
+        Q(aplica_a="todos") |
+        Q(aplica_a="solo_extranjeros" if _es_extranjero(info) else "solo_nacionales")
+    )
+    tipos_requeridos = [r.tipo for r in reqs_qs]
+    tipos_subidos_ids = set(d.tipo_id for d in docs)
+    faltantes = [t for t in tipos_requeridos if t.id not in tipos_subidos_ids]
+
+    docs_total = len(docs)
+    docs_last_update = docs[0].actualizado_en if docs else None
 
     if request.method == "POST":
-        form = DocumentosAlumnoForm(request.POST, request.FILES, instance=docs)
-        if form.is_valid():
-            form.save()
-            messages.success(request, "Documentos actualizados correctamente.")
-            # redirige a donde prefieras (detalle del alumno, o quedarse aquí)
-            return redirect("alumnos_documentos_editar", pk=alumno.pk)
+        if "add" in request.POST:
+            create_form = DocumentoAlumnoCreateForm(request.POST, request.FILES, info_escolar=info)
+            formset = DocumentoAlumnoFormSet(request.POST, request.FILES, queryset=docs_qs)
+            if create_form.is_valid():
+                nuevo = create_form.save(commit=False)
+                nuevo.subido_por = request.user
+                nuevo.save()
+                messages.success(request, f"Documento '{nuevo.tipo.nombre}' subido correctamente.")
+                return redirect("alumnos_documentos_editar", pk=alumno.pk)
+            else:
+                messages.error(request, "Revisa los errores al agregar el documento.")
         else:
-            messages.error(request, "Revisa los errores del formulario.")
+            create_form = DocumentoAlumnoCreateForm(info_escolar=info)
+            formset = DocumentoAlumnoFormSet(request.POST, request.FILES, queryset=docs_qs)
+
+            if formset.is_valid():
+                # ✅ 1) Eliminar los marcados correctamente
+                for f in formset.deleted_forms:
+                    if f.instance and f.instance.pk:
+                        f.instance.delete()
+
+                # ✅ 2) Guardar/actualizar el resto
+                for f in formset.forms:
+                    if f in formset.deleted_forms:
+                        continue
+                    if not f.cleaned_data:
+                        continue
+                    inst = f.save(commit=False)
+                    # Si reemplazaron archivo, registrar quién sube
+                    if f.cleaned_data.get("archivo"):
+                        inst.subido_por = request.user
+                    inst.info_escolar = info  # por seguridad
+                    inst.save()
+
+                messages.success(request, "Cambios guardados correctamente.")
+                return redirect("alumnos_documentos_editar", pk=alumno.pk)
+            else:
+                messages.error(request, "Revisa los errores del formulario de documentos.")
     else:
-        form = DocumentosAlumnoForm(instance=docs)
+        create_form = DocumentoAlumnoCreateForm(info_escolar=info)
+        formset = DocumentoAlumnoFormSet(queryset=docs_qs)
 
     return render(request, "alumnos/documentos_form.html", {
         "alumno": alumno,
-        "form": form,
+        "info": info,
+        "docs": docs,
+        "faltantes": faltantes,
+        "docs_total": docs_total,
+        "docs_last_update": docs_last_update,
+        "create_form": create_form,
+        "formset": formset,
+        "tipos_requeridos": tipos_requeridos,
     })
-
 ###############################################################
 @login_required
 def documentos_alumnos_lista(request):
+    from alumnos.services.documentos_helpers import requisitos_para_alumno
+
     q = (request.GET.get("q") or "").strip()
-
-    base = (
-        DocumentosAlumno.objects
-        .select_related(
-            "alumno",
-            "alumno__informacionEscolar",
-            "alumno__informacionEscolar__programa",
-            "alumno__informacionEscolar__sede",
-        )
-        .order_by("-fecha_ultima_actualizacion", "alumno__numero_estudiante")
-    )
-
+    solo_faltantes = (request.GET.get("solo_faltantes") == "1")  # << NUEVO
     user = request.user
 
-    # Si NO tiene permiso para ver documentos, mostramos lista vacía
-    if not user_can_view_documentos(user):
-        qs = base.none()
-    else:
-        if user.is_superuser:
-            qs = base
-        elif user.groups.filter(name="admisiones").exists():
-            # Admisiones: solo docs de sus alumnos
-            qs = base.filter(alumno__created_by=user)
-        else:
-            profile = getattr(user, "profile", None)
-            if not profile:
-                qs = base.none()
-            else:
-                sedes_ids = list(profile.sedes.values_list("id", flat=True))
-                qs = base.filter(alumno__informacionEscolar__sede_id__in=sedes_ids) if sedes_ids else base.none()
+    alumnos_qs = (
+        Alumno.for_user(user)
+        .select_related(
+            "pais",
+            "informacionEscolar",
+            "informacionEscolar__programa",
+            "informacionEscolar__sede",
+        )
+        .prefetch_related("informacionEscolar__documentos__tipo")
+        .order_by("-actualizado_en", "-numero_estudiante")
+    )
 
-    # Búsqueda opcional
+    if not user_can_view_documentos(user):
+        alumnos_qs = alumnos_qs.none()
+
     if q:
-        qs = qs.filter(
-            Q(alumno__numero_estudiante__icontains=q) |
-            Q(alumno__nombre__icontains=q) |
-            Q(alumno__apellido_p__icontains=q) |
-            Q(alumno__apellido_m__icontains=q) |
-            Q(alumno__curp__icontains=q) |
-            Q(alumno__email__icontains=q)
+        alumnos_qs = alumnos_qs.filter(
+            Q(numero_estudiante__icontains=q)
+            | Q(nombre__icontains=q)
+            | Q(apellido_p__icontains=q)
+            | Q(apellido_m__icontains=q)
+            | Q(curp__icontains=q)
+            | Q(email__icontains=q)
+            | Q(email_institucional__icontains=q)
         )
 
-    ctx = {"q": q, "documentos": qs}
+    items = []
+    for a in alumnos_qs:
+        ie = getattr(a, "informacionEscolar", None)
+        prog = getattr(ie, "programa", None)
+
+        reqs = list(requisitos_para_alumno(prog, a))
+        req_tipos = [r.tipo for r in reqs]
+
+        docs = list(ie.documentos.select_related("tipo").all()) if ie else []
+        tipos_subidos_ids = {d.tipo_id for d in docs if d.tipo_id}
+        faltantes = [t for t in req_tipos if t.id not in tipos_subidos_ids]
+
+        # << NUEVO: si pediste solo faltantes y este alumno no tiene, sáltalo
+        if solo_faltantes and not faltantes:
+            continue
+
+        total_subidos = len(docs)
+        total_req = len(req_tipos)
+
+        last_update = None
+        for d in docs:
+            if d.actualizado_en and (last_update is None or d.actualizado_en > last_update):
+                last_update = d.actualizado_en
+        if last_update is None:
+            last_update = a.actualizado_en
+
+        items.append(
+            {
+                "alumno": a,
+                "documentos": docs,
+                "total_subidos": total_subidos,
+                "total_requeridos": total_req,
+                "faltantes": faltantes,
+                "ultima_actualizacion": last_update,
+            }
+        )
+
+    ctx = {"q": q, "items": items, "solo_faltantes": solo_faltantes}  # << NUEVO en contexto
     return render(request, "alumnos/documentos_lista.html", ctx)
 
 ###############################################################
@@ -1001,22 +1529,172 @@ def twilio_status_callback(request):
 # alumnos/views.py
 from alumnos.utils import documentos_a_pdf
 
+# views.py (o utils.py según prefieras)
+from io import BytesIO
+import os
+
+from django.contrib.auth.decorators import login_required
+from django.http import Http404, HttpResponse, HttpResponseForbidden
+from django.shortcuts import get_object_or_404
+from django.db.models import Q, Max
+
+from pypdf import PdfWriter, PdfReader
+from PIL import Image
+
+from alumnos.models import Alumno, DocumentoAlumno, DocumentoTipo, ProgramaDocumentoRequisito
+from alumnos.permisos import user_can_view_documentos  # ajusta si tu helper se llama distinto
+
+
+IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".gif", ".webp"}
+
+
+def _image_file_to_pdf_bytes(django_file) -> BytesIO:
+    """
+    Convierte una imagen (subida) a un PDF monoplano en memoria.
+    Retorna un BytesIO posicionado al inicio.
+    """
+    django_file.open("rb")
+    try:
+        img = Image.open(django_file)
+        # Asegurar modo compatible
+        if img.mode in ("RGBA", "P"):
+            img = img.convert("RGB")
+        out = BytesIO()
+        img.save(out, format="PDF")
+        out.seek(0)
+        return out
+    finally:
+        try:
+            django_file.close()
+        except Exception:
+            pass
+
+
+def documentos_a_pdf_dinamico(*, info_escolar=None, documentos_qs=None, titulo="Documentos del alumno") -> bytes:
+    """
+    Une todos los archivos de DocumentoAlumno en un solo PDF.
+    - PDFs se agregan tal cual (todas sus páginas)
+    - Imágenes se convierten a PDF y se agregan
+    - Ignora tipos sin archivo
+    Puedes pasar:
+      - info_escolar=<InformacionEscolar>  (usará sus DocumentoAlumno)
+      - documentos_qs=<QuerySet de DocumentoAlumno>
+    """
+    if documentos_qs is None:
+        if info_escolar is None:
+            raise ValueError("Debes proveer info_escolar o documentos_qs.")
+        documentos_qs = DocumentoAlumno.objects.filter(info_escolar=info_escolar)
+
+    # Orden recomendado:
+    # 1) Si hay requisitos configurados para el programa, priorizamos ese orden (si existe un campo 'orden')
+    # 2) Luego por nombre de tipo
+    # 3) Finalmente por fecha de actualización
+    # Nota: si tu ProgramaDocumentoRequisito no tiene campo 'orden', este bloque simplemente
+    # termina ordenando por tipo__nombre y actualizado_en.
+    if info_escolar and getattr(info_escolar, "programa_id", None):
+        reqs = ProgramaDocumentoRequisito.objects.filter(
+            programa=info_escolar.programa, activo=True, tipo__activo=True
+        ).select_related("tipo")
+        # Si manejas requisitos por nacionalidad, puedes filtrar aquí como en tus otras vistas.
+
+        # Mapa tipo_id -> índice de prioridad por requisito (si no hay 'orden', usamos enumeración)
+        prioridad = {}
+        for idx, r in enumerate(reqs.order_by("orden" if hasattr(reqs.model, "orden") else "id")):
+            prioridad[r.tipo_id] = idx
+
+        documentos = list(
+            documentos_qs.select_related("tipo")
+                         .order_by("tipo__nombre", "-actualizado_en", "-id")
+        )
+        # Reordena por prioridad primero (si existe el tipo en el mapa)
+        documentos.sort(key=lambda d: (prioridad.get(d.tipo_id, 10_000), d.tipo.nombre.lower()))
+    else:
+        documentos = list(
+            documentos_qs.select_related("tipo")
+                         .order_by("tipo__nombre", "-actualizado_en", "-id")
+        )
+
+    writer = PdfWriter()
+
+    for d in documentos:
+        f = d.archivo
+        if not f:
+            continue
+        _, ext = os.path.splitext(f.name or "")
+        ext = ext.lower()
+
+        try:
+            if ext == ".pdf":
+                f.open("rb")
+                reader = PdfReader(f)
+                for page in reader.pages:
+                    writer.add_page(page)
+            elif ext in IMAGE_EXTS:
+                img_pdf = _image_file_to_pdf_bytes(f)  # BytesIO
+                reader = PdfReader(img_pdf)
+                for page in reader.pages:
+                    writer.add_page(page)
+            else:
+                # Extensión no soportada: lo ignoramos (o podrías agregar una hoja separadora con ReportLab).
+                continue
+        finally:
+            try:
+                f.close()
+            except Exception:
+                pass
+
+    # Metadatos del PDF
+    writer.add_metadata({
+        "/Title": titulo,
+        "/Author": "CampusIUAF",
+    })
+
+    out = BytesIO()
+
+    # Si no hay páginas, devolvemos un PDF con una sola página informativa
+    if len(writer.pages) == 0:
+        from reportlab.pdfgen import canvas
+        from reportlab.lib.pagesizes import A4
+        buf = BytesIO()
+        c = canvas.Canvas(buf, pagesize=A4)
+        c.setFont("Helvetica", 12)
+        c.drawString(72, 800, "No hay documentos para mostrar.")
+        c.showPage()
+        c.save()
+        buf.seek(0)
+        reader = PdfReader(buf)
+        for page in reader.pages:
+            writer.add_page(page)
+
+    writer.write(out)
+    out.seek(0)
+    return out.read()
+
+
 @login_required
 def documentos_unificados_pdf(request, alumno_id):
-    # Ajusta tus reglas de acceso (permiso o staff, etc.)
-    # @permission_required('alumnos.view_documentosalumno', raise_exception=True)  # opcional
-
+    """
+    Devuelve un PDF con TODOS los documentos del alumno (esquema dinámico).
+    """
     alumno = get_object_or_404(Alumno, pk=alumno_id)
-    try:
-        documentos = alumno.documentos
-    except DocumentosAlumno.DoesNotExist:
-        raise Http404("Este alumno no tiene set de documentos.")
 
-    content = documentos_a_pdf(documentos, titulo=f"Documentos — {alumno}")
-    response = HttpResponse(content, content_type="application/pdf")
-    # inline para abrir en el navegador; usa 'attachment' si quieres forzar descarga
+    # Permisos
+    if not user_can_view_documentos(request.user):
+        return HttpResponseForbidden("No tienes permiso para ver/descargar documentos.")
+
+    info = getattr(alumno, "informacionEscolar", None)
+    if not info:
+        raise Http404("El alumno no tiene un plan escolar asignado.")
+
+    pdf_bytes = documentos_a_pdf_dinamico(
+        info_escolar=info,
+        titulo=f"Documentos — {alumno.numero_estudiante or alumno.pk}",
+    )
+
+    response = HttpResponse(pdf_bytes, content_type="application/pdf")
     response["Content-Disposition"] = f'inline; filename="documentos_alumno_{alumno_id}.pdf"'
     return response
+
 ################################################################
 from django.contrib.admin.views.decorators import staff_member_required
 from django.views.decorators.http import require_http_methods
@@ -1093,20 +1771,28 @@ def run_leer_google_sheet(request):
 
 ################################################################
 from .models import MovimientoBanco 
+
+@method_decorator(login_required, name="dispatch")
 class MovimientoBancoListView(ListView):
     model = MovimientoBanco
-    template_name = "panel/movimientos_list.html"  # ver plantilla abajo
+    template_name = "panel/movimientos_list.html"
     context_object_name = "movimientos"
     paginate_by = None  # DataTables pagina en el cliente
 
     def get_queryset(self):
-        qs = MovimientoBanco.objects.all().order_by( "id")
+        user = self.request.user
+
+        # Si no está autenticado, o no está en 'pagos' y no es superuser => nada
+        if (not user.is_authenticated) or (not user.is_superuser and not user.groups.filter(name="pagos").exists()):
+            return MovimientoBanco.objects.none()
+
+        qs = MovimientoBanco.objects.all().order_by("id")
 
         # Filtros opcionales por GET
         signo = self.request.GET.get("signo")      # "1" = Abono, "-1" = Cargo
-        tipo = self.request.GET.get("tipo")        # substring
-        fmin = self.request.GET.get("desde")       # "YYYY-MM-DD"
-        fmax = self.request.GET.get("hasta")       # "YYYY-MM-DD"
+        tipo  = self.request.GET.get("tipo")       # substring
+        fmin  = self.request.GET.get("desde")      # "YYYY-MM-DD"
+        fmax  = self.request.GET.get("hasta")      # "YYYY-MM-DD"
 
         if signo in ("1", "-1"):
             qs = qs.filter(signo=int(signo))
@@ -1116,16 +1802,16 @@ class MovimientoBancoListView(ListView):
             qs = qs.filter(fecha__gte=fmin)
         if fmax:
             qs = qs.filter(fecha__lte=fmax)
+
         return qs
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        qs = self.object_list
+        qs = self.object_list  # ya viene vacío si no tiene permiso
         ctx["total_registros"] = qs.count()
-        ctx["total_abonos"] = qs.filter(signo=1).aggregate(s=Sum("monto"))["s"] or Decimal("0")
-        ctx["total_cargos"] = qs.filter(signo=-1).aggregate(s=Sum("monto"))["s"] or Decimal("0")
+        ctx["total_abonos"]    = qs.filter(signo=1).aggregate(s=Sum("monto"))["s"] or Decimal("0")
+        ctx["total_cargos"]    = qs.filter(signo=-1).aggregate(s=Sum("monto"))["s"] or Decimal("0")
         return ctx
-    
 
 ###############################################################
 SHEET_ID = "1G0P64LVOfxG4siNXmTm0gCORoaPby2W2_wu0Z869Dvk"
@@ -1187,3 +1873,174 @@ def run_movimientos_banco_update(request):
             messages.error(request, f"Error al ejecutar importación: {e_cmd}")
 
     return redirect("movimientos_banco_lista")    
+
+###########################################################################################
+from django.views.decorators.csrf import csrf_protect
+from .models import UploadInvite
+
+@csrf_protect
+def public_upload(request, token):
+    invite = get_object_or_404(UploadInvite, token=token)
+
+    # Flags útiles para la UI (tu template los puede usar)
+    invite_is_expired = not invite.is_valid()
+    invite_is_revoked = bool(getattr(invite, "revoked", False))
+
+    if invite_is_expired:
+        return render(
+            request,
+            "alumnos/public_upload_invalid.html",
+            {"invite": invite},
+            status=410,
+        )
+
+    alumno = invite.alumno
+    info = getattr(alumno, "informacionEscolar", None)
+
+    # -------------------- DOCUMENTOS DEL ALUMNO --------------------
+    uploads = (
+        DocumentoAlumno.objects
+        .filter(info_escolar__alumno=alumno)
+        .select_related("tipo")
+        .order_by("-actualizado_en", "-creado_en")
+    )
+
+    # -------------------- REQUISITOS / FALTANTES --------------------
+    faltantes = []
+    faltantes_ids = []
+    faltantes_count = 0
+
+    if info and getattr(info, "programa_id", None):
+        reqs_qs = (
+            ProgramaDocumentoRequisito.objects
+            .filter(programa=info.programa, activo=True, tipo__activo=True)
+            .select_related("tipo")
+        )
+
+        # Si manejas requisitos por nacionalidad, descomenta este bloque:
+        # if _es_extranjero(info):
+        #     reqs_qs = reqs_qs.filter(Q(aplica_a="todos") | Q(aplica_a="solo_extranjeros"))
+        # else:
+        #     reqs_qs = reqs_qs.filter(Q(aplica_a="todos") | Q(aplica_a="solo_nacionales"))
+
+        tipos_requeridos = [r.tipo for r in reqs_qs]
+        subidos_tipo_ids = {d.tipo_id for d in uploads if d.tipo_id}
+        faltantes = [t for t in tipos_requeridos if t.id not in subidos_tipo_ids]
+        faltantes_ids = [t.id for t in faltantes]
+        faltantes_count = len(faltantes)
+
+    # -------------------- ACCIÓN: ELIMINAR DOCUMENTO --------------------
+    if request.method == "POST" and "delete" in request.POST:
+        doc_id = request.POST.get("doc_id")
+        doc = get_object_or_404(
+            DocumentoAlumno,
+            pk=doc_id,
+            info_escolar__alumno=alumno  # seguridad: solo documentos del mismo alumno
+        )
+        if doc.valido is True:
+            messages.error(request, "No puedes eliminar un documento marcado como válido.")
+        else:
+            # (Opcional) eliminar el archivo físico del storage
+            archivo = doc.archivo
+            doc.delete()
+            try:
+                if archivo and archivo.name:
+                    archivo.storage.delete(archivo.name)
+            except Exception:
+                pass
+            messages.success(request, "Documento eliminado.")
+        return redirect("public_upload", token=invite.token)
+
+    # -------------------- SUBIDA NORMAL --------------------
+    if request.method == "POST" and "delete" not in request.POST:
+        form = DocumentoAlumnoCreateForm(
+            request.POST, request.FILES,
+            info_escolar=getattr(alumno, "informacionEscolar", None),
+        )
+        # Restringir el select a faltantes (si hay)
+        if faltantes_ids:
+            form.fields["tipo"].queryset = DocumentoTipo.objects.filter(id__in=faltantes_ids).order_by("nombre")
+
+        if form.is_valid():
+            doc = form.save(commit=False)
+            doc.info_escolar = getattr(alumno, "informacionEscolar", None)
+            doc.save()
+
+            invite.uses += 1
+            invite.save(update_fields=["uses"])
+
+            messages.success(request, "¡Documento subido correctamente!")
+            return redirect("public_upload", token=invite.token)
+        else:
+            messages.error(request, "Revisa los campos del formulario.")
+    else:
+        form = DocumentoAlumnoCreateForm(
+            info_escolar=getattr(alumno, "informacionEscolar", None)
+        )
+        if faltantes_ids:
+            form.fields["tipo"].queryset = DocumentoTipo.objects.filter(id__in=faltantes_ids).order_by("nombre")
+
+    # -------------------- RENDER --------------------
+    return render(
+        request,
+        "alumnos/public_upload.html",
+        {
+            "alumno": alumno,
+            "form": form,
+            "invite": invite,
+            "invite_is_expired": invite_is_expired,
+            "invite_is_revoked": invite_is_revoked,
+            "uploads": uploads,               # lista para la tabla
+            "docs": uploads,                  # si tu template usa 'docs', dejamos alias
+            "faltantes": faltantes,           # lista de DocumentoTipo faltantes
+            "faltantes_count": faltantes_count,
+        },
+    )
+
+@login_required
+def crear_enlace_subida(request, pk):
+    alumno = get_object_or_404(Alumno, pk=pk)
+    expires = timezone.now() + timezone.timedelta(days=7)  # 7 días
+    invite = UploadInvite.objects.create(
+        alumno=alumno,
+        expires_at=expires,
+        max_uses=0,            # ilimitado hasta caducar (o pon 5, 10…)
+        created_by=request.user,
+    )
+    url = request.build_absolute_uri(
+        reverse("public_upload", args=[invite.token])
+    )
+    messages.success(request, f"Enlace generado: {url}")
+    return redirect("alumnos_detalle", pk=alumno.pk)
+
+def generar_enlace_subida(request, pk):
+    alumno = get_object_or_404(Alumno, pk=pk)
+    expires = timezone.now() + timezone.timedelta(days=7)  # dura 7 días
+    invite = UploadInvite.objects.create(
+        alumno=alumno,
+        expires_at=expires,
+        max_uses=0,  # ilimitado hasta expirar
+        created_by=request.user if request.user.is_authenticated else None,
+    )
+    link = request.build_absolute_uri(
+        reverse("public_upload", args=[invite.token])
+    )
+    messages.success(request, f"Enlace generado: {link}")
+    return redirect("alumnos_documentos_editar", pk=alumno.pk)
+################################################################
+@require_POST
+@login_required
+def generar_enlace_subida_json(request, pk):
+    """
+    Crea un invite y devuelve el URL absoluto en JSON, ideal para AJAX.
+    """
+    alumno = get_object_or_404(Alumno, pk=pk)
+    expires = timezone.now() + timezone.timedelta(days=7)
+    invite = UploadInvite.objects.create(
+        alumno=alumno,
+        expires_at=expires,
+        max_uses=0,
+        created_by=request.user,
+    )
+    url = request.build_absolute_uri(reverse("public_upload", args=[invite.token]))
+    return JsonResponse({"ok": True, "url": url, "expires_at": expires.isoformat()})

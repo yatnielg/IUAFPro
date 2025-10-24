@@ -1,24 +1,36 @@
 # forms.py
 from django import forms
-from django.db.models import Q
+from django.db.models import Q, Count
+from django.forms import modelformset_factory, inlineformset_factory
+from decimal import Decimal
 
 from .models import (
     Alumno, Estado, Pais,
-    InformacionEscolar, DocumentosAlumno,
+    InformacionEscolar,
+    DocumentoAlumno, DocumentoTipo, ProgramaDocumentoRequisito,
 )
+from alumnos import models
 
 # ---------- Widgets helpers ----------
 class ClearableFileInputAccept(forms.ClearableFileInput):
+    """
+    Widget para inputs de archivo con 'accept' y clase adecuada para que no quede oculto
+    por estilos del theme (usa form-control-file en Bootstrap/Material).
+    """
     def __init__(self, *args, **kwargs):
         attrs = kwargs.setdefault("attrs", {})
+        # PDF e imágenes por defecto; ajusta si quieres restringir más
         attrs.setdefault("accept", ".pdf,.png,.jpg,.jpeg")
+        css = attrs.get("class", "")
+        # clase apropiada para file inputs
+        attrs["class"] = (css + " form-control-file").strip()
         super().__init__(*args, **kwargs)
 
 
-# ============ ALUMNO ============
+# ============================================================
+#  ALUMNO
+# ============================================================
 class AlumnoForm(forms.ModelForm):
-
-
     fecha_nacimiento = forms.DateField(
         required=False,
         widget=forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"),
@@ -55,46 +67,43 @@ class AlumnoForm(forms.ModelForm):
 
     def __init__(self, *args, request=None, crear=False, **kwargs):
         """
-        crear=True  -> ocultar numero_estudiante y no requerirlo (se asigna en la vista)
-        crear=False -> en edición, numero_estudiante deshabilitado
+        crear=True  -> oculta numero_estudiante y no lo requiere (lo asigna servidor).
+        crear=False -> en edición, numero_estudiante deshabilitado.
         """
         super().__init__(*args, **kwargs)
         self.request = request
 
-        # En creación: estos campos son obligatorios
+        # En creación: obligatorios
         if crear:
             for name in self.REQUIRED_ON_CREATE:
                 if name in self.fields:
-                    self.fields[name].required = True                 # validación servidor
-                    self.fields[name].widget.attrs["required"] = "required"  # validación HTML
-                    # opcional UX:
+                    self.fields[name].required = True
+                    self.fields[name].widget.attrs["required"] = "required"
                     self.fields[name].widget.attrs.setdefault("aria-required", "true")
 
-        # Mostrar bandera en etiquetas de país
+        # Etiqueta con bandera en País
         if "pais" in self.fields:
             self.fields["pais"].label_from_instance = AlumnoForm._pais_label
 
-        # Agregar clase form-control a todos
+        # Clase form-control a todos (sin romper checkbox)
         for f in self.fields.values():
             css = f.widget.attrs.get("class", "")
             f.widget.attrs["class"] = (css + " form-control").strip()
 
-        # En edición: no permitir cambiar el número
-        if self.instance and self.instance.pk:
-            if "numero_estudiante" in self.fields:
-                self.fields["numero_estudiante"].disabled = True
+        # En edición: bloquear número
+        if self.instance and self.instance.pk and "numero_estudiante" in self.fields:
+            self.fields["numero_estudiante"].disabled = True
 
-        # En creación: ocultar y no requerir el número (lo asigna el servidor)
-        if crear:
-            if "numero_estudiante" in self.fields:
-                self.fields["numero_estudiante"].required = False
-                self.fields["numero_estudiante"].widget = forms.HiddenInput()
+        # En creación: ocultar número
+        if crear and "numero_estudiante" in self.fields:
+            self.fields["numero_estudiante"].required = False
+            self.fields["numero_estudiante"].widget = forms.HiddenInput()
 
-        # CURP toUppercase en cliente
+        # Uppercase CURP
         if "curp" in self.fields:
             self.fields["curp"].widget.attrs["oninput"] = "this.value=this.value.toUpperCase()"
 
-        # Estados dependientes de país
+        # Estados dependientes
         if "estado" in self.fields:
             self.fields["estado"].queryset = Estado.objects.none()
             if "pais" in self.data:
@@ -107,7 +116,7 @@ class AlumnoForm(forms.ModelForm):
             elif self.instance.pk and self.instance.pais_id:
                 self.fields["estado"].queryset = Estado.objects.filter(pais_id=self.instance.pais_id).order_by("nombre")
 
-        # Mostrar planes libres o el actual del alumno
+        # Planes disponibles (libres o el actual)
         if "informacionEscolar" in self.fields:
             qs = InformacionEscolar.objects.filter(alumno__isnull=True)
             if self.instance and self.instance.pk and self.instance.informacionEscolar_id:
@@ -119,7 +128,6 @@ class AlumnoForm(forms.ModelForm):
     def clean_curp(self):
         curp = (self.cleaned_data.get("curp") or "").strip().upper()
         return curp or None
-    
 
     def save(self, commit=True):
         obj = super().save(commit=False)
@@ -128,18 +136,17 @@ class AlumnoForm(forms.ModelForm):
         if commit:
             obj.save()
         return obj
-    
 
-# ============ INFORMACION ESCOLAR ============
-from django import forms
-from .models import InformacionEscolar
+
+# ============================================================
+#  INFORMACION ESCOLAR
+# ============================================================
 from alumnos.permisos import (
     user_can_edit_estatus_academico,
     user_can_edit_estatus_administrativo,
 )
 
 class InformacionEscolarForm(forms.ModelForm):
-    # Fechas como <input type="date">
     inicio_programa = forms.DateField(
         required=False,
         widget=forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"),
@@ -158,18 +165,17 @@ class InformacionEscolarForm(forms.ModelForm):
         fields = [
             "programa",
             "financiamiento",
-
-            # --- Precios y reinscripciones (solo lectura en UI) ---
+            # Precios
             "precio_colegiatura",
             "monto_descuento",
             "precio_final",
             "meses_programa",
             "precio_inscripcion",
+            "precio_reinscripcion",    
             "precio_titulacion",
             "precio_equivalencia",
             "numero_reinscripciones",
-
-            # --- Resto ---
+            # Resto
             "sede",
             "inicio_programa",
             "fin_programa",
@@ -178,8 +184,6 @@ class InformacionEscolarForm(forms.ModelForm):
             "matricula",
             "estatus_academico",
             "estatus_administrativo",
-
-            # Booleano extra
             "requiere_datos_de_facturacion",
         ]
         widgets = {
@@ -190,30 +194,53 @@ class InformacionEscolarForm(forms.ModelForm):
             "estatus_academico": forms.Select(attrs={"class": "selectpicker", "data-style": "select-with-transition"}),
             "estatus_administrativo": forms.Select(attrs={"class": "selectpicker", "data-style": "select-with-transition"}),
             "requiere_datos_de_facturacion": forms.CheckboxInput(),
+
+            
+            "monto_descuento": forms.NumberInput(attrs={"class": "form-control is-readonly-input is-readonly",  "readonly": "readonly", "step": "0.01"}),
+            "precio_final": forms.NumberInput(attrs={"class": "form-control is-readonly-input is-readonly",  "readonly": "readonly", "step": "0.01"}),
+            "meses_programa": forms.NumberInput(attrs={"class": "form-control is-readonly-input is-readonly",  "readonly": "readonly", "step": "0.01"}),
+            "precio_colegiatura": forms.NumberInput(attrs={"class": "form-control is-readonly-input is-readonly",  "readonly": "readonly", "step": "0.01"}),
+            # models.py
+            "precio_inscripcion": forms.NumberInput(attrs={"class": "form-control is-readonly-input is-readonly",  "readonly": "readonly", "step": "0.01"}),
+            "precio_reinscripcion": forms.NumberInput(attrs={"class": "form-control is-readonly-input is-readonly",  "readonly": "readonly", "step": "0.01"}),
+            "precio_titulacion": forms.NumberInput(attrs={"class": "form-control is-readonly-input is-readonly",  "readonly": "readonly", "step": "0.01"}),
+            "precio_equivalencia": forms.NumberInput(attrs={"class": "form-control is-readonly-input is-readonly",  "readonly": "readonly", "step": "0.01"}),
+            "numero_reinscripciones": forms.NumberInput(attrs={"class": "form-control is-readonly-input is-readonly",  "readonly": "readonly"}),
+
         }
 
     READONLY_PRICE_FIELDS = [
-        "precio_colegiatura",
+        
         "monto_descuento",
+        "precio_colegiatura",
         "precio_final",
         "meses_programa",
         "precio_inscripcion",
+        "precio_reinscripcion",   # <-- añadido para consistencia visual
         "precio_titulacion",
         "precio_equivalencia",
         "numero_reinscripciones",
     ]
 
     def __init__(self, *args, request=None, readonly_prices=True, **kwargs):
-        """
-        Pásame request=request en la vista para poder chequear grupos.
-        readonly_prices=True => pone los campos de precios en solo-lectura (UI) y (opcional) los protege en save().
-        """
         super().__init__(*args, **kwargs)
         self.request = request
         self._user = getattr(request, "user", None)
-        self._readonly_prices = bool(readonly_prices)
 
-        # Añade clases a widgets (sin romper el checkbox)
+        # En GET puedes querer solo-lectura visual; en POST NO se debe bloquear el guardado.
+        self._readonly_prices = bool(readonly_prices)
+        if self.is_bound:
+            for name in [
+                "precio_inscripcion",
+                "precio_reinscripcion",  # ⬅️ asegúrate de incluirlo
+                "precio_titulacion",
+                "precio_equivalencia",
+                "monto_descuento",
+            ]:
+                if name in self.fields:
+                    self.fields[name].required = False
+
+        # Estética / clases
         for name, field in self.fields.items():
             if isinstance(field.widget, forms.CheckboxInput):
                 css = field.widget.attrs.get("class", "")
@@ -222,11 +249,13 @@ class InformacionEscolarForm(forms.ModelForm):
                 css = field.widget.attrs.get("class", "")
                 field.widget.attrs["class"] = (css + " form-control").strip()
 
-        # Etiqueta para programa
+        # Etiqueta de programa
         if "programa" in self.fields:
-            self.fields["programa"].label_from_instance = lambda p: f"{getattr(p, 'codigo', '')} — {p.nombre}"
+            self.fields["programa"].label_from_instance = (
+                lambda p: f"{getattr(p, 'codigo', '')} — {p.nombre}"
+            )
 
-        # Solo lectura (UI) para precios (no bloquea POST malicioso)
+        # Solo-lectura VISUAL cuando aplica (GET)
         if self._readonly_prices:
             for name in self.READONLY_PRICE_FIELDS:
                 if name in self.fields:
@@ -236,60 +265,63 @@ class InformacionEscolarForm(forms.ModelForm):
                     self.fields[name].widget.attrs["class"] = (css + " is-readonly").strip()
 
         # Permisos de estatus
-        can_acad  = user_can_edit_estatus_academico(self._user) if self._user else False
+        can_acad = user_can_edit_estatus_academico(self._user) if self._user else False
         can_admin = user_can_edit_estatus_administrativo(self._user) if self._user else False
-
         if "estatus_academico" in self.fields and not can_acad:
             self.fields["estatus_academico"].disabled = True
-
         if "estatus_administrativo" in self.fields and not can_admin:
             self.fields["estatus_administrativo"].disabled = True
 
     def clean(self):
         cleaned = super().clean()
 
+        # Asegurar defaults seguros si el template no envía algún precio
+        for name, default in [
+            ("precio_inscripcion", Decimal("0.00")),
+            ("precio_reinscripcion", Decimal("0.00")),
+            ("precio_titulacion", Decimal("0.00")),
+            ("precio_equivalencia", Decimal("0.00")),
+            ("monto_descuento", Decimal("0.00")),
+        ]:
+            if cleaned.get(name) in (None, ""):
+                cleaned[name] = default
+
         # Recalcular precio_final simple (colegiatura - descuento)
-        coleg = cleaned.get("precio_colegiatura") or 0
-        desc  = cleaned.get("monto_descuento") or 0
+        coleg = cleaned.get("precio_colegiatura") or Decimal("0.00")
+        desc = cleaned.get("monto_descuento") or Decimal("0.00")
         final = cleaned.get("precio_final")
         try:
-            if final is None or final != (coleg - desc):
-                cleaned["precio_final"] = coleg - desc
+            esperado = coleg - desc
+            if final is None or final != esperado:
+                cleaned["precio_final"] = esperado
         except Exception:
             pass
 
-        # Refuerzo de permisos sobre estatus (en edición)
+        # Refuerzo de permisos de estatus
         if self.instance and self.instance.pk:
-            can_acad  = user_can_edit_estatus_academico(self._user) if self._user else False
+            can_acad = user_can_edit_estatus_academico(self._user) if self._user else False
             can_admin = user_can_edit_estatus_administrativo(self._user) if self._user else False
-
             if "estatus_academico" in cleaned and not can_acad:
                 cleaned["estatus_academico"] = self.instance.estatus_academico
-
             if "estatus_administrativo" in cleaned and not can_admin:
                 cleaned["estatus_administrativo"] = self.instance.estatus_administrativo
 
         return cleaned
 
     def save(self, commit=True):
-        """
-        Protección extra en servidor:
-        - Si no puede editar estatus, conserva los valores previos.
-        - Si readonly_prices=True y es edición, conserva los campos de precios originales.
-        """
         obj = super().save(commit=False)
 
         if self.instance and self.instance.pk:
-            # Permisos de estatus
-            can_acad  = user_can_edit_estatus_academico(self._user) if self._user else False
+            # Permisos de estatus (no tocar si no puede)
+            can_acad = user_can_edit_estatus_academico(self._user) if self._user else False
             can_admin = user_can_edit_estatus_administrativo(self._user) if self._user else False
-
             if not can_acad:
                 obj.estatus_academico = self.instance.estatus_academico
             if not can_admin:
                 obj.estatus_administrativo = self.instance.estatus_administrativo
 
-            # Protección de precios si marcaste solo-lectura
+            # En GET (_readonly_prices=True) no pisamos precios con datos del form
+            # (en POST __init__ ya fuerza _readonly_prices=False)
             if self._readonly_prices:
                 for name in self.READONLY_PRICE_FIELDS:
                     if hasattr(self.instance, name):
@@ -299,25 +331,144 @@ class InformacionEscolarForm(forms.ModelForm):
             obj.save()
         return obj
 
+# ============================================================
+#  DOCUMENTOS (nuevo esquema)
+# ============================================================
 
-# forms.py
-class DocumentosAlumnoForm(forms.ModelForm):
+def _es_extranjero(info: InformacionEscolar) -> bool:
+    """
+    Heurística sencilla: extranjero si el alumno tiene país y no es MX.
+    Si no hay alumno/país, no filtramos por nacionalidad (tratamos como 'todos').
+    """
+    if not info:
+        return False
+    alumno = getattr(info, "alumno", None)
+    if not alumno or not alumno.pais:
+        return False
+    iso2 = (alumno.pais.codigo_iso2 or "").upper()
+    return bool(iso2 and iso2 != "MX")
+
+
+class DocumentoAlumnoCreateForm(forms.ModelForm):
+    """
+    Para subir un documento (tipo + archivo) a un plan (info_escolar).
+    La vista debe pasar info_escolar=<obj> en __init__ o setear instance.info_escolar.
+    """
+    archivo = forms.FileField(widget=ClearableFileInputAccept())
+
     class Meta:
-        model = DocumentosAlumno
-        fields = [
-            "acta_nacimiento","curp","certificado_estudios","titulo_grado",
-            "solicitud_registro","validacion_autenticidad","carta_compromiso",
-            "carta_interes","identificacion_oficial","otro_documento",
-        ]
+        model = DocumentoAlumno
+        fields = ["tipo", "archivo"]
         widgets = {
-            "acta_nacimiento":        forms.ClearableFileInput(attrs={"accept": ".pdf"}),
-            "curp":                   forms.ClearableFileInput(attrs={"accept": ".pdf"}),
-            "certificado_estudios":   forms.ClearableFileInput(attrs={"accept": ".pdf"}),
-            "titulo_grado":           forms.ClearableFileInput(attrs={"accept": ".pdf"}),
-            "solicitud_registro":     forms.ClearableFileInput(attrs={"accept": ".pdf"}),
-            "validacion_autenticidad":forms.ClearableFileInput(attrs={"accept": ".pdf"}),
-            "carta_compromiso":       forms.ClearableFileInput(attrs={"accept": ".pdf"}),
-            "carta_interes":          forms.ClearableFileInput(attrs={"accept": ".pdf"}),
-            "identificacion_oficial": forms.ClearableFileInput(attrs={"accept": ".pdf,image/*"}),
-            "otro_documento":         forms.ClearableFileInput(attrs={"accept": ".pdf,image/*"}),
+            "tipo": forms.Select(attrs={"class": "selectpicker", "data-style": "select-with-transition"}),
         }
+
+    def __init__(self, *args, info_escolar: InformacionEscolar = None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.info_escolar = info_escolar or getattr(self.instance, "info_escolar", None)
+
+        # Añade clase form-control SOLO a no-file widgets
+        for f in self.fields.values():
+            w = f.widget
+            if isinstance(w, (forms.FileInput, forms.ClearableFileInput)):
+                # El widget de archivo ya trae 'form-control-file'
+                continue
+            css = w.attrs.get("class", "")
+            w.attrs["class"] = (css + " form-control").strip()
+
+        # Filtrar tipos por requisitos del programa y por nacionalidad (aplica_a)
+        tipos_qs = DocumentoTipo.objects.filter(activo=True)
+        if self.info_escolar and self.info_escolar.programa_id:
+            reqs = ProgramaDocumentoRequisito.objects.filter(
+                programa=self.info_escolar.programa, activo=True, tipo__activo=True
+            ).select_related("tipo")
+
+            # Filtrado por nacionalidad
+            es_ext = _es_extranjero(self.info_escolar)
+            if es_ext:
+                reqs = reqs.filter(Q(aplica_a="todos") | Q(aplica_a="solo_extranjeros"))
+            else:
+                reqs = reqs.filter(Q(aplica_a="todos") | Q(aplica_a="solo_nacionales"))
+
+            tipos_qs = DocumentoTipo.objects.filter(id__in=reqs.values_list("tipo_id", flat=True))
+
+        if "tipo" in self.fields:
+            self.fields["tipo"].queryset = tipos_qs.order_by("nombre")
+            self.fields["tipo"].label_from_instance = lambda t: f"{t.nombre}"
+
+    def clean(self):
+        cleaned = super().clean()
+        tipo = cleaned.get("tipo")
+        if not self.info_escolar:
+            raise forms.ValidationError("Falta el plan (info_escolar) para adjuntar el documento.")
+
+        if not tipo:
+            return cleaned
+
+        # Validar contra max/min del requisito correspondiente
+        req = ProgramaDocumentoRequisito.objects.filter(
+            programa=self.info_escolar.programa_id,
+            tipo=tipo,
+            activo=True
+        ).first()
+
+        if req:
+            # ¿cuántos ya subidos de este tipo?
+            count_actual = DocumentoAlumno.objects.filter(info_escolar=self.info_escolar, tipo=tipo).count()
+            # Vamos a agregar 1 (este) => validar máximo
+            if not tipo.multiple and count_actual >= 1:
+                raise forms.ValidationError(f"El tipo '{tipo.nombre}' no permite múltiples archivos.")
+            if req.maximo and count_actual + 1 > req.maximo:
+                raise forms.ValidationError(f"Máximo permitido para '{tipo.nombre}': {req.maximo} archivo(s).")
+
+        return cleaned
+
+    def save(self, commit=True):
+        obj = super().save(commit=False)
+        if self.info_escolar:
+            obj.info_escolar = self.info_escolar
+        if commit:
+            obj.save()
+        return obj
+
+
+class DocumentoAlumnoUpdateForm(forms.ModelForm):
+    """
+    Para editar un documento existente (solo cambiar archivo/notas/validez).
+    """
+    archivo = forms.FileField(required=False, widget=ClearableFileInputAccept())
+
+    class Meta:
+        model = DocumentoAlumno
+        fields = ["archivo", "valido", "notas"]
+
+  
+
+ 
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for f in self.fields.values():
+            w = f.widget
+            # No pises el file input
+            if isinstance(w, (forms.FileInput, forms.ClearableFileInput)):
+                continue
+            css = w.attrs.get("class", "")
+            w.attrs["class"] = (css + " form-control").strip()
+
+
+# Opcionales: formsets para manejar varios documentos en una sola pantalla
+DocumentoAlumnoFormSet = modelformset_factory(
+    DocumentoAlumno,
+    form=DocumentoAlumnoUpdateForm,
+    extra=0,
+    can_delete=True,
+)
+
+DocumentoInlineFormSet = inlineformset_factory(
+    InformacionEscolar,
+    DocumentoAlumno,
+    form=DocumentoAlumnoUpdateForm,
+    extra=0,
+    can_delete=True,
+)

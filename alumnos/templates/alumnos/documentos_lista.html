@@ -4,35 +4,19 @@
 {% block main_content %}
 
 <style>
-  /* ====== Estilos de imagen (si los usaras) ====== */
-  .order-img {
-    width: 34px !important;
-    height: 34px !important;
-    object-fit: cover;
-    border-radius: 5px;
-    margin-right: 2px;
-    background: #f7f8fa;
-    transition: transform 0.2s;
-    cursor: pointer;
-  }
-  .order-img:hover {
-    transform: scale(2.5) translateX(5px);
-    z-index: 2;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.18);
-  }
+  .order-img { width: 34px !important; height: 34px !important; object-fit: cover; border-radius: 5px; margin-right: 2px; background: #f7f8fa; transition: transform 0.2s; cursor: pointer; }
+  .order-img:hover { transform: scale(2.5) translateX(5px); z-index: 2; box-shadow: 0 4px 16px rgba(0,0,0,0.18); }
 
-  /* ====== FIX Scroll Mouse ====== */
   html, body { height: 100% !important; overflow-y: auto !important; overflow-x: hidden !important; }
   .main-panel, .content, .card-body { overflow-y: visible !important; }
 
-  /* Scroll horizontal para DataTables */
   .dataTables_wrapper { overflow-x: auto; overflow-y: visible; }
   .table-responsive { width: 100%; overflow-x: auto !important; overflow-y: visible !important; -webkit-overflow-scrolling: touch; }
 
   .doc-chip { display:inline-block; margin: 0 .35rem .35rem 0; }
+  .doc-chip-missing { opacity: .6; pointer-events: none; }
 </style>
 
-<!-- ====== DataTables CSS/JS ====== -->
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
 <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
 <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
@@ -69,103 +53,87 @@
                   <th>No. Estudiante</th>
                   <th>Nombre</th>
                   <th>CURP</th>
-                  <th>Total cargados</th>
+                  <th>Subidos / Requeridos</th>
                   <th>Última actualización</th>
-                  <th>Archivos</th>
+                  <th>Documentos</th>
                   <th class="disabled-sorting text-right">Acciones</th>
                 </tr>
               </thead>
               <tbody>
-                {% for d in documentos %}
+                {% for it in items %}
+                {% with a=it.alumno %}
                 <tr>
                   <!-- No. Estudiante -->
                   <td>
-                    {% if d.alumno %}
-                      <a href="{% url 'alumnos_detalle' d.alumno.pk %}" class="btn btn-link text-info btn-just-icon like" title="Ver ficha">
-                        {{ d.alumno.numero_estudiante }}
-                      </a>
-                    {% else %} — {% endif %}
+                    <a href="{% url 'alumnos_detalle' a.pk %}" class="btn btn-link text-info btn-just-icon like" title="Ver ficha">
+                      {{ a.numero_estudiante }}
+                    </a>
                   </td>
 
                   <!-- Nombre -->
-                  <td>
-                    {% if d.alumno %}
-                      {{ d.alumno.nombre }} {{ d.alumno.apellido_p }} {{ d.alumno.apellido_m }}
-                    {% else %}<span class="text-muted">—</span>{% endif %}
-                  </td>
+                  <td>{{ a.nombre }} {{ a.apellido_p }} {{ a.apellido_m }}</td>
 
                   <!-- CURP -->
+                  <td>{% if a.curp %}{{ a.curp }}{% else %}<span class="text-muted">—</span>{% endif %}</td>
+
+                  <!-- Subidos / Requeridos -->
                   <td>
-                    {% if d.alumno and d.alumno.curp %}
-                      {{ d.alumno.curp }}
+                    <span class="badge badge-pill badge-success">{{ it.total_subidos }}</span>
+                    /
+                    <span class="badge badge-pill badge-secondary">{{ it.total_requeridos }}</span>
+                    {% if it.faltantes and it.total_requeridos %}
+                      <small class="text-muted ml-1">({{ it.faltantes|length }} faltan)</small>
+                    {% endif %}
+                  </td>
+
+                  <!-- Última actualización -->
+                  <td>
+                    {% if it.ultima_actualizacion %}
+                      {{ it.ultima_actualizacion|date:"d/m/Y H:i" }}
                     {% else %}<span class="text-muted">—</span>{% endif %}
                   </td>
 
-                  <!-- Total -->
-                  <td>{{ d.total_subidos|default:0 }}</td>
+                  <!-- Documentos -->
+                  <td style="min-width:380px; white-space:normal">
+                    {# Subidos #}
+                    {% for d in it.documentos %}
+                      <a class="btn btn-sm btn-outline-primary doc-chip"
+                         href="{{ d.archivo.url }}" target="_blank" rel="noopener"
+                         title="{{ d.tipo.nombre }}">
+                        {{ d.tipo.nombre|truncatechars:24 }}
+                      </a>
+                    {% empty %}
+                      <span class="text-muted">Sin documentos</span>
+                    {% endfor %}
 
-                  <!-- Fecha -->
-                  <td>
-                    {% if d.fecha_ultima_actualizacion %}
-                      {{ d.fecha_ultima_actualizacion|date:"d/m/Y H:i" }}
-                    {% else %}<span class="text-muted">—</span>{% endif %}
-                  </td>
-
-                  <!-- Archivos: chips con “Ver” si existe -->
-                  <td style="min-width:320px; white-space:normal">
-                    {% if d.acta_nacimiento %}
-                      <a class="btn btn-sm btn-outline-primary doc-chip" href="{{ d.acta_nacimiento.url }}" target="_blank" rel="noopener">Acta</a>
-                    {% endif %}
-                    {% if d.curp %}
-                      <a class="btn btn-sm btn-outline-primary doc-chip" href="{{ d.curp.url }}" target="_blank" rel="noopener">CURP</a>
-                    {% endif %}
-                    {% if d.certificado_estudios %}
-                      <a class="btn btn-sm btn-outline-primary doc-chip" href="{{ d.certificado_estudios.url }}" target="_blank" rel="noopener">Certificado</a>
-                    {% endif %}
-                    {% if d.titulo_grado %}
-                      <a class="btn btn-sm btn-outline-primary doc-chip" href="{{ d.titulo_grado.url }}" target="_blank" rel="noopener">Título</a>
-                    {% endif %}
-                    {% if d.solicitud_registro %}
-                      <a class="btn btn-sm btn-outline-primary doc-chip" href="{{ d.solicitud_registro.url }}" target="_blank" rel="noopener">Solicitud</a>
-                    {% endif %}
-                    {% if d.validacion_autenticidad %}
-                      <a class="btn btn-sm btn-outline-primary doc-chip" href="{{ d.validacion_autenticidad.url }}" target="_blank" rel="noopener">Validación</a>
-                    {% endif %}
-                    {% if d.carta_compromiso %}
-                      <a class="btn btn-sm btn-outline-primary doc-chip" href="{{ d.carta_compromiso.url }}" target="_blank" rel="noopener">Compromiso</a>
-                    {% endif %}
-                    {% if d.carta_interes %}
-                      <a class="btn btn-sm btn-outline-primary doc-chip" href="{{ d.carta_interes.url }}" target="_blank" rel="noopener">Interés</a>
-                    {% endif %}
-                    {% if d.identificacion_oficial %}
-                      <a class="btn btn-sm btn-outline-primary doc-chip" href="{{ d.identificacion_oficial.url }}" target="_blank" rel="noopener">Identificación</a>
-                    {% endif %}
-                    {% if d.otro_documento %}
-                      <a class="btn btn-sm btn-outline-primary doc-chip" href="{{ d.otro_documento.url }}" target="_blank" rel="noopener">Otro</a>
-                    {% endif %}
-
-                    {% if not d.total_subidos %}
-                      <span class="text-muted">—</span>
+                    {# Faltantes (gris) #}
+                    {% if it.faltantes %}
+                      <div class="mt-1">
+                        {% for t in it.faltantes %}
+                          <span class="btn btn-sm btn-outline-secondary doc-chip doc-chip-missing" title="Faltante">
+                            {{ t.nombre|truncatechars:24 }}
+                          </span>
+                        {% endfor %}
+                      </div>
                     {% endif %}
                   </td>
 
                   <!-- Acciones -->
                   <td class="text-right" style="min-width:120px">
-                    {% if d.alumno %}
-                      <a href="{% url 'alumnos_detalle' d.alumno.pk %}" class="btn btn-link text-info btn-just-icon like" title="Ver ficha">
-                        <i class="material-icons">visibility</i>
-                      </a>
+                    <a href="{% url 'alumnos_detalle' a.pk %}" class="btn btn-link text-info btn-just-icon like" title="Ver ficha">
+                      <i class="material-icons">visibility</i>
+                    </a>
 
-                       {% if request.user.profile.puede_editar_todo or request.user.is_superuser %}
-                        <a href="{% url 'alumnos_documentos_editar' d.alumno.pk %}" class="btn btn-link text-secondary btn-just-icon edit" title="Subir/actualizar">
+                    {% with p=request.user.profile %}
+                      {% if request.user.is_superuser or p and p.puede_editar_todo %}
+                        <a href="{% url 'alumnos_documentos_editar' a.pk %}" class="btn btn-link text-secondary btn-just-icon edit" title="Subir/actualizar">
                           <i class="material-icons">upload_file</i>
                         </a>
-                    {% endif %}
-
-
-                    {% endif %}
+                      {% endif %}
+                    {% endwith %}
                   </td>
                 </tr>
+                {% endwith %}
                 {% empty %}
                 <tr>
                   <td colspan="7" class="text-center text-muted py-4">Sin resultados</td>
@@ -185,7 +153,7 @@
   $(document).ready(function() {
     $('#documentos-table').DataTable({
       language: { url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/es-ES.json' },
-      order: [[4, 'desc'], [0, 'desc']], // por fecha de actualización, luego No. Estudiante
+      order: [[4, 'desc'], [0, 'desc']], // por última actualización, luego No. Estudiante
       pageLength: 10,
       autoWidth: false,
       scrollX: true,

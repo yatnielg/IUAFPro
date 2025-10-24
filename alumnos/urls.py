@@ -37,6 +37,7 @@ urlpatterns = [
  
     path("alumnos/<int:pk>/documentos/", views.alumnos_documentos_editar, name="alumnos_documentos_editar"),
 
+    
     path("documentos/", views.documentos_alumnos_lista, name="documentos_alumnos_lista"),
 
     path("alumnos/api/programa/<int:pk>/", alumnos_views.programa_info, name="alumnos_programa_info"),
@@ -62,5 +63,10 @@ urlpatterns = [
     path("banco/movimientos/", views.MovimientoBancoListView.as_view(), name="movimientos_banco_lista"),
     path("banco/movimientos/run-update/", views.run_movimientos_banco_update, name="movimientos_banco_update"),
 
-    path("banco/movimientos/", views.MovimientoBancoListView.as_view(), name="movimientos_banco_lista"),
+    path("uploads/<str:token>/", views.public_upload, name="public_upload"),
+    path("alumnos/<int:pk>/generar-enlace/", views.generar_enlace_subida, name="generar_enlace_subida"),
+    path("alumnos/<int:pk>/generar-enlace-json/",views.generar_enlace_subida_json,name="generar_enlace_subida_json",
+)
+
+    #path("banco/movimientos/", views.MovimientoBancoListView.as_view(), name="movimientos_banco_lista"),
 ]
