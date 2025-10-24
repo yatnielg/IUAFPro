@@ -36,12 +36,20 @@
   </div>
 </div>
 
-<form method="post" id="conciliar-form">
+<form method="post" id="conciliar-form" action="">
   {% csrf_token %}
+  {{ formset.management_form }}
+
+  {% if not formset.management_form %}
+    <!-- Fallback por si no se renderiza el management_form -->
+    <input type="hidden" name="lineas-TOTAL_FORMS" id="id_lineas-TOTAL_FORMS" value="1">
+    <input type="hidden" name="lineas-INITIAL_FORMS" value="0">
+    <input type="hidden" name="lineas-MIN_NUM_FORMS" value="0">
+    <input type="hidden" name="lineas-MAX_NUM_FORMS" value="1000">
+  {% endif %}
+
   <input type="hidden" name="nombre_detectado_save" id="nds-hidden"
          value="{{ mov.nombre_detectado_save|default_if_none:mov.nombre_detectado|default:'' }}">
-
-  {{ formset.management_form }}
 
   <div class="table-responsive">
     <table class="table table-sm align-middle">
@@ -99,9 +107,7 @@
         </tr>
         <tr>
           <td colspan="2" class="text-end fw-semibold">Falta por conciliar:</td>
-          <td>
-            <input type="text" class="form-control form-control-sm" id="faltante-lineas" value="0.00" readonly>
-          </td>
+          <td><input type="text" class="form-control form-control-sm" id="faltante-lineas" value="0.00" readonly></td>
           <td></td>
         </tr>
       </tfoot>
@@ -112,10 +118,11 @@
     <button class="btn btn-sm btn-outline-primary" id="add-linea" type="button">+ Agregar línea</button>
   </div>
 
-  <button class="btn btn-primary" type="submit">Conciliar y crear pagos</button>
-  <a class="btn btn-subtle" href="{% url 'movimientos_abonos_pendientes' %}">Cancelar</a>
+  <button class="btn btn-primary" type="submit" id="submit-btn">Conciliar y crear pagos</button>
+  <a class="btn btn-light" href="{% url 'movimientos_abonos_pendientes' %}">Cancelar</a>
 </form>
 
+<!-- plantilla oculta -->
 <table class="d-none">
   <tbody>
     <tr id="tpl-linea">
@@ -135,43 +142,39 @@
           {% endfor %}
         </select>
       </td>
-      <td>
-        <input type="number" step="0.01" min="0.01" class="form-control form-control-sm monto-input" required>
-      </td>
-      <td class="text-end">
-        <button class="btn btn-sm btn-outline-danger btn-del" type="button">Quitar</button>
-      </td>
+      <td><input type="number" step="0.01" min="0.01" class="form-control form-control-sm monto-input" required></td>
+      <td class="text-end"><button class="btn btn-sm btn-outline-danger btn-del" type="button">Quitar</button></td>
       <input type="hidden" class="del-flag" value="">
     </tr>
   </tbody>
 </table>
 
 <script>
-  // ================= UTILIDADES NUMÉRICAS =================
+  // ================= Utilidad numérica =================
   function toFloat(val) {
-    let s = String(val ?? '').trim();
-    if (s.includes(',') && !s.includes('.')) {
-      s = s.replace(/\./g, '').replace(',', '.');
-    } else {
-      s = s.replace(/,/g, '');
-    }
-    s = s.replace(/[^\d.+-]/g, '');
+    let s = String(val ?? '').trim().replace(/,/g, '');
     const n = parseFloat(s);
     return isNaN(n) ? 0 : n;
   }
 
-  // ================= RECÁLCULO AUTOMÁTICO =================
+  // ✅ Deshabilita inputs de una fila marcada para borrar (evita bloqueo HTML5)
+  function disableRow(tr){
+    tr.querySelectorAll('select, input').forEach(el => {
+      if (el.classList.contains('del-flag')) return; // dejamos el flag
+      el.required = false;
+      el.disabled = true;
+    });
+  }
+
   (function(){
     const addBtn = document.getElementById('add-linea');
-    const body   = document.getElementById('lineas-body');
+    const body = document.getElementById('lineas-body');
     const totalI = document.getElementById('total-lineas');
-    const faltI  = document.getElementById('faltante-lineas');
+    const faltI = document.getElementById('faltante-lineas');
     const mgmtTotal = document.getElementById('id_lineas-TOTAL_FORMS');
     const debeInput = document.getElementById('monto-debe');
 
-    function getDebe() {
-      return toFloat(debeInput.value);
-    }
+    function getDebe() { return toFloat(debeInput.value); }
 
     function recalc() {
       let total = 0;
@@ -180,10 +183,8 @@
         total += toFloat(tr.querySelector('.monto-input').value);
       });
       totalI.value = total.toFixed(2);
-
       const faltante = getDebe() - total;
       faltI.value = faltante.toFixed(2);
-
       faltI.classList.remove('is-valid', 'is-invalid');
       if (Math.abs(faltante) < 0.005) faltI.classList.add('is-valid');
       else faltI.classList.add('is-invalid');
@@ -194,10 +195,14 @@
       tr.querySelector('.btn-del').addEventListener('click', () => {
         const delFlag = tr.querySelector('.del-flag');
         if (delFlag && delFlag.name) {
-          delFlag.value = 'on'; tr.style.display = 'none';
+          // fila existente del formset: marcar DELETE y deshabilitar campos
+          delFlag.value = 'on';
+          disableRow(tr);
+          tr.style.display = 'none';
         } else {
+          // fila nueva (sin nombres), eliminar y decrementar TOTAL_FORMS
           tr.remove();
-          mgmtTotal.value = String(parseInt(mgmtTotal.value) - 1);
+          mgmtTotal.value = String(parseInt(mgmtTotal.value || '0') - 1);
         }
         recalc();
       });
@@ -207,7 +212,7 @@
     recalc();
 
     addBtn.addEventListener('click', () => {
-      const idx = parseInt(mgmtTotal.value);
+      const idx = parseInt(mgmtTotal.value || 0);
       const tpl = document.getElementById('tpl-linea');
       const tr = tpl.cloneNode(true);
       tr.id = ''; tr.classList.add('linea');
@@ -221,17 +226,34 @@
       recalc();
     });
 
+    // ================= Submit =================
     document.getElementById('conciliar-form').addEventListener('submit', (e) => {
+      console.log("🔵 Intentando enviar formulario al servidor...");
+
+      // Deshabilitar TODAS las filas marcadas para borrar
+      document.querySelectorAll('#lineas-body tr.linea').forEach(tr => {
+        const delFlag = tr.querySelector('.del-flag');
+        if (delFlag && delFlag.value === 'on') {
+          disableRow(tr);
+        }
+      });
+
       const total = toFloat(totalI.value);
       const debe = getDebe();
       if (Math.abs(total - debe) > 0.009) {
         e.preventDefault();
         alert(`La suma de líneas (${total.toFixed(2)}) debe ser igual al monto del movimiento (${debe.toFixed(2)}).`);
+        console.log("❌ Envío cancelado: montos no coinciden");
+        return false;
       }
+
+      const btn = document.getElementById('submit-btn');
+      btn.disabled = true;
+      btn.innerHTML = 'Procesando...';
     });
   })();
 
-  // ================= AJAX PARA GUARDAR NOMBRE =================
+  // ================= AJAX: guardar nombre_detectado_save =================
   function getFormCsrf() {
     const form = document.getElementById('conciliar-form');
     const input = form.querySelector('input[name=csrfmiddlewaretoken]');
@@ -243,7 +265,6 @@
     const input = document.getElementById('nombre-detectado-input');
     const hidden = document.getElementById('nds-hidden');
     if (!btn || !input || !hidden) return;
-
     const saveUrl = "{% url 'mov_set_nds' mov.id %}";
 
     let editing = false;

@@ -1782,22 +1782,20 @@ class MovimientoBancoListView(ListView):
     model = MovimientoBanco
     template_name = "panel/movimientos_list.html"
     context_object_name = "movimientos"
-    paginate_by = None  # DataTables pagina en el cliente
+    paginate_by = None
 
     def get_queryset(self):
         user = self.request.user
 
-        # Si no está autenticado, o no está en 'pagos' y no es superuser => nada
         if (not user.is_authenticated) or (not user.is_superuser and not user.groups.filter(name="pagos").exists()):
             return MovimientoBanco.objects.none()
 
         qs = MovimientoBanco.objects.all().order_by("id")
 
-        # Filtros opcionales por GET
-        signo = self.request.GET.get("signo")      # "1" = Abono, "-1" = Cargo
-        tipo  = self.request.GET.get("tipo")       # substring
-        fmin  = self.request.GET.get("desde")      # "YYYY-MM-DD"
-        fmax  = self.request.GET.get("hasta")      # "YYYY-MM-DD"
+        signo = self.request.GET.get("signo")
+        tipo  = self.request.GET.get("tipo")
+        fmin  = self.request.GET.get("desde")
+        fmax  = self.request.GET.get("hasta")
 
         if signo in ("1", "-1"):
             qs = qs.filter(signo=int(signo))
@@ -1812,11 +1810,23 @@ class MovimientoBancoListView(ListView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        qs = self.object_list  # ya viene vacío si no tiene permiso
+        qs = self.object_list
+
+        user = self.request.user
         ctx["total_registros"] = qs.count()
-        ctx["total_abonos"]    = qs.filter(signo=1).aggregate(s=Sum("monto"))["s"] or Decimal("0")
-        ctx["total_cargos"]    = qs.filter(signo=-1).aggregate(s=Sum("monto"))["s"] or Decimal("0")
+        ctx["total_abonos"] = qs.filter(signo=1).aggregate(s=Sum("monto"))["s"] or Decimal("0")
+        ctx["total_cargos"] = qs.filter(signo=-1).aggregate(s=Sum("monto"))["s"] or Decimal("0")
+
+        # 🔸 Añadimos banderas de permisos por grupo
+        ctx["puede_conciliar"] = (
+            user.is_superuser or user.groups.filter(name="Conciliadores Bancarios").exists()
+        )
+        ctx["puede_deshacer"] = (
+            user.is_superuser or user.groups.filter(name="Supervisores Bancarios").exists()
+        )
+
         return ctx
+
 
 ###############################################################
 SHEET_ID = "1G0P64LVOfxG4siNXmTm0gCORoaPby2W2_wu0Z869Dvk"
@@ -2135,6 +2145,14 @@ class LineaConciliacionForm(forms.Form):
 
 LineaFormSet = formset_factory(LineaConciliacionForm, extra=1, can_delete=True)
 
+
+from decimal import Decimal, ROUND_HALF_UP
+
+def _q2(v):
+    return (Decimal(v or 0).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
+
+
+
 @login_required
 @user_passes_test(puede_conciliar)
 def conciliar_movimiento(request, mov_id):
@@ -2153,17 +2171,16 @@ def conciliar_movimiento(request, mov_id):
 
     if request.method == "POST":
         nds_input = (request.POST.get("nombre_detectado_save") or "").strip() or None
-
         formset = LineaFormSet(request.POST, prefix="lineas")
 
         if not formset.is_valid():
+            print("❌ Formset inválido:", formset.errors)
             messages.error(request, "Revisa las líneas: hay errores en los datos.")
-            return render(request, "pagos/conciliar_movimiento_split.html", {
-                "mov": mov, "conceptos": conceptos, "candidatos": candidatos, "base": base,
-                "formset": formset,
+            return render(request, "pagos/conciliar_movimiento.html", {
+                "mov": mov, "conceptos": conceptos, "candidatos": candidatos,
+                "base": base, "formset": formset,
             })
 
-        # Calcula suma
         total = Decimal("0.00")
         lineas_validas = []
         for f in formset:
@@ -2171,17 +2188,18 @@ def conciliar_movimiento(request, mov_id):
                 total += f.cleaned_data["monto"]
                 lineas_validas.append(f.cleaned_data)
 
-        # Validación de monto
-        if total != (mov.monto or Decimal("0.00")):
-            messages.error(request, f"La suma de montos ({total}) debe ser igual al monto del movimiento ({mov.monto}).")
-            return render(request, "pagos/conciliar_movimiento_split.html", {
-                "mov": mov, "conceptos": conceptos, "candidatos": candidatos, "base": base,
-                "formset": formset,
+        total_norm = _q2(total)
+        mov_norm   = _q2(mov.monto)
+
+        if total_norm != mov_norm:
+            messages.error(request, f"La suma de montos ({total_norm}) debe ser igual al monto del movimiento ({mov_norm}).")
+            return render(request, "pagos/conciliar_movimiento.html", {
+                "mov": mov, "conceptos": conceptos, "candidatos": candidatos,
+                "base": base, "formset": formset,
             })
 
         try:
             with transaction.atomic():
-                # crea un PagoDiario por línea
                 for data in lineas_validas:
                     alumno   = Alumno.objects.get(pk=data["alumno_id"])
                     concepto = ConceptoPago.objects.get(pk=data["concepto_id"])
@@ -2190,12 +2208,12 @@ def conciliar_movimiento(request, mov_id):
                     sede_txt     = get_sede_text(alumno)
 
                     PagoDiario.objects.create(
-                        movimiento=mov,               # ← enlace al movimiento
+                        # movimiento=mov,  # Descomenta si tu modelo PagoDiario tiene este FK
                         alumno=alumno,
                         fecha=mov.fecha,
-                        monto=data["monto"],          # ← monto por línea
+                        monto=_q2(data["monto"]),
                         forma_pago="Transferencia/Depósito",
-                        concepto=concepto.codigo,     # o concepto.nombre
+                        concepto=concepto.codigo,
                         pago_detalle=(mov.concepto or "")[:200],
                         folio=(mov.autorizacion or mov.referencia_numerica or "")[:32],
                         curp=alumno.curp or None,
@@ -2205,29 +2223,25 @@ def conciliar_movimiento(request, mov_id):
                         sede=alumno.informacionEscolar.sede,
                     )
 
-                # guarda el nombre editado y marca conciliado
                 mov.nombre_detectado_save = nds_input
                 mov.conciliado = True
                 mov.conciliado_por = request.user
                 mov.conciliado_en = timezone.now()
                 mov.save(update_fields=["nombre_detectado_save","conciliado","conciliado_por","conciliado_en"])
 
-            messages.success(request, f"Conciliado. Se generaron {len(lineas_validas)} pagos.")
+            messages.success(request, f"✅ Conciliado. Se generaron {len(lineas_validas)} pagos.")
             return redirect(reverse("movimientos_abonos_pendientes"))
 
         except Exception as e:
+            print("❌ Error al conciliar:", e)
             messages.error(request, f"Error al conciliar: {e}")
 
     else:
-        # GET: inicializa una línea por defecto con el total del movimiento
-        formset = LineaFormSet(
-            initial=[{"monto": mov.monto}],
-            prefix="lineas",
-        )
+        formset = LineaFormSet(initial=[{"monto": mov.monto}], prefix="lineas")
 
     return render(request, "pagos/conciliar_movimiento.html", {
-        "mov": mov, "conceptos": conceptos, "candidatos": candidatos, "base": base,
-        "formset": formset,
+        "mov": mov, "conceptos": conceptos, "candidatos": candidatos,
+        "base": base, "formset": formset,
     })
 
 #############################################################################################

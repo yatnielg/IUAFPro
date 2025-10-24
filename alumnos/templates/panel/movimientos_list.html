@@ -124,6 +124,7 @@
                     <th>Autorización</th>
                     <th>Emisor</th>
                     <th>Nombre detectado</th>
+                    <th>nombre_detectado_save</th>
                     <th>Institución emisora</th>
                     <th>Concepto</th>
                     <th>Ref. alfanumérica</th>
@@ -156,7 +157,11 @@
                       {% else %}—{% endif %}
                     </td>
 
-
+                    <td title="{{ m.nombre_detectado_save }}">
+                      {% if m.nombre_detectado_save %}
+                        {{ m.nombre_detectado_save|truncatechars:30 }}
+                      {% else %}—{% endif %}
+                    </td>
                     <td>{{ m.institucion_emisora|default:"—" }}</td>
                     <td>{{ m.concepto|default:"—" }}</td>
                     <td>
@@ -166,12 +171,40 @@
                     </td>
 
                 
-                    <td class="text-right">
-                      {# Usa el reverse del admin si tu app es "alumnos": admin:alumnos_movimientobanco_change #}
-                      <a href="{% url 'admin:alumnos_movimientobanco_change' m.pk %}" class="btn btn-link text-info btn-just-icon like" title="Ver/Editar (admin)">
-                        <i class="material-icons">visibility</i>
-                      </a>
-                    </td>
+    <td class="text-right">
+
+  {# Ver o editar en admin #}
+  <a href="{% url 'admin:alumnos_movimientobanco_change' m.pk %}"
+     class="btn btn-link text-info btn-just-icon like"
+     title="Ver/Editar (admin)">
+    <i class="material-icons">visibility</i>
+  </a>
+
+ {# Mostrar botones según grupo y estado #}
+{% if not m.conciliado and puede_conciliar %}
+    <a href="{% url 'conciliar_movimiento' m.pk %}"
+       class="btn btn-sm btn-primary"
+       title="Conciliar este movimiento">
+      Conciliar
+    </a>
+  {% elif m.conciliado and puede_deshacer %}
+    <form method="post"
+          action="{% url 'mov_deshacer_conciliacion' m.pk %}"
+          class="d-inline"
+          onsubmit="return confirm('¿Seguro que deseas deshacer la conciliación y eliminar/invalidar los pagos generados?');">
+      {% csrf_token %}
+      <button class="btn btn-sm btn-warning" title="Deshacer conciliación">
+        🔄 Deshacer
+      </button>
+    </form>
+  {% endif %}
+</td>
+
+
+
+
+
+
                   </tr>
                   {% empty %}
                   <tr>
