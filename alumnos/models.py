@@ -12,6 +12,8 @@ import re
 import os
 import unicodedata
 
+from django.utils.functional import cached_property
+
 # ============================================================
 # Utilidades
 # ============================================================
@@ -195,6 +197,13 @@ def _best_name_span(text: str) -> str | None:
 # ============================================================
 
 class MovimientoBanco(models.Model):
+    alumno_asignado = models.ForeignKey('Alumno', null=True, blank=True, on_delete=models.SET_NULL, related_name='movimientos_banco')
+    pago_creado = models.OneToOneField('PagoDiario', null=True, blank=True, on_delete=models.SET_NULL,related_name='movimiento_banco')
+    conciliado = models.BooleanField(default=False, db_index=True)
+    conciliado_por = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,related_name='conciliaciones_banco')
+    conciliado_en = models.DateTimeField(null=True, blank=True)
+
+
     fecha = models.DateField(null=True, blank=True, db_index=True)
     tipo = models.CharField(max_length=120, null=True, blank=True, db_index=True)
     monto = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True, db_index=True)

@@ -392,7 +392,7 @@
         <tbody>
           {% for p in pagos %}
           <tr>
-            <td>{% if p.fecha %}{{ p.fecha|date:"d/m/Y" }}{% else %}—{% endif %}</td>
+            <td title="{% if p.creado_en %}{{ p.creado_en|date:"d/m/Y" }}{% else %}—{% endif %}" data-order="{{ p.fecha|date:'Y-m-d' }}">{% if p.fecha %}{{ p.fecha|date:"d/m/Y" }}{% else %}—{% endif %}</td>
             <td>{{ p.folio|default:"—" }}</td>
             <td>{% if p.monto != None %}$ {{ p.monto }}{% else %}—{% endif %}</td>
             <td>{{ p.concepto|default:"—" }}</td>
@@ -584,7 +584,7 @@
     if ($tabla.length) {
       $tabla.DataTable({
         language: { url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/es-ES.json' },
-        order: [[0, 'desc']],
+        order: [[0, 'desc']],   // 👈 más reciente primero
         pageLength: 10,
         autoWidth: false,
         scrollX: true
@@ -592,5 +592,4 @@
     }
   });
 </script>
-
 {% endblock %}

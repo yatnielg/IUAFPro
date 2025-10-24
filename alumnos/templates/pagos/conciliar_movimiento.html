@@ -1,0 +1,42 @@
+{% extends "panel/grafico.html" %}
+{% block main_content %}
+
+<h3>Conciliar movimiento #{{ mov.id }}</h3>
+
+<div class="card mb-3">
+  <div class="card-body">
+    <p><strong>Fecha:</strong> {{ mov.fecha|default:"—" }}</p>
+    <p><strong>Monto:</strong> ${{ mov.monto|default:"—" }}</p>
+    <p><strong>Emisor:</strong> {{ mov.emisor_nombre|default:"—" }}</p>
+    <p><strong>Detectado:</strong> {{ mov.nombre_detectado|default:"—" }}</p>
+    <p><strong>Referencia:</strong> {{ mov.referencia_numerica|default:"—" }} / {{ mov.autorizacion|default:"—" }}</p>
+    <p><strong>Concepto:</strong> {{ mov.concepto|default:"—" }}</p>
+  </div>
+</div>
+
+<h5>Candidatos encontrados</h5>
+<form method="post">
+  {% csrf_token %}
+  <table class="table table-hover">
+    <thead><tr><th></th><th>No.</th><th>Nombre</th><th>CURP</th><th>Email</th><th>Teléfono</th></tr></thead>
+    <tbody>
+      {% for a in candidatos %}
+      <tr>
+        <td><input type="radio" name="alumno_id" value="{{ a.pk }}" required></td>
+        <td>{{ a.numero_estudiante }}</td>
+        <td>{{ a.nombre }} {{ a.apellido_p }} {{ a.apellido_m }}</td>
+        <td>{{ a.curp|default:"—" }}</td>
+        <td>{{ a.email|default:"—" }}</td>
+        <td>{{ a.telefono|default:"—" }}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="6" class="text-muted">No se encontraron coincidencias automáticas. Prueba a buscar por nombre/curp en otra pestaña y vuelve.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <button class="btn btn-primary" type="submit">Asignar y crear pago</button>
+  <a class="btn btn-light" href="{% url 'movimientos_abonos_pendientes' %}">Cancelar</a>
+</form>
+
+{% endblock %}

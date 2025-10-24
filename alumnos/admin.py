@@ -206,13 +206,150 @@ class PagoAdmin(admin.ModelAdmin):
 # =============================
 @admin.register(PagoDiario)
 class PagoDiarioAdmin(admin.ModelAdmin):
-    list_display = ("fecha", "monto", "concepto", "programa", "sede", "numero_alumno")
-    list_filter = ("programa", "sede", ("fecha", admin.DateFieldListFilter))
-    search_fields = (
-        "numero_alumno", "nombre", "curp", "programa", "concepto", "pago_detalle",
-        "alumno__numero_estudiante", "alumno__nombre", "alumno__apellido_p", "alumno__apellido_m",
+    # ===== Listado =====
+    list_display = (
+        "fecha",
+        "folio",
+        "monto",
+        "forma_pago",
+        "concepto",
+        "programa",
+        "sede",
+        "curp",
+        "numero_alumno",
+        "alumno_link",
+        "mov_banco_link",
+        "creado_en",
     )
-    actions = [exportar_csv]
+    list_display_links = ("fecha", "folio")
+    date_hierarchy = "fecha"
+    ordering = ("-fecha", "-creado_en")
+
+    # Filtros
+    list_filter = (
+        ("fecha", admin.DateFieldListFilter),
+        "programa",
+        "sede",
+        "forma_pago",
+        ("alumno", admin.EmptyFieldListFilter),  # “Con/ sin alumno”
+    )
+
+    # Búsqueda
+    search_fields = (
+        "folio",
+        "nombre",
+        "curp",
+        "programa",
+        "concepto",
+        "pago_detalle",
+        "no_auto",
+        "emision",
+        "numero_alumno",
+        "alumno__numero_estudiante",
+        "alumno__nombre",
+        "alumno__apellido_p",
+        "alumno__apellido_m",
+    )
+
+    # Performance y UX
+    list_select_related = ("alumno",)
+    autocomplete_fields = ("alumno",)
+    readonly_fields = ("creado_en", "actualizado_en")
+
+    # Form
+    fieldsets = (
+        ("Identificación", {
+            "fields": (("folio", "fecha"), ("sede", "forma_pago"), "programa")
+        }),
+        ("Importe y detalle", {
+            "fields": (("monto", "grado"), ("concepto", "pago_detalle"))
+        }),
+        ("Referencia", {
+            "classes": ("collapse",),
+            "fields": (("no_auto", "emision"), ("curp", "numero_alumno"), "nombre")
+        }),
+        ("Vinculación", {
+            "fields": ("alumno",)
+        }),
+        ("Tiempos", {
+            "classes": ("collapse",),
+            "fields": (("creado_en", "actualizado_en"),)
+        }),
+    )
+
+    # Acciones
+    actions = ("vincular_alumno_por_numero", "desvincular_alumno", "exportar_csv")
+
+    # ===== Columnas decoradas =====
+    def alumno_link(self, obj):
+        if not obj.alumno_id:
+            return "-"
+        url = reverse("admin:alumnos_alumno_change", args=[obj.alumno_id])  # cambia "alumnos" por tu app_label si es distinto
+        a = obj.alumno
+        texto = f"{a.numero_estudiante} — {a.nombre} {a.apellido_p or ''} {a.apellido_m or ''}".strip()
+        return format_html('<a href="{}">{}</a>', url, texto)
+    alumno_link.short_description = "Alumno"
+
+    def mov_banco_link(self, obj):
+        # Acceso reverso al OneToOne de MovimientoBanco (related_name='movimiento_banco')
+        mb = getattr(obj, "movimiento_banco", None)
+        if not mb:
+            return "-"
+        url = reverse("admin:alumnos_movimientobanco_change", args=[mb.pk])  # cambia app_label si aplica
+        return format_html('<a href="{}">Mov #{}</a>', url, mb.pk)
+    mov_banco_link.short_description = "Movimiento banco"
+
+    # ===== Acciones =====
+    def vincular_alumno_por_numero(self, request, queryset):
+        """
+        Si el registro tiene 'numero_alumno' y no tiene 'alumno',
+        intenta vincularlo con el Alumno cuyo numero_estudiante coincide.
+        """
+        from .models import Alumno
+        to_update = queryset.filter(alumno__isnull=True).exclude(numero_alumno__isnull=True)
+        count = 0
+        for p in to_update:
+            try:
+                a = Alumno.objects.get(numero_estudiante=p.numero_alumno)
+            except Alumno.DoesNotExist:
+                continue
+            p.alumno = a
+            # si falta, sincroniza nombre/curp básicos
+            if not p.nombre:
+                p.nombre = f"{a.nombre} {a.apellido_p} {a.apellido_m}".strip()
+            if not p.curp:
+                p.curp = a.curp or p.curp
+            p.save(update_fields=["alumno", "nombre", "curp", "actualizado_en"])
+            count += 1
+        self.message_user(request, f"{count} pagos vinculados a su Alumno por número.")
+    vincular_alumno_por_numero.short_description = "Vincular alumno usando 'numero_alumno'"
+
+    def desvincular_alumno(self, request, queryset):
+        updated = queryset.update(alumno=None)
+        self.message_user(request, f"{updated} pagos desvinculados del Alumno.")
+    desvincular_alumno.short_description = "Desvincular Alumno"
+
+    # Si ya usas una acción exportar_csv en otros admins, déjala disponible aquí
+    def exportar_csv(self, request, queryset):
+        # Reutiliza tu implementación existente si ya la tienes importada.
+        # Esto es un placeholder por si quieres mantener la API uniforme.
+        from .admin_utils import exportar_csv_queryset  # ajusta a tu helper real
+        return exportar_csv_queryset(self, request, queryset, filename_prefix="pagos_diario")
+    exportar_csv.short_description = "Exportar CSV seleccionado(s)"
+
+    # ===== Lógica útil al guardar =====
+    def save_model(self, request, obj, form, change):
+        """
+        Si no tiene alumno pero sí numero_alumno, intenta autovincular.
+        """
+        if not obj.alumno_id and obj.numero_alumno:
+            from .models import Alumno
+            try:
+                obj.alumno = Alumno.objects.get(numero_estudiante=obj.numero_alumno)
+            except Alumno.DoesNotExist:
+                pass
+        super().save_model(request, obj, form, change)
+
 
 # =============================
 # MOVIMIENTOS BANCARIOS
@@ -231,14 +368,138 @@ borrar_todos_mov_banco.short_description = "🧨 BORRAR TODOS los movimientos"
 
 @admin.register(MovimientoBanco)
 class MovimientoBancoAdmin(admin.ModelAdmin):
+    # ======= LISTA =======
     list_display = (
-        "fecha", "tipo", "monto", "sucursal", "referencia_numerica",
-        "autorizacion", "emisor_nombre", "institucion_emisora", "nombre_detectado"
+        "id",
+        "fecha",
+        "signo_display",
+        "monto",
+        "tipo",
+        "emisor_nombre",
+        "nombre_detectado",
+        "alumno_link",
+        "pago_link",
+        "conciliado",
+        "conciliado_por",
+        "conciliado_en",
+        "institucion_emisora",
+        "sucursal",
+        "referencia_numerica",
+        "autorizacion",
     )
-    list_filter = ("tipo", "institucion_emisora", "sucursal", "source_sheet_name")
-    search_fields = ("descripcion_raw", "emisor_nombre", "concepto", "referencia_numerica", "autorizacion", "institucion_emisora")
+    list_display_links = ("id", "fecha")
+    list_filter = (
+        "conciliado",
+        "signo",
+        "tipo",
+        "institucion_emisora",
+        "sucursal",
+        "source_sheet_name",
+    )
+    search_fields = (
+        "emisor_nombre", "referencia_alfanumerica", "concepto",
+        "referencia_numerica", "autorizacion", "institucion_emisora",
+        "descripcion_raw",
+        # por relación
+        "alumno_asignado__numero_estudiante",
+        "alumno_asignado__nombre",
+        "alumno_asignado__apellido_p",
+        "alumno_asignado__apellido_m",
+        "alumno_asignado__curp",
+    )
     date_hierarchy = "fecha"
-    actions = [exportar_csv, borrar_todos_mov_banco]
+    ordering = ("-fecha", "id")
+    list_select_related = ("alumno_asignado", "pago_creado", "conciliado_por")
+    readonly_fields = (
+        "uid_hash", "created_at", "updated_at",
+        "nombre_detectado", "pago_creado",  # pago se ve pero no se edita aquí
+        "conciliado_por", "conciliado_en",
+    )
+    autocomplete_fields = ("alumno_asignado",)  # útil si tienes muchos alumnos
+
+    # ======= FORM =======
+    fieldsets = (
+        ("Conciliación", {
+            "fields": (
+                ("conciliado", "alumno_asignado", "pago_creado"),
+                ("conciliado_por", "conciliado_en"),
+            )
+        }),
+        ("Movimiento", {
+            "fields": (
+                ("fecha", "signo", "monto", "tipo"),
+                ("sucursal", "institucion_emisora"),
+                ("emisor_nombre", "nombre_detectado"),
+                ("referencia_numerica", "autorizacion"),
+                "referencia_alfanumerica",
+                "concepto",
+                "descripcion_raw",
+            )
+        }),
+        ("Origen (import)", {
+            "classes": ("collapse",),
+            "fields": (
+                ("source_sheet_id", "source_sheet_name"),
+                ("source_gid", "source_row"),
+                "uid_hash",
+                ("created_at", "updated_at"),
+            )
+        }),
+    )
+
+    # ======= ACTIONS =======
+    actions = ("marcar_conciliado", "desmarcar_conciliado","exportar_csv", "borrar_todos_mov_banco")
+     
+
+    def marcar_conciliado(self, request, qs):
+        updated = qs.update(conciliado=True, conciliado_por=request.user)
+        self.message_user(request, f"{updated} movimientos marcados como conciliados.")
+    marcar_conciliado.short_description = "Marcar como conciliado"
+
+    def desmarcar_conciliado(self, request, qs):
+        updated = qs.update(conciliado=False, conciliado_por=None, conciliado_en=None, pago_creado=None, alumno_asignado=None)
+        self.message_user(request, f"{updated} movimientos desmarcados (se limpiaron vínculos).")
+    desmarcar_conciliado.short_description = "Desmarcar conciliado (limpiar vínculos)"
+
+    # ======= COLS DECORADAS =======
+    def signo_display(self, obj):
+        if obj.signo == 1:
+            return format_html('<span style="color:#2e7d32;font-weight:600">Abono</span>')
+        if obj.signo == -1:
+            return format_html('<span style="color:#c62828;font-weight:600">Cargo</span>')
+        return "-"
+    signo_display.short_description = "Signo"
+    signo_display.admin_order_field = "signo"
+
+    def alumno_link(self, obj):
+        if not obj.alumno_asignado_id:
+            return "-"
+        url = reverse("admin:alumnos_alumno_change", args=[obj.alumno_asignado_id])
+        a = obj.alumno_asignado
+        nombre = f"{a.numero_estudiante} — {a.nombre} {a.apellido_p} {a.apellido_m}".strip()
+        return format_html('<a href="{}">{}</a>', url, nombre)
+    alumno_link.short_description = "Alumno"
+
+    def pago_link(self, obj):
+        if not obj.pago_creado_id:
+            return "-"
+        url = reverse("admin:alumnos_pagodiario_change", args=[obj.pago_creado_id])
+        return format_html('<a href="{}">Pago #{}</a>', url, obj.pago_creado_id)
+    pago_link.short_description = "Pago"
+
+    # Guarda quién y cuándo concilia desde el admin si se cambia el flag
+    def save_model(self, request, obj, form, change):
+        if "conciliado" in form.changed_data:
+            if obj.conciliado:
+                from django.utils import timezone
+                obj.conciliado_por = request.user
+                obj.conciliado_en = timezone.now()
+            else:
+                obj.conciliado_por = None
+                obj.conciliado_en = None
+        super().save_model(request, obj, form, change)
+
+   
 
 # =============================
 # NUEVO SISTEMA DE DOCUMENTOS

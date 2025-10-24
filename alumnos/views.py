@@ -686,15 +686,20 @@ def alumnos_detalle(request, pk):
     pagos = cargos = cargos_pendientes = None
     pagos_total = 0
     if can_view_pagos:
-        pagos = PagoDiario.objects.filter(alumno=alumno).order_by("-fecha", "-id")
+        pagos = PagoDiario.objects.filter(alumno=alumno).order_by("fecha", "-id")        
         pagos_total = round(pagos.aggregate(total=Sum("monto"))["total"] or 0, 2)
+
+        
+        
+
+
         cargos = (
             Cargo.objects.filter(alumno=alumno)
             .select_related("concepto")
             .order_by("-fecha_cargo", "-id")
         )
         cargos_pendientes = cargos.filter(pagado=False)
-
+       
     # -------- Documentos DINÁMICOS por programa --------
     docs = []
     docs_total = 0
@@ -2044,3 +2049,83 @@ def generar_enlace_subida_json(request, pk):
     )
     url = request.build_absolute_uri(reverse("public_upload", args=[invite.token]))
     return JsonResponse({"ok": True, "url": url, "expires_at": expires.isoformat()})
+
+################################################################
+from django.contrib.auth.decorators import login_required, user_passes_test
+from django.shortcuts import get_object_or_404, render, redirect
+from django.utils import timezone
+from django.contrib import messages
+from django.db import transaction
+from django.urls import reverse
+
+from alumnos.models import MovimientoBanco, PagoDiario, Alumno
+from alumnos.services.match_helpers import buscar_alumnos_candidatos
+
+def puede_conciliar(u):
+    return u.is_authenticated and (u.is_superuser or u.groups.filter(name='pagos').exists())
+
+@login_required
+@user_passes_test(puede_conciliar)
+def movimientos_abonos_pendientes(request):
+    q = (request.GET.get("q") or "").strip()
+    qs = MovimientoBanco.objects.filter(signo=1, conciliado=False).order_by('id')
+    if q:
+        qs = qs.filter(
+            Q(emisor_nombre__icontains=q) |
+            Q(referencia_alfanumerica__icontains=q) |
+            Q(concepto__icontains=q) |
+            Q(referencia_numerica__icontains=q) |
+            Q(autorizacion__icontains=q)
+        )
+    return render(request, "pagos/abonos_pendientes.html", {"movs": qs, "q": q})
+
+@login_required
+@user_passes_test(puede_conciliar)
+def conciliar_movimiento(request, mov_id):
+    mov = get_object_or_404(MovimientoBanco, pk=mov_id)
+
+    # Texto base para buscar: nombre_detectado o emisor_nombre
+    base = mov.nombre_detectado or mov.emisor_nombre or mov.referencia_alfanumerica or ""
+    candidatos = buscar_alumnos_candidatos(base)
+
+    if request.method == "POST":
+        alumno_id = request.POST.get("alumno_id")
+        alumno = get_object_or_404(Alumno, pk=alumno_id)
+
+        try:
+            with transaction.atomic():
+                # Crear PagoDiario
+                pago = PagoDiario.objects.create(
+                    alumno=alumno,
+                    fecha=mov.fecha,
+                    monto=mov.monto,
+                    forma_pago="Transferencia/Depósito",
+                    concepto=mov.tipo or "Pago desde banco",
+                    pago_detalle=(mov.concepto or "")[:200],
+                    folio=(mov.autorizacion or mov.referencia_numerica or "")[:32],
+                    curp=alumno.curp or None,
+                    numero_alumno=alumno.numero_estudiante,
+                    nombre=f"{alumno.nombre} {alumno.apellido_p} {alumno.apellido_m}".strip(),
+                )
+
+                # Marcar conciliación en el movimiento
+                mov.alumno_asignado = alumno
+                mov.pago_creado = pago
+                mov.conciliado = True
+                mov.conciliado_por = request.user
+                mov.conciliado_en = timezone.now()
+                mov.save(update_fields=[
+                    "alumno_asignado","pago_creado","conciliado",
+                    "conciliado_por","conciliado_en"
+                ])
+
+            messages.success(request, f"Conciliado con {alumno.numero_estudiante} y pago #{pago.id} creado.")
+            return redirect(reverse("movimientos_abonos_pendientes"))
+        except Exception as e:
+            messages.error(request, f"Error al conciliar: {e}")
+
+    return render(
+        request,
+        "pagos/conciliar_movimiento.html",
+        {"mov": mov, "candidatos": candidatos, "base": base}
+    )
