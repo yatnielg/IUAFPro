@@ -360,7 +360,7 @@ class DocumentoAlumnoCreateForm(forms.ModelForm):
         model = DocumentoAlumno
         fields = ["tipo", "archivo"]
         widgets = {
-            "tipo": forms.Select(attrs={"class": "selectpicker", "data-style": "select-with-transition"}),
+            "tipo": forms.Select(attrs={"class": "selectpicker", "data-style": "select-with-transition" }),
         }
 
     def __init__(self, *args, info_escolar: InformacionEscolar = None, **kwargs):

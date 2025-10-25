@@ -9,6 +9,18 @@
     .order-img{width:34px;height:34px;object-fit:cover;border-radius:5px;margin-right:2px;background:#f7f8fa;transition:transform .2s;cursor:pointer}
     .order-img:hover{transform:scale(2.5) translateX(5px);z-index:2;box-shadow:0 4px 16px rgba(0,0,0,.18)}
     .table-responsive{width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
+
+    /* Toolbar en columna: botón arriba, filtros abajo */
+    .toolbar{
+      display:flex; flex-direction:column; align-items:flex-start; gap:.5rem; margin-bottom:.5rem;
+    }
+    .filters-row{
+      display:flex; flex-wrap:wrap; gap:.5rem; width:100%;
+    }
+
+    #filter-admin, #filter-acad, #filter-programa, #filter-sede {
+      min-width:220px; max-width:280px;
+    }
   </style>
 </head>
 <body>
@@ -16,6 +28,7 @@
 <div class="content">
 
   <div class="toolbar">
+    <!-- Botón arriba -->
     {% if request.user.is_superuser %}
       <a href="{% url 'alumnos_crear' %}" class="btn btn-primary btn-sm">
         <i class="material-icons" style="vertical-align:middle">add</i>
@@ -27,6 +40,15 @@
         Agregar Nuevo Estudiante
       </a>
     {% endif %}
+
+    <!-- Filtros abajo en su propia fila -->
+    <div class="filters-row">
+      <select id="filter-programa" class="selectpicker" data-style="select-with-transition" multiple title="Programa" data-size="7"></select>
+      <select id="filter-admin"    class="selectpicker" data-style="select-with-transition" multiple title="Estatus Administrativo" data-size="7"></select>
+      <select id="filter-acad"     class="selectpicker" data-style="select-with-transition" multiple title="Estatus Académico" data-size="7"></select>
+      <select id="filter-sede"     class="selectpicker" data-style="select-with-transition" multiple title="Sede" data-size="7"></select>
+      <button id="clear-filters" type="button" class="btn btn-sm btn-outline-warning">Limpiar</button>
+    </div>
   </div>
 
   <div class="container-fluid">
@@ -48,6 +70,7 @@
                   <th>Programa</th>
                   <th>Estatus Administrativo</th>
                   <th>Estatus Académico</th>
+                  <th>Sedes</th>
                   {% if request.user.is_superuser %}
                     <th class="disabled-sorting text-right">Acciones</th>
                   {% elif p and p.puede_editar_todo %}
@@ -94,6 +117,14 @@
                     {% endif %}
                   </td>
 
+                  <td>
+                    {% if a.informacionEscolar.sede %}
+                      {{ a.informacionEscolar.sede.nombre }}
+                    {% else %}
+                      <span class="text-muted">—</span>
+                    {% endif %}
+                  </td>
+
                   {% if request.user.is_superuser or p and p.puede_editar_todo or p and p.puede_ver_todo %}
                   <td class="text-right">
                     {% if request.user.is_superuser or p and p.puede_ver_todo %}
@@ -129,12 +160,67 @@
 <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
 <script>
   $(function () {
-    $('#datatables').DataTable({
+    const table = $('#datatables').DataTable({
       language: {
         url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/es-ES.json',
         emptyTable: 'Sin resultados'
       },
       order: [[0, 'desc']]
+    });
+
+    // Índices de columnas
+    const PROG_COL_IDX  = 3;
+    const ADMIN_COL_IDX = 4;
+    const ACAD_COL_IDX  = 5;
+    const SEDE_COL_IDX  = 6;
+
+    // Selects
+    const $selProg  = $('#filter-programa');
+    const $selAdmin = $('#filter-admin');
+    const $selAcad  = $('#filter-acad');
+    const $selSede  = $('#filter-sede');
+
+    // Poblar opciones únicas para cada select
+    function populateUnique(colIdx, $select) {
+      const set = new Set();
+      table.column(colIdx).nodes().each(function (td) {
+        const txt = $(td).text().trim();
+        if (txt && txt !== '—') set.add(txt);
+      });
+      $select.empty();
+      Array.from(set).sort().forEach(v => $select.append(new Option(v, v)));
+    }
+    populateUnique(PROG_COL_IDX,  $selProg);
+    populateUnique(ADMIN_COL_IDX, $selAdmin);
+    populateUnique(ACAD_COL_IDX,  $selAcad);
+    populateUnique(SEDE_COL_IDX,  $selSede);
+
+    // Utilidad regex
+    const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    function applyFilter($select, colIdx) {
+      const selected = $select.val();
+      if (selected && selected.length) {
+        const pattern = '^(' + selected.map(esc).join('|') + ')$';
+        table.column(colIdx).search(pattern, true, false);
+      } else {
+        table.column(colIdx).search('', true, false);
+      }
+    }
+
+    // Cambios en los selects => aplicar sus filtros y redibujar
+    $selProg.on('change',  function(){ applyFilter($selProg,  PROG_COL_IDX);  table.draw(); });
+    $selAdmin.on('change', function(){ applyFilter($selAdmin, ADMIN_COL_IDX); table.draw(); });
+    $selAcad.on('change',  function(){ applyFilter($selAcad,  ACAD_COL_IDX);  table.draw(); });
+    $selSede.on('change',  function(){ applyFilter($selSede,  SEDE_COL_IDX);  table.draw(); });
+
+    // Botón Limpiar (todos)
+    $('#clear-filters').on('click', function () {
+      $selProg.val([]); $selAdmin.val([]); $selAcad.val([]); $selSede.val([]);
+      applyFilter($selProg,  PROG_COL_IDX);
+      applyFilter($selAdmin, ADMIN_COL_IDX);
+      applyFilter($selAcad,  ACAD_COL_IDX);
+      applyFilter($selSede,  SEDE_COL_IDX);
+      table.draw();
     });
   });
 </script>
