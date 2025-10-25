@@ -503,3 +503,29 @@ def documentos_a_pdf(documentos, titulo="Documentos del alumno") -> bytes:
     writer.write(out)
     out.seek(0)
     return out.read()
+##########################################################################################
+from reportlab.lib.utils import ImageReader
+def draw_fullwidth_image_bottom(c, page_width, left_margin, right_margin, bottom_margin, image_path):
+    """
+    Dibuja una imagen a todo lo ancho (respetando proporción) en la parte inferior de la página.
+    - c: canvas
+    - page_width: ancho de la página (W)
+    - left_margin / right_margin: márgenes laterales
+    - bottom_margin: separación desde el borde inferior
+    - image_path: ruta absoluta del archivo de imagen
+    """
+    if not os.path.exists(image_path):
+        return  # silencioso si no existe
+
+    img = ImageReader(image_path)
+    iw, ih = img.getSize()
+
+    usable_w = page_width - left_margin - right_margin
+    scale = usable_w / float(iw)
+    scaled_h = ih * scale
+
+    x = left_margin
+    y = bottom_margin  # pega “bien abajo”
+
+    # mask='auto' hace transparente el fondo si la imagen tiene alpha
+    c.drawImage(img, x, y, width=usable_w, height=scaled_h, preserveAspectRatio=True, mask='auto')

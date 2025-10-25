@@ -11,6 +11,10 @@ from django.core.exceptions import ValidationError
 from .models import Cargo, ClipPaymentOrder, Pago
 from .models import Financiamiento
 
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import A4
+
+
 from django.utils import timezone
 from django.http import JsonResponse, Http404
 from datetime import date
@@ -434,10 +438,12 @@ def _filtrar_por_permisos_sede(qs, user):
     return qs.filter(filtro)
 
 ###############################################################
-# estudiantes()
+from django.db.models import Case, When, Value, BooleanField
 @login_required
 def estudiantes(request):
     q = (request.GET.get("q") or "").strip()
+
+    hoy = timezone.localdate()
 
     qs = (
         Alumno.for_user(request.user)
@@ -446,8 +452,15 @@ def estudiantes(request):
             "informacionEscolar",
             "informacionEscolar__programa",
             "informacionEscolar__sede",
-            "user",  # <- OK
-            # "documentos",  # <- QUITAR: no existe FK/OneToOne llamado así para select_related
+            "user",
+        )
+        .annotate(
+            # Activo si fin_programa es FUTURO; si es hoy o pasado (o null), NO activo
+            activo=Case(
+                When(informacionEscolar__fin_programa__gt=hoy, then=Value(True)),
+                default=Value(False),
+                output_field=BooleanField(),
+            )
         )
     )
 
@@ -461,7 +474,6 @@ def estudiantes(request):
             Q(curp__icontains=q)
         )
 
-    # pasa el perfil de forma segura al template
     profile = getattr(request.user, "profile", None)
 
     return render(
@@ -469,8 +481,6 @@ def estudiantes(request):
         "panel/all_orders.html",
         {"alumnos": qs, "q": q, "p": profile},
     )
-
-
 ###############################################################
 # views.py
 import re
@@ -686,20 +696,21 @@ def alumnos_detalle(request, pk):
     pagos = cargos = cargos_pendientes = None
     pagos_total = 0
     if can_view_pagos:
-        pagos = PagoDiario.objects.filter(alumno=alumno).order_by("fecha", "-id")        
+        pagos = (
+            PagoDiario.objects
+            .filter(alumno=alumno)
+            .order_by("fecha", "-id")
+        )
         pagos_total = round(pagos.aggregate(total=Sum("monto"))["total"] or 0, 2)
 
-        
-        
-
-
         cargos = (
-            Cargo.objects.filter(alumno=alumno)
+            Cargo.objects
+            .filter(alumno=alumno)
             .select_related("concepto")
             .order_by("-fecha_cargo", "-id")
         )
         cargos_pendientes = cargos.filter(pagado=False)
-       
+
     # -------- Documentos DINÁMICOS por programa --------
     docs = []
     docs_total = 0
@@ -709,17 +720,25 @@ def alumnos_detalle(request, pk):
     info = getattr(alumno, "informacionEscolar", None)
     prog = getattr(info, "programa", None)
 
+    # <<< NUEVO: flag para “Fin del programa en futuro” >>>
+    fin_programa_is_future = False
+    if info and getattr(info, "fin_programa", None):
+        hoy = timezone.localdate()
+        # Si fin_programa es DateField -> comparación directa
+        fin_programa_is_future = info.fin_programa > hoy
+    # <<< FIN NUEVO >>>
+
     if can_view_docs and info and prog:
         # Documentos subidos para el plan escolar del alumno
         docs_qs = (
             DocumentoAlumno.objects
             .filter(info_escolar=info)
             .select_related("tipo", "verificado_por", "subido_por")
-            .order_by("-actualizado_en")              # <- CAMBIO: usar actualizado_en
+            .order_by("-actualizado_en")  # usar actualizado_en
         )
         docs = list(docs_qs)
         docs_total = len(docs)
-        agg = docs_qs.aggregate(ultima=Max("actualizado_en"))  # <- CAMBIO
+        agg = docs_qs.aggregate(ultima=Max("actualizado_en"))
         docs_last_update = agg["ultima"]
 
         # Tipos requeridos por el PROGRAMA (activos)
@@ -755,6 +774,9 @@ def alumnos_detalle(request, pk):
             "docs_total": docs_total,
             "docs_last_update": docs_last_update,
             "faltantes": faltantes,
+
+            # <<< NUEVO en el contexto para pintar en el template >>>
+            "fin_programa_is_future": fin_programa_is_future,
         },
     )
 
@@ -1657,13 +1679,30 @@ def documentos_a_pdf_dinamico(*, info_escolar=None, documentos_qs=None, titulo="
     out = BytesIO()
 
     # Si no hay páginas, devolvemos un PDF con una sola página informativa
+    
+
     if len(writer.pages) == 0:
-        from reportlab.pdfgen import canvas
-        from reportlab.lib.pagesizes import A4
+        
         buf = BytesIO()
         c = canvas.Canvas(buf, pagesize=A4)
         c.setFont("Helvetica", 12)
         c.drawString(72, 800, "No hay documentos para mostrar.")
+
+        # --- Imagen estática de pie de página (cámbiala cuando quieras) ---
+        left_margin = 40
+        right_margin = 40
+        bottom_margin = 16
+
+        from django.contrib.staticfiles import finders
+        footer_img_path = finders.find("recibos/footer.png")  # ← tu subcarpeta/archivo
+
+        #footer_img_path = os.path.join(settings.BASE_DIR, "static", "recibos", "footer.png")
+        # Ejemplo alterno: footer_img_path = r"C:\ruta\a\tu\imagen\footer.png"
+        from alumnos.utils import draw_fullwidth_image_bottom
+
+        draw_fullwidth_image_bottom(c, W, left_margin, right_margin, bottom_margin, footer_img_path)
+
+
         c.showPage()
         c.save()
         buf.seek(0)
@@ -2287,3 +2326,226 @@ def deshacer_conciliacion(request, mov_id):
     ok, msg = mov.deshacer_conciliacion()
     messages.success(request, msg) if ok else messages.warning(request, msg)
     return redirect("movimientos_abonos_pendientes")
+
+
+###########################################################################################
+from django.shortcuts import get_object_or_404
+from django.template.loader import render_to_string
+from django.http import HttpResponse
+from django.utils import timezone
+
+
+# Evitar que WeasyPrint tumbe el server si no están sus DLLs en Windows
+WEASYPRINT_OK = False
+WEASYPRINT_ERR = None
+try:
+    from weasyprint import HTML, CSS
+    WEASYPRINT_OK = True
+except Exception as e:
+    WEASYPRINT_ERR = e
+
+
+from .models import PagoDiario
+from django.conf import settings
+
+try:
+    from num2words import num2words  # pip install num2words
+except Exception:
+    num2words = None
+
+from reportlab.pdfgen import canvas as rl_canvas
+
+@login_required
+def pago_recibo_pdf(request, pk):
+    # --- Imports locales para ser auto-contenidos ---
+    from io import BytesIO
+    from reportlab.pdfgen import canvas as rl_canvas
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib import colors
+    from reportlab.pdfbase.pdfmetrics import stringWidth
+
+    def is_overdue(pago, today):
+        """
+        Determina si el pago es extemporáneo.
+        1) Boolean directo: pago.es_estemporaneo
+        2) Por fecha de vencimiento: (pago.fecha or hoy) > pago.fecha_vencimiento
+        3) Por estado textual: 'extemporaneo'/'extemporáneo'/similar
+        """
+        val = getattr(pago, "es_estemporaneo", None)
+        if val is not None:
+            return bool(val)
+        fv = getattr(pago, "fecha_vencimiento", None)
+        if fv:
+            fecha_base = getattr(pago, "fecha", None) or today
+            try:
+                return fecha_base > fv
+            except Exception:
+                pass
+        estado = str(getattr(pago, "estado", "")).strip().lower()
+        return estado in {"extemporaneo", "extemporáneo", "atrasado", "tarde"}
+
+    def draw_badge_right(c, page_width, y, text, bg_color,
+                         font_name="Helvetica-Bold", font_size=10, pad_x=3, pad_y=8, radius=3):
+        """
+        Dibuja una 'pastilla' alineada a la derecha con fondo de color y texto en blanco.
+        """
+        c.setFont(font_name, font_size)
+        tw = stringWidth(text, font_name, font_size)
+        rect_w = tw + pad_x * 2
+        rect_h = font_size + pad_y * 2
+
+        x = page_width - 40 - rect_w  # margen derecho de 40
+        # rectángulo redondeado (fallback a rect si no hay roundRect)
+        c.setFillColor(bg_color)
+        c.setStrokeColor(bg_color)
+        try:
+            c.roundRect(x, y - rect_h + 2, rect_w, rect_h, radius, fill=1, stroke=0)
+        except Exception:
+            c.rect(x, y - rect_h + 2, rect_w, rect_h, fill=1, stroke=0)
+
+        # texto
+        c.setFillColor(colors.white)
+        c.drawString(x + pad_x, y - rect_h + pad_y + font_size * 0.2, text)
+        c.setFillColor(colors.black)
+
+    from .models import PagoDiario
+
+    pago = get_object_or_404(
+        PagoDiario.objects.select_related("alumno"),
+        pk=pk
+    )
+    alumno = pago.alumno
+    hoy = timezone.localdate()
+
+    # Monto en letras (opcional)
+    monto_letras = ""
+    if num2words and pago.monto is not None:
+        try:
+            monto_letras = num2words(pago.monto, lang="es").upper()
+        except Exception:
+            monto_letras = ""
+
+    ctx = {
+        "pago": pago,
+        "alumno": alumno,
+        "hoy": hoy,
+        "monto_letras": monto_letras,
+        "institucion": {
+            "nombre": "INSTITUTO UNIVERSITARIO DE ALTA FORMACIÓN IUAF SC.",
+            "rfc": "R.F.C. IUAT0913LI2",
+            "cct": "25PSU00064H",
+            "ciudad": "Cancún Q. R.",
+            "direccion": "BOULEVARD KUKULKAN M2.30 LTD.-9.8 KM 3.5 ZONA HOTELERA. CANCÚN Q. R. 9992636780",
+        },
+    }
+
+    # === Opción A: usar WeasyPrint si está disponible ===
+    if globals().get("WEASYPRINT_OK"):
+        try:
+            html = render_to_string("alumnos/recibo_pago.html", ctx)
+            response = HttpResponse(content_type="application/pdf")
+            filename = f"recibo_{pago.folio or pago.pk}.pdf"
+            response["Content-Disposition"] = f'inline; filename="{filename}"'
+            base_url = request.build_absolute_uri("/")
+            # Nota: en tu template, usa {{ hoy|date:"d \\d\\e F \\d\\e Y" }} para evitar el error del 'e'
+            HTML(string=html, base_url=base_url).write_pdf(
+                response,
+                stylesheets=[CSS(string="""
+                    @page { size: A4; margin: 18mm 16mm 18mm 16mm; }
+                    body { font-family: Arial, Helvetica, sans-serif; font-size: 12px; color:#111; }
+                    .hdr { text-align:center; }
+                    .hdr h1 { font-size: 16px; margin: 0 0 4px; }
+                    .hdr .sub { font-size: 11px; color:#444; }
+                    .grid { width:100%; border-collapse:collapse; }
+                    .grid td { padding:6px 8px; vertical-align:top; }
+                    .label { color:#555; width:30%; }
+                    .box { border:1px solid #999; padding:8px; }
+                    .title { letter-spacing:.35em; text-align:center; margin:10px 0 12px; }
+                    .monto { font-size: 14px; font-weight:bold; }
+                    .badge { background:#e6f4ea; border:1px solid #a8dab5; padding:6px 10px; display:inline-block; }
+                    .footer { margin-top: 18px; font-size: 10px; color:#666; text-align:center; }
+                    .row { display:flex; gap:12px; }
+                    .col { flex:1; }
+                    .right { text-align:right; }
+                    .center { text-align:center; }
+                    .muted { color:#666; }
+                    .folio { background: #fff6a5; border:1px solid #e6d85a; padding:2px 8px; font-weight:bold; }
+                """)]
+            )
+            return response
+        except Exception as e:
+            # Si falla WeasyPrint por DLLs u otra cosa, cae al fallback
+            pass
+
+    # === Opción B (fallback): generar PDF con ReportLab + badge ===
+    buf = BytesIO()
+    c = rl_canvas.Canvas(buf, pagesize=A4)
+    W, H = A4
+
+    y = H - 50
+    c.setFont("Helvetica-Bold", 14)
+    c.drawCentredString(W/2, y, ctx["institucion"]["nombre"])
+    y -= 16
+    c.setFont("Helvetica", 10)
+    c.drawCentredString(W/2, y, f"{ctx['institucion']['rfc']} • {ctx['institucion']['cct']}")
+    y -= 14
+    c.drawCentredString(W/2, y, f"{ctx['institucion']['ciudad']} — {hoy.strftime('%d de %B de %Y')}")
+
+    y -= 28
+    c.setFont("Helvetica-Bold", 12)
+    c.drawCentredString(W/2, y, "R E C I B O   D E   P A G O")
+
+    y -= 24
+    c.setFont("Helvetica", 11)
+    c.drawString(40, y, f"Folio: {pago.folio or pago.pk}")
+    c.drawRightString(W-40, y, f"% BECA otorgado: "
+                      f"{getattr(getattr(alumno.informacionEscolar, 'financiamiento', None), 'beca', '—')}")
+    y -= 18
+    c.drawString(40, y, f"Recibimos de: {alumno.nombre} {alumno.apellido_p} {alumno.apellido_m}")
+    y -= 18
+    c.drawString(40, y, f"CURP: {alumno.curp or '—'}")
+
+    y -= 28
+    c.setFont("Helvetica-Bold", 11)
+    c.drawString(40, y, "La cantidad de:")
+    c.setFont("Helvetica", 12)
+    c.drawString(140, y, f"$ {pago.monto or '0.00'}")
+
+    # --- Badge a la derecha ---
+    overdue = is_overdue(pago, hoy)
+    if overdue:
+        draw_badge_right(c, W, y, "PAGO ESTEMPORÁNEO", colors.HexColor("#c62828"))
+    else:
+        draw_badge_right(c, W, y, "PAGO OPORTUNO", colors.HexColor("#4dad52"))
+
+    if monto_letras:
+        y -= 22
+        c.setFont("Helvetica-Oblique", 10)
+        c.drawCentredString(W/2, y, f"SON {monto_letras} 00/100 M.N.")
+
+    y -= 26
+    c.setFont("Helvetica", 10)
+    prog = getattr(getattr(alumno, "informacionEscolar", None), "programa", None)
+    sede = getattr(getattr(alumno, "informacionEscolar", None), "sede", None)
+    c.drawString(40, y, f"Programa: {getattr(prog, 'nombre', '—')}")
+    c.drawRightString(W-40, y, f"Sede: {sede or '—'}")
+    y -= 18
+    c.drawString(40, y, f"Concepto de pago: {pago.concepto or '—'}")
+    y -= 18
+    c.drawString(40, y, f"Detalle: {pago.pago_detalle or '—'}")
+    y -= 18
+    c.drawString(40, y, f"Forma de pago: {pago.forma_pago or '—'}")
+    c.drawRightString(W-40, y, f"Fecha de pago: {pago.fecha.strftime('%d/%m/%Y') if pago.fecha else '—'}")
+
+    y -= 30
+    c.setFont("Helvetica", 9)
+    c.drawCentredString(W/2, y, ctx["institucion"]["direccion"])
+
+    c.showPage()
+    c.save()
+    pdf = buf.getvalue()
+    buf.close()
+
+    resp = HttpResponse(pdf, content_type="application/pdf")
+    resp["Content-Disposition"] = f'inline; filename="recibo_{pago.folio or pago.pk}.pdf"'
+    return resp

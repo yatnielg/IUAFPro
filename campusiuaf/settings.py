@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 from pathlib import Path
+import os
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -119,12 +120,35 @@ WSGI_APPLICATION = 'campusiuaf.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+# ---- Bases de datos
+if DEBUG:
+    # Desarrollo: SQLite
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
+        }
     }
-}
+else:
+    # Producción: Postgres (Docker compose: servicio 'db')
+    # Opción A: variables sueltas del .env
+    POSTGRES_DB = os.environ.get("POSTGRES_DB", "miapp_db")
+    POSTGRES_USER = os.environ.get("POSTGRES_USER", "miapp_user")
+    POSTGRES_PASSWORD = os.environ.get("POSTGRES_PASSWORD", "miapp_password")
+    POSTGRES_HOST = os.environ.get("POSTGRES_HOST", "db")  # nombre del servicio en compose
+    POSTGRES_PORT = int(os.environ.get("POSTGRES_PORT", "5432"))
+
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": POSTGRES_DB,
+            "USER": POSTGRES_USER,
+            "PASSWORD": POSTGRES_PASSWORD,
+            "HOST": POSTGRES_HOST,
+            "PORT": POSTGRES_PORT,
+            "CONN_MAX_AGE": 600,
+        }
+    }
 
 
 # Password validation

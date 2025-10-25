@@ -11,14 +11,10 @@
     .table-responsive{width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
 
     /* Toolbar en columna: botón arriba, filtros abajo */
-    .toolbar{
-      display:flex; flex-direction:column; align-items:flex-start; gap:.5rem; margin-bottom:.5rem;
-    }
-    .filters-row{
-      display:flex; flex-wrap:wrap; gap:.5rem; width:100%;
-    }
+    .toolbar{ display:flex; flex-direction:column; align-items:flex-start; gap:.5rem; margin-bottom:.5rem; }
+    .filters-row{ display:flex; flex-wrap:wrap; gap:.5rem; width:100%; }
 
-    #filter-admin, #filter-acad, #filter-programa, #filter-sede {
+    #filter-admin, #filter-acad, #filter-programa, #filter-sede, #filter-activo {
       min-width:220px; max-width:280px;
     }
   </style>
@@ -28,7 +24,6 @@
 <div class="content">
 
   <div class="toolbar">
-    <!-- Botón arriba -->
     {% if request.user.is_superuser %}
       <a href="{% url 'alumnos_crear' %}" class="btn btn-primary btn-sm">
         <i class="material-icons" style="vertical-align:middle">add</i>
@@ -41,12 +36,16 @@
       </a>
     {% endif %}
 
-    <!-- Filtros abajo en su propia fila -->
     <div class="filters-row">
-      <select id="filter-programa" class="selectpicker" data-style="select-with-transition" multiple title="Programa" data-size="7"></select>
-      <select id="filter-admin"    class="selectpicker" data-style="select-with-transition" multiple title="Estatus Administrativo" data-size="7"></select>
-      <select id="filter-acad"     class="selectpicker" data-style="select-with-transition" multiple title="Estatus Académico" data-size="7"></select>
-      <select id="filter-sede"     class="selectpicker" data-style="select-with-transition" multiple title="Sede" data-size="7"></select>
+      <select id="filter-programa" class="selectpicker" data-style="select-with-transition" multiple title="Programa" data-size="5"></select>
+      <select id="filter-admin"    class="selectpicker" data-style="select-with-transition" multiple title="Estatus Administrativo" data-size="5"></select>
+      <select id="filter-acad"     class="selectpicker" data-style="select-with-transition" multiple title="Estatus Académico" data-size="5"></select>
+      <select id="filter-sede"     class="selectpicker" data-style="select-with-transition" multiple title="Sede" data-size="5"></select>
+      <!-- NUEVO filtro por Activo -->
+      <select id="filter-activo"   class="selectpicker" data-style="select-with-transition" multiple title="Activo" data-size="5">
+        <option>Activo</option>
+        <option>Inactivo</option>
+      </select>
       <button id="clear-filters" type="button" class="btn btn-sm btn-outline-warning">Limpiar</button>
     </div>
   </div>
@@ -71,11 +70,8 @@
                   <th>Estatus Administrativo</th>
                   <th>Estatus Académico</th>
                   <th>Sedes</th>
-                  {% if request.user.is_superuser %}
-                    <th class="disabled-sorting text-right">Acciones</th>
-                  {% elif p and p.puede_editar_todo %}
-                    <th class="disabled-sorting text-right">Acciones</th>
-                  {% elif p and p.puede_ver_todo %}
+                  <th>Activo</th>
+                  {% if request.user.is_superuser or p and p.puede_editar_todo or p and p.puede_ver_todo %}
                     <th class="disabled-sorting text-right">Acciones</th>
                   {% endif %}
                 </tr>
@@ -125,6 +121,14 @@
                     {% endif %}
                   </td>
 
+                  <td>
+                    {% if a.activo %}
+                      <span class="badge badge-success">Activo</span>
+                    {% else %}
+                      <span class="badge badge-secondary">Inactivo</span>
+                    {% endif %}
+                  </td>
+
                   {% if request.user.is_superuser or p and p.puede_editar_todo or p and p.puede_ver_todo %}
                   <td class="text-right">
                     {% if request.user.is_superuser or p and p.puede_ver_todo %}
@@ -168,19 +172,19 @@
       order: [[0, 'desc']]
     });
 
-    // Índices de columnas
-    const PROG_COL_IDX  = 3;
-    const ADMIN_COL_IDX = 4;
-    const ACAD_COL_IDX  = 5;
-    const SEDE_COL_IDX  = 6;
+    // Índices de columnas (los filtros apuntan a 3-7 ahora)
+    const PROG_COL_IDX   = 3;
+    const ADMIN_COL_IDX  = 4;
+    const ACAD_COL_IDX   = 5;
+    const SEDE_COL_IDX   = 6;
+    const ACTIVO_COL_IDX = 7; // NUEVO
 
-    // Selects
-    const $selProg  = $('#filter-programa');
-    const $selAdmin = $('#filter-admin');
-    const $selAcad  = $('#filter-acad');
-    const $selSede  = $('#filter-sede');
+    const $selProg   = $('#filter-programa');
+    const $selAdmin  = $('#filter-admin');
+    const $selAcad   = $('#filter-acad');
+    const $selSede   = $('#filter-sede');
+    const $selActivo = $('#filter-activo'); // NUEVO
 
-    // Poblar opciones únicas para cada select
     function populateUnique(colIdx, $select) {
       const set = new Set();
       table.column(colIdx).nodes().each(function (td) {
@@ -194,8 +198,8 @@
     populateUnique(ADMIN_COL_IDX, $selAdmin);
     populateUnique(ACAD_COL_IDX,  $selAcad);
     populateUnique(SEDE_COL_IDX,  $selSede);
+    // Para "Activo" ya pusimos opciones fijas (Activo/Inactivo), no hace falta poblar
 
-    // Utilidad regex
     const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     function applyFilter($select, colIdx) {
       const selected = $select.val();
@@ -207,19 +211,19 @@
       }
     }
 
-    // Cambios en los selects => aplicar sus filtros y redibujar
-    $selProg.on('change',  function(){ applyFilter($selProg,  PROG_COL_IDX);  table.draw(); });
-    $selAdmin.on('change', function(){ applyFilter($selAdmin, ADMIN_COL_IDX); table.draw(); });
-    $selAcad.on('change',  function(){ applyFilter($selAcad,  ACAD_COL_IDX);  table.draw(); });
-    $selSede.on('change',  function(){ applyFilter($selSede,  SEDE_COL_IDX);  table.draw(); });
+    $selProg.on('change',   function(){ applyFilter($selProg,   PROG_COL_IDX);   table.draw(); });
+    $selAdmin.on('change',  function(){ applyFilter($selAdmin,  ADMIN_COL_IDX);  table.draw(); });
+    $selAcad.on('change',   function(){ applyFilter($selAcad,   ACAD_COL_IDX);   table.draw(); });
+    $selSede.on('change',   function(){ applyFilter($selSede,   SEDE_COL_IDX);   table.draw(); });
+    $selActivo.on('change', function(){ applyFilter($selActivo, ACTIVO_COL_IDX); table.draw(); });
 
-    // Botón Limpiar (todos)
     $('#clear-filters').on('click', function () {
-      $selProg.val([]); $selAdmin.val([]); $selAcad.val([]); $selSede.val([]);
-      applyFilter($selProg,  PROG_COL_IDX);
-      applyFilter($selAdmin, ADMIN_COL_IDX);
-      applyFilter($selAcad,  ACAD_COL_IDX);
-      applyFilter($selSede,  SEDE_COL_IDX);
+      $selProg.val([]); $selAdmin.val([]); $selAcad.val([]); $selSede.val([]); $selActivo.val([]);
+      applyFilter($selProg,   PROG_COL_IDX);
+      applyFilter($selAdmin,  ADMIN_COL_IDX);
+      applyFilter($selAcad,   ACAD_COL_IDX);
+      applyFilter($selSede,   SEDE_COL_IDX);
+      applyFilter($selActivo, ACTIVO_COL_IDX);
       table.draw();
     });
   });

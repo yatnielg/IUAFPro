@@ -319,14 +319,16 @@
             </div>
           </div>
 
-          <div class="col-sm-6 mb-2">
-            <div class="text-muted small">Fin del programa</div>
-            <div>
-              {% if alumno.informacionEscolar and alumno.informacionEscolar.fin_programa %}
-                {{ alumno.informacionEscolar.fin_programa|date:"d/m/Y" }}
-              {% else %}—{% endif %}
-            </div>
-          </div>
+<div class="col-sm-6 mb-2">
+  <div class="text-muted small">Fin del programa</div>
+  <div>
+    {% if alumno.informacionEscolar and alumno.informacionEscolar.fin_programa %}
+      <span class="{% if fin_programa_is_future %}text-success font-weight-bold{% endif %}">
+        {{ alumno.informacionEscolar.fin_programa|date:"d/m/Y" }}
+      </span>
+    {% else %}—{% endif %}
+  </div>
+</div>
 
           <div class="col-sm-12 mb-2">
             <div class="text-muted small">¿Requiere datos de facturación?</div>
@@ -401,11 +403,18 @@
             <td>{{ p.forma_pago|default:"—" }}</td>
             <td>{{ p.sede|default:"—" }}</td>
             <td>{{ p.curp|default:"—" }}</td>
+
             <td class="text-right">
-              <a href="/admin/alumnos/pagodiario/{{ p.pk }}/change/" class="btn btn-link text-info btn-just-icon like" title="Ver/Editar (admin)">
-                <i class="material-icons">visibility</i>
-              </a>
-            </td>
+  <a href="/admin/alumnos/pagodiario/{{ p.pk }}/change/" class="btn btn-link text-info btn-just-icon like" title="Ver/Editar (admin)">
+    <i class="material-icons">visibility</i>
+  </a>
+  <a href="{% url 'pago_recibo_pdf' p.pk %}" class="btn btn-outline-success btn-sm" target="_blank" title="Generar recibo (PDF)">
+    <i class="material-icons align-middle">picture_as_pdf</i> Recibo
+  </a>
+</td>
+
+
+
           </tr>
           {% empty %}
           <tr>

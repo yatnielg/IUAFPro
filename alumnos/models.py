@@ -726,6 +726,8 @@ class PagoDiario(models.Model):
     creado_en = models.DateTimeField(auto_now_add=True)
     actualizado_en = models.DateTimeField(auto_now=True)
 
+    pago_oportuno = models.BooleanField(default=True)
+
     class Meta:
         ordering = ["-fecha"]
         indexes = [

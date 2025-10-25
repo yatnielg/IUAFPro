@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Recibo de pago</title>
+</head>
+<body>
+
+  <!-- Encabezado -->
+  <div class="hdr">
+    <h1>{{ institucion.nombre }}</h1>
+    <div class="sub">{{ institucion.rfc }} &nbsp; • &nbsp; {{ institucion.cct }}</div>
+    <!-- CORREGIDO: escapar cada letra de "de" -->
+    <div class="sub">{{ institucion.ciudad }} — {{ hoy|date:"d \\d\\e F \\d\\e Y" }}</div>
+  </div>
+
+  <div class="title"><strong>R E C I B O &nbsp; D E &nbsp; P A G O</strong></div>
+
+  <table class="grid" style="margin-bottom:8px">
+    <tr>
+      <td class="label">Folio:</td>
+      <td><span class="folio">{{ pago.folio|default:pago.pk }}</span></td>
+      <td class="label right">% BECA otorgado:</td>
+      <td class="right">{% if alumno.informacionEscolar and alumno.informacionEscolar.financiamiento %}{{ alumno.informacionEscolar.financiamiento.beca }}{% else %}—{% endif %}</td>
+    </tr>
+    <tr>
+      <td class="label">Recibimos de:</td>
+      <td colspan="3"><strong>{{ alumno.apellido_p }} {{ alumno.apellido_m }} {{ alumno.nombre }}</strong></td>
+    </tr>
+    <tr>
+      <td class="label">CURP:</td>
+      <td colspan="3">{{ alumno.curp|default:"—" }}</td>
+    </tr>
+  </table>
+
+  <table class="grid">
+    <tr>
+      <td class="label">La cantidad de:</td>
+      <td class="box" style="width:45%">
+        <span>$</span>
+        <span class="monto">{{ pago.monto|default:"0.00" }}</span>
+      </td>
+      <td class="box center" style="width:35%"><strong>PAGO OPORTUNO</strong></td>
+    </tr>
+  </table>
+
+  {% if monto_letras %}
+  <p class="center" style="margin:10px 0 12px"><em>SON {{ monto_letras }} 00/100 M.N.</em></p>
+  {% endif %}
+
+  <div class="box" style="margin-top:10px">
+    <div class="row">
+      <div class="col">
+        <div class="muted">Programa</div>
+        <div>
+          {% if alumno.informacionEscolar and alumno.informacionEscolar.programa %}
+            {{ alumno.informacionEscolar.programa.nombre }}
+          {% else %}—{% endif %}
+        </div>
+      </div>
+      <div class="col">
+        <div class="muted">Sede</div>
+        <div>
+          {% if alumno.informacionEscolar and alumno.informacionEscolar.sede %}
+            {{ alumno.informacionEscolar.sede }}
+          {% else %}—{% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:8px">
+      <div class="col">
+        <div class="muted">Concepto de pago</div>
+        <div><strong>{{ pago.concepto|default:"—" }}</strong></div>
+      </div>
+      <div class="col">
+        <div class="muted">Detalle</div>
+        <div>{{ pago.pago_detalle|default:"—" }}</div>
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:8px">
+      <div class="col">
+        <div class="muted">Forma de pago</div>
+        <div>{{ pago.forma_pago|default:"—" }}</div>
+      </div>
+      <div class="col">
+        <div class="muted">Fecha de pago</div>
+        <div>{{ pago.fecha|date:"d/m/Y" }}</div>
+      </div>
+    </div>
+  </div>
+
+
+
+  <div class="footer">
+    {{ institucion.direccion }}
+  </div>
+
+
+
+  {% load static %}
+<img src="{% static 'recibos/footer.png' %}" alt="footer">
+
+
+</body>
+</html>

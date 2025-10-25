@@ -74,6 +74,8 @@ urlpatterns = [
 
     path('movimiento/<int:mov_id>/deshacer/', views.deshacer_conciliacion, name='mov_deshacer_conciliacion'),
 
+    path("pagos/<int:pk>/recibo.pdf", views.pago_recibo_pdf, name="pago_recibo_pdf"),
+
 
     #path("banco/movimientos/", views.MovimientoBancoListView.as_view(), name="movimientos_banco_lista"),
 ]
