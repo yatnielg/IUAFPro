@@ -2550,3 +2550,198 @@ def pago_recibo_pdf(request, pk):
     resp = HttpResponse(pdf, content_type="application/pdf")
     resp["Content-Disposition"] = f'inline; filename="recibo_{pago.folio or pago.pk}.pdf"'
     return resp
+
+
+###################################################################
+# alumnos/views.py
+import io, re
+import pandas as pd
+from datetime import datetime, date
+from pathlib import Path
+from django.http import HttpResponse, Http404
+from django.conf import settings
+from django.contrib.admin.views.decorators import staff_member_required
+from django.contrib.staticfiles import finders
+from django.template.loader import render_to_string
+
+# === helpers PDF (igual a lo que ya tenías) ===
+def html_to_pdf(html: str) -> bytes:
+    try:
+        from weasyprint import HTML, CSS
+        return HTML(string=html).write_pdf(
+            stylesheets=[CSS(string="""
+                @page { size: A4; margin: 18mm 14mm; }
+                body { font-family: DejaVu Sans, sans-serif; font-size: 12px; }
+                .hdr { text-align:center; }
+                .title { text-align:center; margin: 10px 0 16px; font-weight:700; letter-spacing:1px; }
+                .grid td { padding: 4px 6px; vertical-align: top; }
+                .right { text-align:right; }
+                .box { border:1px solid #888; padding:8px; border-radius:6px; }
+                .muted { color:#666; }
+            """)]
+        )
+    except Exception:
+        from xhtml2pdf import pisa
+        buf = io.BytesIO()
+        r = pisa.CreatePDF(io.StringIO(html), dest=buf)
+        if r.err:
+            raise RuntimeError("No se pudo generar el PDF.")
+        return buf.getvalue()
+
+def _parse_money(val):
+    if val is None: return None
+    s = str(val).strip()
+    if not s: return None
+    s = s.replace("$", "").replace(",", "").replace(" ", "")
+    if "." in s and "," in s and s.rfind(",") > s.rfind("."):
+        s = s.replace(".", "").replace(",", ".")
+    try: return float(s)
+    except Exception:
+        try: return float(re.sub(r"[^\d.\-]", "", s))
+        except Exception: return None
+
+def _parse_date(val):
+    if not val: return None
+    if isinstance(val, (datetime, date)): return val if isinstance(val, date) else val.date()
+    if hasattr(val, "to_pydatetime"): return val.to_pydatetime().date()
+    s = str(val).strip()
+    for fmt in ("%d/%m/%Y", "%d-%m-%Y", "%Y-%m-%d", "%d/%m/%y", "%d-%m-%y"):
+        try: return datetime.strptime(s, fmt).date()
+        except Exception: pass
+    return None
+
+def _norm(x):
+    """Texto normalizado para comparar etiquetas."""
+    if x is None: return ""
+    s = str(x).strip()
+    return re.sub(r"\s+", " ", s).lower()
+
+def _get(df, r, c):
+    try:
+        v = df.iloc[r, c]
+    except Exception:
+        return None
+    return None if pd.isna(v) else str(v).strip()
+
+def find_label(df, pattern):
+    """
+    Busca una celda cuyo texto (normalizado) matchea el regex 'pattern' (en lower).
+    Devuelve (r, c) o None.
+    """
+    rx = re.compile(pattern)
+    rows, cols = df.shape
+    for r in range(rows):
+        for c in range(cols):
+            txt = _norm(df.iloc[r, c])
+            if txt and rx.search(txt):
+                return r, c
+    return None
+
+def value_right(df, r, c, steps=1):
+    """Valor a la derecha de la etiqueta (steps columnas)."""
+    return _get(df, r, c + steps)
+
+@staff_member_required
+def recibo2_from_excel(request):
+    """
+    Lee un Excel de recibo (no tabular) desde /static (por defecto iuaf/pago.xlsx),
+    detecta etiquetas y saca los valores adyacentes. NO guarda nada. Devuelve PDF.
+    Query opcional: ?archivo=iuaf/otro.xlsx
+    """
+    rel_path = (request.GET.get("archivo") or "iuaf/pago.xlsx").lstrip("/")
+    static_path = finders.find(rel_path)
+    if not static_path:
+        static_path = Path(settings.BASE_DIR) / "static" / rel_path
+        if not static_path.exists():
+            raise Http404(f"No encuentro el Excel en static: {rel_path}")
+
+    # Lee toda la hoja como texto, sin encabezados
+    try:
+        df = pd.read_excel(static_path, header=None, dtype=str)
+    except Exception as e:
+        raise Http404(f"Excel inválido ({rel_path}): {e}")
+
+    if df.empty:
+        raise Http404("El Excel no contiene datos.")
+
+    # === Buscar etiquetas y tomar valores a la derecha ===
+    # Usamos patrones tolerantes (tildes opcionales, espacios múltiples, etc.)
+    # 1) Folio
+    pos = find_label(df, r"\bfolio\b")
+    folio = value_right(df, *pos, steps=1) if pos else ""
+
+    # 2) Recibimos de
+    pos = find_label(df, r"\brecibimos\s*de\b")
+    nombre = value_right(df, *pos, steps=1) if pos else ""
+
+    # 3) CURP
+    pos = find_label(df, r"\bcurp\b")
+    curp = value_right(df, *pos, steps=1) if pos else ""
+
+    # 4) Concepto de Pago
+    pos = find_label(df, r"\bconcepto\s*de\s*pago\b")
+    concepto = value_right(df, *pos, steps=1) if pos else ""
+
+    # 5) # Pago
+    pos = find_label(df, r"#\s*pago\b")
+    detalle = value_right(df, *pos, steps=1) if pos else ""
+
+    # 6) Forma de pago
+    pos = find_label(df, r"\bforma\s*de\s*pago\b")
+    forma = value_right(df, *pos, steps=1) if pos else ""
+
+    # 7) No de autorizacion (tildes opcionales)
+    pos = find_label(df, r"\bno\.?\s*de\s*autorizaci[oó]n\b")
+    no_auto = value_right(df, *pos, steps=1) if pos else ""
+
+    # 8) FECHA DE PAGO
+    pos = find_label(df, r"\bfecha\s*de\s*pago\b")
+    fecha_raw = value_right(df, *pos, steps=1) if pos else ""
+    fecha_dt = _parse_date(fecha_raw)
+
+    # 9) Programa: en tu imagen aparece como título grande (p. ej. "DOCTORADO EN DERECHO")
+    #    Lo buscamos si existe una celda con "doctorado|licenciatura|maestría" etc.
+    pos = find_label(df, r"(doctorado|maestr[ií]a|licenciatura)")
+    programa = _get(df, *pos) if pos else ""
+
+    # 10) La Cantidad de -> el monto aparece más a la derecha (a veces 2-3 celdas)
+    pos = find_label(df, r"\bla\s*cantidad\s*de\b")
+    monto = ""
+    if pos:
+        for step in (1, 2, 3, 4):  # intenta varias columnas a la derecha
+            cand = value_right(df, *pos, steps=step)
+            if cand and re.search(r"\d", cand):
+                monto = cand
+                break
+    monto_f = _parse_money(monto)
+
+    # === Contexto para plantilla ===
+    ctx = {
+        "institucion": {
+            "nombre": "INSTITUTO UNIVERSITARIO DE ALTA FORMACIÓN IUAF SC.",
+            "rfc": "IUA170913LI2",
+            "cct": "23PSU0064H",
+            "ciudad": "Cancún, Q.R.",
+        },
+        "folio": folio or "—",
+        "nombre": nombre or "—",
+        "curp": curp or "—",
+        "programa": programa or "—",
+        "concepto": concepto or "—",
+        "detalle": detalle or "—",
+        "forma_pago": forma or "—",
+        "sede": "",  # si lo agregas al Excel, añade otra etiqueta y extrae igual
+        "no_autorizacion": no_auto or "—",
+        "fecha_pago": fecha_dt.strftime("%d/%m/%Y") if fecha_dt else (fecha_raw or "—"),
+        "monto": f"${monto_f:,.2f}" if monto_f is not None else (monto or "—"),
+        "hoy": datetime.now().strftime("%d de %B de %Y"),
+        "extemporaneo": bool(find_label(df, r"\bpago\s*extempor[aá]neo\b")),
+    }
+
+    html = render_to_string("reportes/recibo2.html", ctx)
+    pdf_bytes = html_to_pdf(html)
+    filename = f"recibo_{ctx['folio'] or 'sin_folio'}.pdf"
+
+    resp = HttpResponse(pdf_bytes, content_type="application/pdf")
+    resp["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return resp

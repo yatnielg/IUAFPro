@@ -1,0 +1,79 @@
+{# templates/reportes/recibo2.html #}
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Recibo de pago</title>
+  <style>
+    /* Usamos tamaño A4 sin márgenes para calzar con la imagen */
+    @page { size: A4; margin: 0; }
+    html, body { margin:0; padding:0; }
+    .page {
+      position: relative;
+      width: 210mm;   /* A4 */
+      height: 297mm;  /* A4 */
+      background-image: url("{% static 'iuaf/pago.png' %}");
+      background-size: cover;     /* ajusta si tu imagen no es A4 exacto */
+      background-repeat: no-repeat;
+      background-position: center top;
+      font-family: "DejaVu Sans", Arial, sans-serif;
+    }
+    .field {
+      position: absolute;
+      font-size: 12pt;
+      line-height: 1.0;
+      white-space: nowrap;
+    }
+
+    /* ===== Coordenadas (mm) — AJÚSTALAS si ves desfasado ===== */
+    /* Folio (cuadro amarillo) */
+    #folio     { left: 147mm; top: 76mm; font-weight:700; }
+
+    /* Recibimos de */
+    #nombre    { left: 45mm; top: 103mm; width: 120mm; }
+
+    /* CURP */
+    #curp      { left: 34mm; top: 118mm; width: 120mm; }
+
+    /* La Cantidad de ($ …) */
+    #monto     { left: 127mm; top: 134mm; width: 40mm; text-align:right; }
+
+    /* Concepto de Pago */
+    #concepto  { left: 76mm; top: 178mm; width: 110mm; }
+
+    /* # Pago / Detalle */
+    #detalle   { left: 76mm; top: 194mm; width: 110mm; }
+
+    /* Forma de pago */
+    #forma     { left: 76mm; top: 210mm; width: 80mm; }
+
+    /* No. de autorización */
+    #no_auto   { left: 76mm; top: 226mm; width: 80mm; }
+
+    /* Fecha de pago */
+    #fecha     { left: 76mm; top: 242mm; width: 60mm; }
+
+    /* “PAGO EXTEMPORANEO” (si aplica, encima de la franja rosa) */
+    #ext       { left: 75mm; top: 258mm; font-weight:700; color:#b23; }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div id="folio"   class="field">{{ folio }}</div>
+    <div id="nombre"  class="field">{{ nombre }}</div>
+    <div id="curp"    class="field">{{ curp }}</div>
+    <div id="monto"   class="field">{{ monto }}</div>
+
+    <div id="concepto" class="field">{{ concepto }}</div>
+    <div id="detalle"  class="field">{{ detalle }}</div>
+    <div id="forma"    class="field">{{ forma_pago }}</div>
+    <div id="no_auto"  class="field">{{ no_autorizacion }}</div>
+    <div id="fecha"    class="field">{{ fecha_pago }}</div>
+
+    {% if extemporaneo %}
+      <div id="ext" class="field">PAGO EXTEMPORÁNEO</div>
+    {% endif %}
+  </div>
+</body>
+</html>

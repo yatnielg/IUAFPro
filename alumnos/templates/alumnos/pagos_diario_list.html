@@ -123,11 +123,38 @@
                       {% endif %}
                     </td>
 
+                    
+
+
                     <td class="text-right">
-                      <a href="/admin/alumnos/pagodiario/{{ p.pk }}/change/" class="btn btn-link text-info btn-just-icon like" title="Ver/Editar (admin)">
-                        <i class="material-icons">visibility</i>
-                      </a>
-                    </td>
+  <a href="/admin/alumnos/pagodiario/{{ p.pk }}/change/"
+     class="btn btn-link text-info btn-just-icon like"
+     title="Ver/Editar (admin)">
+    <i class="material-icons">visibility</i>
+  </a>
+
+  <!-- Botón Recibo2: por folio (si existe) -->
+<a href="{% url 'recibo2_from_excel' %}"
+   class="btn btn-link text-danger btn-just-icon"
+   title="Recibo2 (PDF desde Excel)">
+  <i class="material-icons">picture_as_pdf</i>
+</a>
+</td>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
                   </tr>
                   {% empty %}
                   <tr>
