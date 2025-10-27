@@ -35,6 +35,19 @@
 <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
 
 <div class="content">
+
+{% comment %} 
+{% if messages %}
+  <div class="container my-2">
+    {% for message in messages %}
+      <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+    {% endfor %}
+  </div>
+{% endif %} {% endcomment %}
+
+
+
+
   <div class="toolbar d-flex align-items-center justify-content-between">
     <h1 class="h4 m-0 text-white">
       <i class="material-icons" style="vertical-align:middle">account_balance</i>

@@ -20,13 +20,19 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
+from dotenv import load_dotenv
+BASE_DIR = Path(__file__).resolve().parent.parent
+# Cargar .env (antes de leer variables)
+load_dotenv(BASE_DIR / ".env")
+
+
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-jd4waq35fus*+^n_^a+nn*5dcg2kj%^@f1k3ee_=j_$-7-toq^'
+SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", default='django-insecure-jd4waq35fus*+^n_^a+nn*5dcg2kj%^@f1k3ee_=j_$-7-toq^')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv("DEBUG", default=True) in [True, 'True', '1', 1]
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", default="localhost").split(",")
 
 
 # Application definition
@@ -187,13 +193,14 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
-STATIC_URL = 'static/'
-STATIC_ROOT = BASE_DIR / "staticfiles"
+# STATIC
+STATIC_URL = "/static/"
 
+# Fuentes (tu carpeta con assets del proyecto)
+STATICFILES_DIRS = [ BASE_DIR / "static" ]  # /app/static (fuente)
 
-STATICFILES_DIRS = [
-    BASE_DIR / "static",   # <-- carpeta global de estáticos del proyecto
-]
+# Destino de collectstatic (separado de la fuente)
+STATIC_ROOT = BASE_DIR / "staticfiles"      # /app/staticfiles (salida)
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field

@@ -1787,6 +1787,7 @@ def run_leer_google_sheet(request):
             if save_db:
                 try:
                     data = json.loads(out_path.read_text(encoding="utf-8"))
+                    
                 except Exception as e_json:
                     messages.error(request, f"No pude leer el JSON de salida ({out_path}): {e_json}")
                 else:
@@ -1825,11 +1826,10 @@ class MovimientoBancoListView(ListView):
 
     def get_queryset(self):
         user = self.request.user
-
         if (not user.is_authenticated) or (not user.is_superuser and not user.groups.filter(name="pagos").exists()):
             return MovimientoBanco.objects.none()
 
-        qs = MovimientoBanco.objects.all().order_by("id")
+        qs = MovimientoBanco.objects.all()
 
         signo = self.request.GET.get("signo")
         tipo  = self.request.GET.get("tipo")
@@ -1845,7 +1845,7 @@ class MovimientoBancoListView(ListView):
         if fmax:
             qs = qs.filter(fecha__lte=fmax)
 
-        return qs
+        return qs.order_by("-fecha", "-id")
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -1880,6 +1880,7 @@ def run_movimientos_banco_update(request):
     guarda un JSON y luego hace upsert en DB.
     No renderiza salida; solo mensajes y redirige al listado.
     """
+    print("**** Ejecutando importación de movimientos de banco... ****")
     out_path = Path("salidas/movimientos_2022.json")
     out_path.parent.mkdir(parents=True, exist_ok=True)
 

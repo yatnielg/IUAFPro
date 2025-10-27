@@ -813,3 +813,46 @@ class UploadInviteAdmin(admin.ModelAdmin):
             except Exception:
                 pass
         super().save_model(request, obj, form, change)
+
+############################################################
+# admin.py
+from django.contrib import admin
+from .models import EstatusAcademico, EstatusAdministrativo
+
+class BaseEstatusAdmin(admin.ModelAdmin):
+    list_display = ("orden", "nombre", "codigo", "activo")
+    list_display_links = ("nombre",)  # <-- el enlace ahora es 'nombre', no 'orden'
+    list_editable = ("orden", "activo")
+    list_filter = ("activo",)
+    search_fields = ("nombre", "codigo")
+    ordering = ("orden", "nombre")
+
+    readonly_fields: tuple = ()
+
+    def get_readonly_fields(self, request, obj=None):
+        # Si ya existe, bloquea edición de 'codigo'
+        if obj:
+            return self.readonly_fields + ("codigo",)
+        return self.readonly_fields
+
+    actions = ("activar", "desactivar")
+
+    def activar(self, request, queryset):
+        updated = queryset.update(activo=True)
+        self.message_user(request, f"{updated} estatus activados.")
+    activar.short_description = "Activar seleccionados"
+
+    def desactivar(self, request, queryset):
+        updated = queryset.update(activo=False)
+        self.message_user(request, f"{updated} estatus desactivados.")
+    desactivar.short_description = "Desactivar seleccionados"
+
+
+@admin.register(EstatusAcademico)
+class EstatusAcademicoAdmin(BaseEstatusAdmin):
+    pass
+
+
+@admin.register(EstatusAdministrativo)
+class EstatusAdministrativoAdmin(BaseEstatusAdmin):
+    pass

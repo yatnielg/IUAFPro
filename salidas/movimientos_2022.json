@@ -2979,7 +2979,7 @@
     "autorizacion": "00912241",
     "emisor_nombre": "POR IDENTIFICAR",
     "institucion_emisora": "banamex",
-    "descripcion_raw": " | Depósito en Efectivo \nSucursal: 7003\nReferencia Numérica:  011\nConcepto del Pago:colegiatura\nNo. de Autorización: 00912241 Nombre del Emisor: POR IDENTIFICAR\nInstitución Emisora: banamex | 04/08/2025 | Depósito en Efectivo \nSucursal: 7003\nReferencia Numérica:  011\nConcepto del Pago:colegiatura\nNo. de Autorización:00550774 Nombre del Emisor: samantha muñoz\nInstitución Emisora: banamex | 5,200.00 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | "
+    "descripcion_raw": " | Depósito en Efectivo \nSucursal: 7003\nReferencia Numérica:  011\nConcepto del Pago:colegiatura\nNo. de Autorización: 00912241 Nombre del Emisor: POR IDENTIFICAR\nInstitución Emisora: banamex | 04/08/2025 | Depósito en Efectivo \nSucursal: 7003\nReferencia Numérica:  011\nConcepto del Pago:colegiatura\nNo. de Autorización:00550774 Nombre del Emisor: marcela muñoz\nInstitución Emisora: banamex | 5,200.00 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | "
   },
   {
     "fecha": "2025-08-04",
@@ -4631,7 +4631,7 @@
     "autorizacion": "488074",
     "emisor_nombre": null,
     "institucion_emisora": null,
-    "descripcion_raw": " |  | 18/06/2025 | Abono Interbancario\nSucursal: 519\nReferencia Numérica: 180625\nConcepto del Pago: doctorado\nNo. de Autorización: 488074\nNombre del Emisor: marcela muñoz Institución emisora: banamex | 5,200.00 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | "
+    "descripcion_raw": " |  | 18/06/2025 | Abono Interbancario\nSucursal: 519\nReferencia Numérica: 180625\nConcepto del Pago: doctorado\nNo. de Autorización: 488074\nNombre del Emisor: samantha muñoz Institución emisora: banamex | 5,200.00 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | "
   },
   {
     "fecha": "2025-06-17",
@@ -5497,9 +5497,9 @@
     "referencia_alfanumerica": null,
     "concepto": "colegiatura",
     "autorizacion": "836860",
-    "emisor_nombre": "POR IDENTIFICAR",
+    "emisor_nombre": "marcela muñoz",
     "institucion_emisora": "banamex",
-    "descripcion_raw": " |  | 04/06/2025 | Depósito en Efectivo \nSucursal: 7003\nReferencia Numérica:  011\nConcepto del Pago:colegiatura\nNo. de Autorización: 836860 Nombre del Emisor: POR IDENTIFICAR\nInstitución Emisora: banamex | 5,200.00 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | "
+    "descripcion_raw": " |  | 04/06/2025 | Depósito en Efectivo \nSucursal: 7003\nReferencia Numérica:  011\nConcepto del Pago:colegiatura\nNo. de Autorización: 836860 Nombre del Emisor: marcela muñoz\nInstitución Emisora: banamex | 5,200.00 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | "
   },
   {
     "fecha": "2025-06-03",
