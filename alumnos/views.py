@@ -2302,13 +2302,13 @@ def set_nombre_detectado_save(request, pk):
         except Exception:
             value = None
 
-    # Normaliza un poco
+    # Normaliza
     if value is not None:
         value = (value or "").strip()
         if not value:
             value = None
 
-    # Valida longitud (tu modelo max_length=200)
+    # Valida longitud
     if value and len(value) > 200:
         return JsonResponse(
             {"ok": False, "error": "El nombre no puede exceder 200 caracteres."},
@@ -2318,7 +2318,27 @@ def set_nombre_detectado_save(request, pk):
     mov.nombre_detectado_save = value
     mov.save(update_fields=["nombre_detectado_save", "updated_at"])
 
-    return JsonResponse({"ok": True, "value": mov.nombre_detectado_save})
+    # Busca el alumno si existe
+    alumno = getattr(mov, "alumno", None)
+    if alumno is None:
+        # si tienes campo numero_alumno, intenta buscarlo
+        num = getattr(mov, "numero_alumno", None)
+        if num:
+            try:
+                from alumnos.models import Alumno
+                alumno = Alumno.objects.select_related("informacionEscolar").get(
+                    numero_estudiante=num
+                )
+            except Alumno.DoesNotExist:
+                alumno = None
+
+    return JsonResponse({
+        "ok": True,
+        "value": mov.nombre_detectado_save,
+        "alumno": str(alumno) if alumno else None,
+        "informacionEscolar": str(alumno.informacionEscolar) if getattr(alumno, "informacionEscolar", None) else None,
+    })
+
 
 ############################################################################
 @login_required
@@ -2766,3 +2786,228 @@ def recibo2_from_excel(request):
     resp = HttpResponse(pdf_bytes, content_type="application/pdf")
     resp["Content-Disposition"] = f'attachment; filename="{filename}"'
     return resp
+
+################################################
+
+from django.shortcuts import render, get_object_or_404
+from django.utils import timezone
+from .models import PagoDiario
+
+# ===== Helpers =====
+MESES_ES = ["", "enero", "febrero", "marzo", "abril", "mayo", "junio",
+            "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
+
+def fecha_larga_es(d):
+    """2025-10-27 -> '27 de octubre de 2025'"""
+    if not d:
+        d = timezone.localdate()
+    return f"{d.day} de {MESES_ES[d.month]} de {d.year}"
+
+def formatea_moneda(amount):
+    """Devuelve '3,497.00' y '$ 3,497.00 MXN'."""
+    if amount is None:
+        return "0.00", "$ 0.00 MXN"
+    s = f"{amount:,.2f}"
+    return s, f"$ {s} MXN"
+
+def cantidad_en_letra_mx(amount):
+    """
+    '3497.00' -> 'TRES MIL CUATROCIENTOS NOVENTA Y SIETE 00/100 PESOS'
+    Requiere num2words para texto; si no está, hace fallback simple.
+    """
+    try:
+        from num2words import num2words
+        entero = int(amount or 0)
+        centavos = int(round(((amount or 0) - entero) * 100))
+        palabras = num2words(entero, lang="es").upper()
+        return f"{palabras} {centavos:02d}/100 PESOS"
+    except Exception:
+        entero = int(amount or 0)
+        centavos = int(round(((amount or 0) - entero) * 100))
+        return f"{entero:,} {centavos:02d}/100 PESOS".replace(",", ".").upper()
+
+def nombre_completo_alumno(alumno):
+    from django.utils.text import capfirst
+    if not alumno:
+        return ""
+    partes = [alumno.nombre or "", alumno.apellido_p or "", alumno.apellido_m or ""]
+    return capfirst(" ".join(p for p in partes if p).strip())
+
+# ===== Vista =====
+def recibo_pago_carta(request, pk):
+    """
+    Renderiza el recibo 'Carta' llenando datos desde PagoDiario (+ Alumno / MovimientoBanco).
+    """
+    pago = get_object_or_404(
+        PagoDiario.objects.select_related("alumno", "movimiento"),
+        pk=pk
+    )
+    alumno = pago.alumno
+    mov = getattr(pago, "movimiento", None)
+
+    # Folio
+    folio = pago.folio or str(pago.pk)
+
+    # Lugar / Fecha emisión
+    lugar_emision = (pago.sede or "Cancún, Q.R.").strip()
+    fecha_emision = fecha_larga_es(pago.fecha or timezone.localdate())
+
+    # Monto
+    monto_str, monto_con_signo = formatea_moneda(pago.monto or 0)
+    monto_letra = cantidad_en_letra_mx(pago.monto or 0)
+
+    # Alumno / CURP
+    nombre_recibe = nombre_completo_alumno(alumno) or (pago.nombre or "").strip()
+    curp = (pago.curp or getattr(alumno, "curp", "") or "").upper()
+
+    # Programa
+    if pago.programa:
+        programa = pago.programa
+    else:
+        try:
+            programa = alumno.programa_clave  # property en tu modelo
+        except Exception:
+            programa = ""
+
+    # Concepto
+    concepto = (pago.concepto or pago.pago_detalle or "").upper()
+
+    # Forma / Fecha pago
+    forma_pago = (pago.forma_pago or (getattr(mov, "tipo", "") or "")).upper()
+    fecha_pago = pago.fecha or getattr(mov, "fecha", None) or timezone.localdate()
+    fecha_pago_str = fecha_pago.strftime("%d/%m/%Y")
+
+    # Beca
+    beca_pct = 0  # cámbialo si lo traes del plan financiero
+
+    # Estado (oportuno/extemporáneo)
+    oportuno = bool(pago.pago_oportuno)
+
+    contexto = {
+        "institucion": {
+            "nombre": "INSTITUTO UNIVERSITARIO DE ALTA FORMACIÓN IUAF SC.",
+            "rfc": "IUA170913LI2",
+            "cct": "23PSU0064H",
+            "ciudad": "Cancún, Q.R.",
+            "telefono": "9982536750",
+            "email": "cadministrativa@iuaf.edu.mx",
+            "direccion": "Blvd. Kukulkán MZ.30 LT.D-9-B KM 3.5 Zona Hotelera",
+        },
+        "hoy": timezone.localdate(),
+
+        "pago": {
+            "pk": pago.pk,
+            "folio": folio,
+            "cantidad": monto_str,
+            "cantidad_letra": monto_letra,
+            "forma_pago": forma_pago,
+            "fecha_pago": fecha_pago_str,
+            "beca": beca_pct,
+            "concepto": concepto,
+            "programa": (programa or "").upper(),
+            "oportuno": oportuno,
+            "monto_con_signo": monto_con_signo,
+            "nombre": nombre_recibe,  # 👈 agregado para que la plantilla pueda usar {{ pago.nombre }}
+        },
+
+        "alumno": {
+            "nombre_completo": nombre_recibe,
+            "curp": curp,
+            "numero": getattr(alumno, "numero_estudiante", "") if alumno else "",
+        },
+
+        "lugar_emision": lugar_emision,
+        "fecha_emision": fecha_emision,
+    }
+    return render(request, "reportes/recibo_carta.html", contexto)
+##########################################################################################
+def estado_cuenta(request, numero_estudiante):
+    alumno = get_object_or_404(
+        Alumno.objects.select_related(
+            "informacionEscolar",
+            "pais", "estado",
+        ),
+        pk=numero_estudiante
+    )
+
+    info = getattr(alumno, "informacionEscolar", None)
+
+    # ================= Pagos reales del alumno =================
+    pagos_qs = (
+        PagoDiario.objects
+        .filter(alumno=alumno)
+        .order_by("fecha", "pk")
+    )
+
+    numero_colegiatura = pagos_qs.first().alumno.informacionEscolar.meses_programa if pagos_qs.exists() else 0
+    pagos = []
+    for p in pagos_qs:
+        pagos.append({
+            "monto": float(p.monto or 0),
+            "grado": getattr(getattr(info, "programa", None), "codigo", "") or getattr(info, "grupo", "") or "",
+            "forma_pago": p.forma_pago or "",
+            "fecha_pago": p.fecha.strftime("%d/%m/%Y") if p.fecha else "",
+            "concepto": p.concepto or "",
+            "detalle": p.pago_detalle or "",
+            "programa": p.programa or (getattr(getattr(info, "programa", None), "nombre", "") or ""),
+        })
+
+    # ================= Cálculos de totales =================
+    total_pagado_num = pagos_qs.aggregate(s=Sum("monto"))["s"] or Decimal("0.00")
+    total_pagado_num = Decimal(total_pagado_num)
+
+    colegiatura = Decimal(str(getattr(info, "precio_colegiatura", 0) or 0))
+    n_colegiaturas = (
+        getattr(info, "numero_reinscripciones", None)
+        or getattr(info, "meses_programa", None)
+        or 20
+    )
+
+    total_programa_num = colegiatura * Decimal(n_colegiaturas or 0)
+    if total_programa_num <= 0:
+        total_programa_num = total_pagado_num
+
+    adeudo_num = total_programa_num - total_pagado_num
+    if adeudo_num < 0:
+        adeudo_num = Decimal("0.00")
+
+    # ================= Datos de institución =================
+    institucion = {
+        "nombre": "INSTITUTO UNIVERSITARIO DE ALTA FORMACION",
+        "direccion": "Blvd Kukulcan km 3.5 plaza nautilus local 53, Zona Hotelera",
+        "ciudad": "Cancún, Q.ROO.",
+        "telefono": "998 253 6750",
+        "rfc": "IUA170913LI2",
+        "cct": "23PSU0064H",
+        "email": "contacto@iuaf.mx",
+    }
+
+    # ================= Datos del alumno =================
+    alumno_ctx = {        
+        "matricula": getattr(info, "matricula", "") or "",
+        "nombre": f"{alumno.nombre} {alumno.apellido_p or ''} {alumno.apellido_m or ''}".strip(),
+        "grupo": getattr(info, "grupo", "") or "",
+        "programa": getattr(getattr(info, "programa", None), "nombre", "") or "",
+        "curp": alumno.curp or "",
+        "no_alumno": alumno.numero_estudiante,
+        "fecha_1er_pago": getattr(info, "inicio_programa", None).strftime("%d/%m/%Y")
+            if getattr(info, "inicio_programa", None)
+            else "",
+    }
+
+    # ================= Contexto final =================
+    context = {
+        "institucion": institucion,
+        "alumno": alumno_ctx,
+        "pagos": pagos,
+        "total_programa": f"{total_programa_num:,.2f}",
+        "total_pagado": f"{total_pagado_num:,.2f}",
+        "adeudo": f"{adeudo_num:,.2f}",
+        "numero_colegiatura": numero_colegiatura,
+        # imágenes (coloca en /static/iuaf/)
+        "logo": "iuaf/logo-placeholder.png",
+        "qr": "iuaf/qr-placeholder.png",
+        "stamp": "iuaf/stamp-placeholder.png",
+    }
+
+    return render(request, "reportes/estado_cuenta.html", context)

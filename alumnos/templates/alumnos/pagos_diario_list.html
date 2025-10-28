@@ -4,49 +4,14 @@
 {% block main_content %}
 
 <style>
-  /* ====== Estilos de imagen ====== */
-  .order-img {
-    width: 34px !important;
-    height: 34px !important;
-    object-fit: cover;
-    border-radius: 5px;
-    margin-right: 2px;
-    background: #f7f8fa;
-    transition: transform 0.2s;
-    cursor: pointer;
-  }
-  .order-img:hover {
-    transform: scale(2.5) translateX(5px);
-    z-index: 2;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.18);
-  }
-
-  /* ====== FIX Scroll Mouse ====== */
-  html, body {
-    height: 100% !important;
-    overflow-y: auto !important;
-    overflow-x: hidden !important;
-  }
-
-  .main-panel, .content, .card-body {
-    overflow-y: visible !important;
-  }
-
-  /* Scroll horizontal para DataTables */
-  .dataTables_wrapper {
-    overflow-x: auto;
-    overflow-y: visible;
-  }
-
-  .table-responsive {
-    width: 100%;
-    overflow-x: auto !important;
-    overflow-y: visible !important;
-    -webkit-overflow-scrolling: touch;
-  }
+  .order-img{ width:34px!important; height:34px!important; object-fit:cover; border-radius:5px; margin-right:2px; background:#f7f8fa; transition:transform .2s; cursor:pointer; }
+  .order-img:hover{ transform:scale(2.5) translateX(5px); z-index:2; box-shadow:0 4px 16px rgba(0,0,0,.18); }
+  html, body{ height:100%!important; overflow-y:auto!important; overflow-x:hidden!important; }
+  .main-panel, .content, .card-body{ overflow-y:visible!important; }
+  .dataTables_wrapper{ overflow-x:auto; overflow-y:visible; }
+  .table-responsive{ width:100%; overflow-x:auto!important; overflow-y:visible!important; -webkit-overflow-scrolling:touch; }
 </style>
 
-<!-- ====== DataTables CSS/JS ====== -->
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
 <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
 <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
@@ -67,9 +32,7 @@
 
         <div class="card">
           <div class="card-header card-header-primary card-header-icon">
-            <div class="card-icon">
-              <i class="material-icons">assignment</i>
-            </div>
+            <div class="card-icon"><i class="material-icons">assignment</i></div>
             <h4 class="card-title">Pagos (DIARIO)</h4>
           </div>
 
@@ -103,13 +66,7 @@
                     <td>{{ p.programa|default:"—" }}</td>
                     <td>{{ p.concepto|default:"—" }}</td>
                     <td>{{ p.pago_detalle|default:"—" }}</td>
-                    <td>
-                      {% if p.monto != None %}
-                        $ {{ p.monto }}
-                      {% else %}
-                        —
-                      {% endif %}
-                    </td>
+                    <td>{% if p.monto != None %}$ {{ p.monto }}{% else %}—{% endif %}</td>
                     <td>{{ p.forma_pago|default:"—" }}</td>
                     <td>{{ p.sede|default:"—" }}</td>
                     <td>{{ p.numero_alumno|default:"—" }}</td>
@@ -123,38 +80,21 @@
                       {% endif %}
                     </td>
 
-                    
-
-
                     <td class="text-right">
-  <a href="/admin/alumnos/pagodiario/{{ p.pk }}/change/"
-     class="btn btn-link text-info btn-just-icon like"
-     title="Ver/Editar (admin)">
-    <i class="material-icons">visibility</i>
-  </a>
+                      <a href="/admin/alumnos/pagodiario/{{ p.pk }}/change/"
+                         class="btn btn-link text-info btn-just-icon like"
+                         title="Ver/Editar (admin)">
+                        <i class="material-icons">visibility</i>
+                      </a>
 
-  <!-- Botón Recibo2: por folio (si existe) -->
-<a href="{% url 'recibo2_from_excel' %}"
-   class="btn btn-link text-danger btn-just-icon"
-   title="Recibo2 (PDF desde Excel)">
-  <i class="material-icons">picture_as_pdf</i>
-</a>
-</td>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+                      <!-- Botón: descarga PDF en el navegador -->
+                      <a href="{% url 'recibo_carta' p.pk %}"
+                         data-url="{% url 'recibo_carta' p.pk %}"
+                         class="btn btn-link text-danger btn-just-icon descargar-recibo"
+                         title="Descargar recibo (PDF)">
+                        <i class="material-icons">picture_as_pdf</i>
+                      </a>
+                    </td>
                   </tr>
                   {% empty %}
                   <tr>
@@ -172,11 +112,12 @@
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js" defer></script>
 <script>
   $(document).ready(function() {
     $('#pagos-table').DataTable({
       language: { url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/es-ES.json' },
-      order: [[1, 'desc'], [0, 'desc']], // fecha desc, luego folio desc
+      order: [[1, 'desc'], [0, 'desc']],
       pageLength: 10,
       autoWidth: false,
       scrollX: true,
@@ -184,5 +125,66 @@
     });
   });
 </script>
+
+<!-- Librería para generar PDF en el navegador -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"
+        integrity="sha512-YcsIPGmIPb2sT0l7jQRmE2Kjv0l1o8S1VgAqWg0c1c0wQdB6lq2jJm2H7nG2s5Nwz3j+u4o2o9pKp5b19+N3GQ=="
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+<script>
+document.addEventListener('click', async (e) => {
+  const btn = e.target.closest('.descargar-recibo');
+  if (!btn) return;
+  e.preventDefault();
+
+  try {
+    const url = btn.getAttribute('data-url') || btn.getAttribute('href');
+    const resp = await fetch(url, { credentials: 'same-origin' });
+    if (!resp.ok) throw new Error('No se pudo cargar el recibo');
+    const html = await resp.text();
+
+    // Contenedor offscreen
+    const cont = document.createElement('div');
+    cont.style.position = 'fixed';
+    cont.style.left = '-99999px';
+    cont.style.top = '0';
+    cont.style.width = '850px';
+    cont.innerHTML = html;
+    document.body.appendChild(cont);
+
+    // Inyecta CSS de exportación para evitar páginas en blanco
+    const style = document.createElement('style');
+    style.textContent = `
+      @page { size: Letter; margin: 0 !important; }
+      html, body { background: #fff !important; margin: 0 !important; padding: 0 !important; }
+      .sheet { width: 8.5in !important; min-height: auto !important; margin: 0 !important;
+               box-shadow: none !important; border: none !important; }
+      .doc { padding: 0.5in !important; } /* margen interno del contenido */
+    `;
+    // Si el HTML trae <head>, úsalo; si no, añádelo al contenedor
+    (cont.querySelector('head') || cont).appendChild(style);
+
+    const el = cont.querySelector('.sheet') || cont;
+
+    // Nombre de archivo por folio
+    let folio = el.querySelector('.amount-box .amount-num')?.textContent?.trim() || 'recibo';
+    folio = folio.replace(/[^\w\-]+/g, '');
+
+    // Generar PDF sin márgenes externos
+    await html2pdf().from(el).set({
+      margin: 0, // ¡importante!
+      jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' },
+      pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
+      html2canvas: { scale: 2, useCORS: true, allowTaint: true, scrollY: 0 }
+    }).save(`recibo_${folio}.pdf`);
+
+    cont.remove();
+  } catch (err) {
+    console.error(err);
+    alert('No se pudo generar el PDF. Revisa la consola (F12).');
+  }
+});
+</script>
+
 
 {% endblock %}

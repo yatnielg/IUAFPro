@@ -361,19 +361,35 @@
   </div>
 
   <div class="card-body">
-    <div class="d-flex justify-content-between mb-2">
-      <div class="small text-muted">
-        Los pagos se importan desde el Excel “DIARIO”. Si alguno falta, verifica la importación.
-      </div>
 
-      {% if request.user.is_superuser %}
-      <div>
-        <a class="btn btn-outline-secondary btn-sm" href="/admin/alumnos/pagodiario/?alumno__id__exact={{ alumno.id }}" target="_blank">
-          Ver en Admin
-        </a>
-      </div>
-      {% endif %}
-    </div>
+
+   <div class="d-flex justify-content-between mb-2">
+  <div class="small text-muted">
+    Los pagos se importan desde el Excel “DIARIO”. Si alguno falta, verifica la importación.
+  </div>
+
+  <div class="d-flex gap-2">
+    {% if request.user.is_superuser %}
+      <a class="btn btn-outline-secondary btn-sm"
+         href="/admin/alumnos/pagodiario/?alumno__id__exact={{ alumno.id }}" target="_blank">
+        Ver en Admin
+      </a>
+    {% endif %}
+
+    {# 👉 Botón que abre el Estado de cuenta para este alumno #}
+<a class="btn btn-primary btn-sm d-inline-flex align-items-center descargar-estado-cuenta"
+   href="{% url 'estado_cuenta' alumno.numero_estudiante %}"
+   data-url="{% url 'estado_cuenta' alumno.numero_estudiante %}"
+   target="_blank" rel="noopener"
+   title="Generar PDF del estado de cuenta">
+  <i class="material-icons align-middle me-1">picture_as_pdf</i>
+  Estado de cuenta
+</a>
+
+  </div>
+</div>
+
+
 
     <div class="table-responsive">
       <table id="tabla-pagos" class="table table-striped table-hover" width="100%">
@@ -408,9 +424,24 @@
   <a href="/admin/alumnos/pagodiario/{{ p.pk }}/change/" class="btn btn-link text-info btn-just-icon like" title="Ver/Editar (admin)">
     <i class="material-icons">visibility</i>
   </a>
-  <a href="{% url 'pago_recibo_pdf' p.pk %}" class="btn btn-outline-success btn-sm" target="_blank" title="Generar recibo (PDF)">
+  
+ {% comment %} <a href="{% url 'pago_recibo_pdf' p.pk %}" class="btn btn-outline-success btn-sm" target="_blank" title="Generar recibo (PDF)">
     <i class="material-icons align-middle">picture_as_pdf</i> Recibo
-  </a>
+  </a>  {% endcomment %}
+ 
+
+<a href="{% url 'recibo_carta' p.pk %}"
+   data-url="{% url 'recibo_carta' p.pk %}"
+   data-folio="{{ p.folio|default:p.pk }}"
+   class="btn btn-outline-success btn-sm descargar-recibo d-inline-flex align-items-center"
+   title="Generar recibo (PDF)">
+  <i class="material-icons align-middle mr-1 me-1">picture_as_pdf</i>
+  Recibo
+</a>
+
+
+
+
 </td>
 
 
@@ -601,4 +632,128 @@
     }
   });
 </script>
+
+
+
+<script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js" defer></script>
+
+
+<script>
+document.addEventListener('click', async (e) => {
+  const btn = e.target.closest('.descargar-recibo');
+  if (!btn) return;
+  e.preventDefault();
+
+  try {
+    const url = btn.getAttribute('data-url') || btn.getAttribute('href');
+    const resp = await fetch(url, { credentials: 'same-origin' });
+    if (!resp.ok) throw new Error('No se pudo cargar el recibo');
+    const html = await resp.text();
+
+    const cont = document.createElement('div');
+    cont.style.position = 'fixed';
+    cont.style.left = '-99999px';
+    cont.style.top = '0';
+    cont.style.width = '850px';
+    cont.innerHTML = html;
+    document.body.appendChild(cont);
+
+    const style = document.createElement('style');
+    style.textContent = `
+      @page { size: Letter; margin: 0 !important; }
+      html, body { background:#fff !important; margin:0 !important; padding:0 !important; }
+      .sheet { width:8.5in !important; min-height:auto !important; margin:0 !important; box-shadow:none !important; border:none !important; }
+      .doc { padding:0.5in !important; }
+    `;
+    (cont.querySelector('head') || cont).appendChild(style);
+
+    const el = cont.querySelector('.sheet') || cont;
+
+    let folio = el.querySelector('.amount-box .amount-num')?.textContent?.trim() || 'recibo';
+    folio = folio.replace(/[^\w\-]+/g, '');
+
+    await html2pdf().from(el).set({
+      margin: 0,
+      jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' },
+      pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
+      html2canvas: { scale: 2, useCORS: true, allowTaint: true, scrollY: 0 }
+    }).save(`recibo_${folio}.pdf`);
+
+    cont.remove();
+  } catch (err) {
+    console.error(err);
+    alert('No se pudo generar el PDF. Revisa la consola (F12).');
+  }
+});
+</script>
+
+
+<script>
+document.addEventListener('click', async (e) => {
+  const btn = e.target.closest('.descargar-estado-cuenta');
+  if (!btn) return;
+  e.preventDefault();
+
+  try {
+    const url = btn.getAttribute('data-url') || btn.getAttribute('href');
+    const resp = await fetch(url, { credentials: 'same-origin' });
+    if (!resp.ok) throw new Error('No se pudo cargar el estado de cuenta');
+    const html = await resp.text();
+
+    // Contenedor fuera de pantalla
+    const cont = document.createElement('div');
+    cont.style.position = 'fixed';
+    cont.style.left = '-99999px';
+    cont.style.top = '0';
+    cont.style.width = '850px';
+    cont.innerHTML = html;
+    document.body.appendChild(cont);
+
+    // Overrides para PDF
+    const style = document.createElement('style');
+    style.textContent = `
+      @page { size: Letter; margin: 0 !important; }
+      html, body { background:#fff !important; margin:0 !important; padding:0 !important; }
+      .sheet { width:8.5in !important; margin:0 !important; box-shadow:none !important; border:none !important; }
+    `;
+    (cont.querySelector('head') || cont).appendChild(style);
+
+    const el = cont.querySelector('.sheet') || cont;
+
+    // === Escalado automático a 1 página Letter ===
+    const PX_PER_IN = 96;                  // densidad típica del navegador
+    const pageW = 8.5 * PX_PER_IN;
+    const pageH = 11  * PX_PER_IN;
+    el.style.width = pageW + 'px';
+    el.style.maxWidth = pageW + 'px';
+
+    // espera un tick para que se apliquen estilos
+    await new Promise(r => setTimeout(r, 50));
+
+    const h = el.scrollHeight;
+    if (h > pageH) {
+      const scale = (pageH - 8) / h;       // margen de seguridad 8px
+      el.style.transformOrigin = 'top left';
+      el.style.transform = `scale(${scale})`;
+      // fija la altura resultante para que html2canvas no agregue nueva página
+      el.style.height = Math.ceil(h * scale) + 'px';
+    }
+
+    await html2pdf().from(el).set({
+      margin: 0,
+      jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' },
+      pagebreak: { mode: ['css','legacy'] },  // 👈 sin 'avoid-all'
+      html2canvas: { scale: 2, useCORS: true, allowTaint: true, scrollY: 0 }
+    }).save('estado_cuenta.pdf');
+
+    cont.remove();
+  } catch (err) {
+    console.error(err);
+    alert('No se pudo generar el PDF del estado de cuenta. Revisa la consola (F12).');
+  }
+});
+</script>
+
+
+
 {% endblock %}

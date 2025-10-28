@@ -78,6 +78,11 @@ urlpatterns = [
 
     path("reportes/recibo2/", views.recibo2_from_excel, name="recibo2_from_excel"),
 
+    path("<int:pk>/recibo/", views.recibo_pago_carta, name="recibo_carta"),
+
+    path('estado-cuenta/<int:numero_estudiante>/', views.estado_cuenta, name='estado_cuenta'),
+    path('estado-cuenta/', views.estado_cuenta, name='estado_cuenta_demo'),
 
     #path("banco/movimientos/", views.MovimientoBancoListView.as_view(), name="movimientos_banco_lista"),
+
 ]
