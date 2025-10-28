@@ -146,6 +146,8 @@ from alumnos.permisos import (
     user_can_edit_estatus_administrativo,
 )
 
+from alumnos.models import Programa, Financiamiento
+
 class InformacionEscolarForm(forms.ModelForm):
     inicio_programa = forms.DateField(
         required=False,
@@ -171,7 +173,7 @@ class InformacionEscolarForm(forms.ModelForm):
             "precio_final",
             "meses_programa",
             "precio_inscripcion",
-            "precio_reinscripcion",    
+            "precio_reinscripcion",
             "precio_titulacion",
             "precio_equivalencia",
             "numero_reinscripciones",
@@ -195,44 +197,124 @@ class InformacionEscolarForm(forms.ModelForm):
             "estatus_administrativo": forms.Select(attrs={"class": "selectpicker", "data-style": "select-with-transition"}),
             "requiere_datos_de_facturacion": forms.CheckboxInput(),
 
-            
-            "monto_descuento": forms.NumberInput(attrs={"class": "form-control is-readonly-input is-readonly",  "readonly": "readonly", "step": "0.01"}),
-            "precio_final": forms.NumberInput(attrs={"class": "form-control is-readonly-input is-readonly",  "readonly": "readonly", "step": "0.01"}),
-            "meses_programa": forms.NumberInput(attrs={"class": "form-control is-readonly-input is-readonly",  "readonly": "readonly", "step": "0.01"}),
-            "precio_colegiatura": forms.NumberInput(attrs={"class": "form-control is-readonly-input is-readonly",  "readonly": "readonly", "step": "0.01"}),
-            # models.py
-            "precio_inscripcion": forms.NumberInput(attrs={"class": "form-control is-readonly-input is-readonly",  "readonly": "readonly", "step": "0.01"}),
-            "precio_reinscripcion": forms.NumberInput(attrs={"class": "form-control is-readonly-input is-readonly",  "readonly": "readonly", "step": "0.01"}),
-            "precio_titulacion": forms.NumberInput(attrs={"class": "form-control is-readonly-input is-readonly",  "readonly": "readonly", "step": "0.01"}),
-            "precio_equivalencia": forms.NumberInput(attrs={"class": "form-control is-readonly-input is-readonly",  "readonly": "readonly", "step": "0.01"}),
-            "numero_reinscripciones": forms.NumberInput(attrs={"class": "form-control is-readonly-input is-readonly",  "readonly": "readonly"}),
+            # Solo-lectura visual en template
+            "monto_descuento": forms.NumberInput(attrs={"class": "form-control is-readonly-input is-readonly", "readonly": "readonly", "step": "0.01"}),
+            "precio_final": forms.NumberInput(attrs={"class": "form-control is-readonly-input is-readonly", "readonly": "readonly", "step": "0.01"}),
+            "meses_programa": forms.NumberInput(attrs={"class": "form-control is-readonly-input is-readonly", "readonly": "readonly"}),
+            "precio_colegiatura": forms.NumberInput(attrs={"class": "form-control is-readonly-input is-readonly", "readonly": "readonly", "step": "0.01"}),
 
+            "precio_inscripcion": forms.NumberInput(attrs={"class": "form-control is-readonly-input is-readonly", "readonly": "readonly", "step": "0.01"}),
+            "precio_reinscripcion": forms.NumberInput(attrs={"class": "form-control is-readonly-input is-readonly", "readonly": "readonly", "step": "0.01"}),
+            "precio_titulacion": forms.NumberInput(attrs={"class": "form-control is-readonly-input is-readonly", "readonly": "readonly", "step": "0.01"}),
+            "precio_equivalencia": forms.NumberInput(attrs={"class": "form-control is-readonly-input is-readonly", "readonly": "readonly", "step": "0.01"}),
+            "numero_reinscripciones": forms.NumberInput(attrs={"class": "form-control is-readonly-input is-readonly", "readonly": "readonly"}),
         }
 
     READONLY_PRICE_FIELDS = [
-        
         "monto_descuento",
         "precio_colegiatura",
         "precio_final",
         "meses_programa",
         "precio_inscripcion",
-        "precio_reinscripcion",   # <-- añadido para consistencia visual
+        "precio_reinscripcion",
         "precio_titulacion",
         "precio_equivalencia",
         "numero_reinscripciones",
     ]
 
+    # -------------------- utilidades internas --------------------
+    def _get_programa(self):
+        """
+        Determina el Programa seleccionado: prioridad POST > instancia.
+        """
+        prog = None
+        if "programa" in (self.data or {}):
+            try:
+                prog_id = int(self.data.get("programa"))
+                prog = Programa.objects.filter(pk=prog_id).first()
+            except Exception:
+                prog = None
+        if not prog and self.instance and self.instance.programa_id:
+            prog = self.instance.programa
+        return prog
+
+    def _get_financiamiento(self):
+        """
+        Determina el Financiamiento seleccionado (válido para el programa actual
+        o global si no tiene programa asignado).
+        """
+        prog = self._get_programa()
+        fin = None
+        if "financiamiento" in (self.data or {}):
+            try:
+                fin_id = int(self.data.get("financiamiento"))
+                fin = Financiamiento.objects.filter(pk=fin_id).first()
+            except Exception:
+                fin = None
+        if not fin and self.instance and self.instance.financiamiento_id:
+            fin = self.instance.financiamiento
+
+        # Asegura coherencia programa-financiamiento (permitiendo globales)
+        if fin and prog:
+            # si el financiamiento tiene programa distinto al actual, invalida;
+            # si es global (programa is None), se permite.
+            if fin.programa_id not in (None, prog.id):
+                fin = None
+        return fin
+
+    def _apply_program_defaults_to_cleaned(self, cleaned, programa: Programa):
+        """
+        Copia precios/meses del Programa a cleaned si no están seteados en el POST,
+        o si estamos en modo solo-lectura visual (GET).
+        """
+        if not programa:
+            return
+
+        # Siempre reflejamos meses del programa
+        cleaned["meses_programa"] = programa.meses_programa
+
+        # Si el campo vino vacío o estamos en GET/solo-lectura, aplica defaults del Programa
+        def _needs_default(name):
+            return cleaned.get(name) in (None, "",) or self._readonly_prices
+
+        if _needs_default("precio_colegiatura"):
+            cleaned["precio_colegiatura"] = programa.colegiatura
+        if _needs_default("precio_inscripcion"):
+            cleaned["precio_inscripcion"] = programa.inscripcion
+        if _needs_default("precio_reinscripcion"):
+            cleaned["precio_reinscripcion"] = programa.reinscripcion
+        if _needs_default("precio_equivalencia"):
+            cleaned["precio_equivalencia"] = programa.equivalencia
+        if _needs_default("precio_titulacion"):
+            cleaned["precio_titulacion"] = programa.titulacion
+
+    def _apply_financiamiento_discount_to_cleaned(self, cleaned, financiamiento: Financiamiento):
+        """
+        Calcula monto_descuento y precio_final usando el Financiamiento
+        sobre la colegiatura actual en cleaned.
+        """
+        coleg = cleaned.get("precio_colegiatura") or Decimal("0.00")
+        descuento = Decimal("0.00")
+        if financiamiento:
+            descuento = financiamiento.calcular_descuento(Decimal(coleg))
+        cleaned["monto_descuento"] = descuento
+        # precio_final = colegiatura - descuento (no negativo)
+        cleaned["precio_final"] = max(Decimal(coleg) - Decimal(descuento), Decimal("0.00"))
+
+    # -------------------- init --------------------
     def __init__(self, *args, request=None, readonly_prices=True, **kwargs):
         super().__init__(*args, **kwargs)
         self.request = request
         self._user = getattr(request, "user", None)
 
-        # En GET puedes querer solo-lectura visual; en POST NO se debe bloquear el guardado.
+        # GET => mantener apariencia de solo-lectura; POST => permitir cálculo y guardado
         self._readonly_prices = bool(readonly_prices)
+
+        # Asegura que los campos de precio no rompan si vienen vacíos en POST
         if self.is_bound:
             for name in [
                 "precio_inscripcion",
-                "precio_reinscripcion",  # ⬅️ asegúrate de incluirlo
+                "precio_reinscripcion",
                 "precio_titulacion",
                 "precio_equivalencia",
                 "monto_descuento",
@@ -249,13 +331,33 @@ class InformacionEscolarForm(forms.ModelForm):
                 css = field.widget.attrs.get("class", "")
                 field.widget.attrs["class"] = (css + " form-control").strip()
 
-        # Etiqueta de programa
+        # Etiqueta visible del programa
         if "programa" in self.fields:
-            self.fields["programa"].label_from_instance = (
-                lambda p: f"{getattr(p, 'codigo', '')} — {p.nombre}"
+            self.fields["programa"].label_from_instance = lambda p: f"{getattr(p, 'codigo', '')} — {p.nombre}"
+
+        # --------- Filtrar financiamientos por programa seleccionado ----------
+        programa = self._get_programa()
+        if "financiamiento" in self.fields:
+            if programa:
+                qs = Financiamiento.objects.filter(
+                    Q(programa=programa) | Q(programa__isnull=True)
+                )
+            else:
+                qs = Financiamiento.objects.filter(programa__isnull=True)
+
+            # Si quieres, ordena por algo que sí exista, p.ej. id o programa_id
+            qs = qs.order_by("programa_id", "id")
+            self.fields["financiamiento"].queryset = qs
+
+            # Etiqueta visible del financiamiento (usa __str__ y marca globales)
+            self.fields["financiamiento"].label_from_instance = lambda f: (
+                f"{str(f)} (Global)" if f.programa_id is None else str(f)
             )
 
-        # Solo-lectura VISUAL cuando aplica (GET)
+            # Mensaje de selección vacía
+            self.fields["financiamiento"].empty_label = "— Selecciona un financiamiento —"
+
+        # Solo-lectura VISUAL de precios cuando aplica (GET)
         if self._readonly_prices:
             for name in self.READONLY_PRICE_FIELDS:
                 if name in self.fields:
@@ -272,30 +374,31 @@ class InformacionEscolarForm(forms.ModelForm):
         if "estatus_administrativo" in self.fields and not can_admin:
             self.fields["estatus_administrativo"].disabled = True
 
+    # -------------------- validación y cálculo --------------------
     def clean(self):
         cleaned = super().clean()
 
-        # Asegurar defaults seguros si el template no envía algún precio
+        # Defaults seguros si algún precio llega vacío
         for name, default in [
             ("precio_inscripcion", Decimal("0.00")),
             ("precio_reinscripcion", Decimal("0.00")),
             ("precio_titulacion", Decimal("0.00")),
             ("precio_equivalencia", Decimal("0.00")),
             ("monto_descuento", Decimal("0.00")),
+            ("precio_colegiatura", Decimal("0.00")),
+            ("precio_final", Decimal("0.00")),
+            ("meses_programa", 0),
         ]:
             if cleaned.get(name) in (None, ""):
                 cleaned[name] = default
 
-        # Recalcular precio_final simple (colegiatura - descuento)
-        coleg = cleaned.get("precio_colegiatura") or Decimal("0.00")
-        desc = cleaned.get("monto_descuento") or Decimal("0.00")
-        final = cleaned.get("precio_final")
-        try:
-            esperado = coleg - desc
-            if final is None or final != esperado:
-                cleaned["precio_final"] = esperado
-        except Exception:
-            pass
+        # Aplicar valores del Programa al cleaned
+        programa = self._get_programa()
+        self._apply_program_defaults_to_cleaned(cleaned, programa)
+
+        # Recalcular descuento y precio_final según Financiamiento
+        financiamiento = self._get_financiamiento()
+        self._apply_financiamiento_discount_to_cleaned(cleaned, financiamiento)
 
         # Refuerzo de permisos de estatus
         if self.instance and self.instance.pk:
@@ -308,11 +411,12 @@ class InformacionEscolarForm(forms.ModelForm):
 
         return cleaned
 
+    # -------------------- guardado --------------------
     def save(self, commit=True):
         obj = super().save(commit=False)
 
+        # Asegurar coherencia con permisos de estatus
         if self.instance and self.instance.pk:
-            # Permisos de estatus (no tocar si no puede)
             can_acad = user_can_edit_estatus_academico(self._user) if self._user else False
             can_admin = user_can_edit_estatus_administrativo(self._user) if self._user else False
             if not can_acad:
@@ -320,8 +424,7 @@ class InformacionEscolarForm(forms.ModelForm):
             if not can_admin:
                 obj.estatus_administrativo = self.instance.estatus_administrativo
 
-            # En GET (_readonly_prices=True) no pisamos precios con datos del form
-            # (en POST __init__ ya fuerza _readonly_prices=False)
+            # En GET (solo-lectura visual), no pisamos valores existentes
             if self._readonly_prices:
                 for name in self.READONLY_PRICE_FIELDS:
                     if hasattr(self.instance, name):

@@ -23,13 +23,12 @@
     /* ===== Hoja ===== */
     .sheet{
       width:8.5in;
-      /* min-height:10.8in;  <-- removido para no forzar 2ª hoja */
       margin:24px auto;
       background:var(--panel);
       border:1px solid #ececf3;
       border-radius:14px;
       box-shadow:0 10px 28px rgba(2,6,23,.08);
-      padding:.32in; /* más compacto */
+      padding:.32in;
     }
 
     /* ===== Banda superior ===== */
@@ -37,165 +36,101 @@
       background:linear-gradient(90deg, var(--brand), var(--brand-2));
       color:#fff;
       border-radius:12px;
-      padding:10px 12px;              /* antes 14px 16px */
+      padding:10px 12px;
       display:grid;
       grid-template-columns:84px 1fr auto;
-      gap:10px;                        /* antes 14px */
+      gap:10px;
       align-items:center;
-      margin-bottom:.18in;             /* antes .4in */
+      margin-bottom:.18in;
     }
-
     .brandband .logo{
-      width:78px; height:78px;         /* antes 88 */
+      width:78px; height:78px;
       object-fit:contain;
       background:#fff;
       border-radius:12px;
-      padding:8px;                      /* antes 10 */
+      padding:8px;
       border:1px solid rgba(255,255,255,.6);
     }
-
     .brandband .name{
-      font-weight:900;
-      letter-spacing:.2px;
-      text-transform:uppercase;
-      line-height:1.1;
-      font-size:1.02rem;
-      margin-bottom:2px;
+      font-weight:900; letter-spacing:.2px; text-transform:uppercase;
+      line-height:1.1; font-size:1.02rem; margin-bottom:2px;
     }
-
-    .brandband .meta{
-      font-size:.84rem;                 /* antes .9 */
-      opacity:.95;
-      line-height:1.25;
-    }
-
+    .brandband .meta{ font-size:.84rem; opacity:.95; line-height:1.25; }
     .tag{
       background:rgba(255,255,255,.12);
       border:1px solid rgba(255,255,255,.35);
-      padding:5px 9px;
-      border-radius:999px;
-      font-weight:700;
-      font-size:.85rem;
-      white-space:nowrap;
+      padding:5px 9px; border-radius:999px; font-weight:700; font-size:.85rem; white-space:nowrap;
     }
 
     /* ===== Totales ===== */
     .totales-box{
-      display:flex;
-      justify-content:space-between;
-      flex-wrap:wrap;
-      margin-top:.4rem;
-      gap:.4rem;
-      page-break-inside:avoid;
+      display:flex; justify-content:space-between; flex-wrap:wrap;
+      margin-top:.4rem; gap:.4rem; page-break-inside:avoid;
     }
-
     .totales-box .chip{
-      background:#fff;
-      border:1px solid var(--line);
-      border-radius:12px;
-      padding:6px 10px;                /* antes 8px 12px */
-      box-shadow:0 2px 8px rgba(2,6,23,.04);
-      flex:1;
-      min-width:135px;                  /* antes 150 */
-      text-align:center;
+      background:#fff; border:1px solid var(--line); border-radius:12px;
+      padding:6px 10px; box-shadow:0 2px 8px rgba(2,6,23,.04);
+      flex:1; min-width:135px; text-align:center;
     }
+    .chip .lbl{ font-size:.66rem; text-transform:uppercase; letter-spacing:.12em; color:var(--muted); }
+    .chip .val{ font-weight:900; font-size:.98rem; color:var(--brand); }
 
-    .chip .lbl{
-      font-size:.66rem;
-      text-transform:uppercase;
-      letter-spacing:.12em;
-      color:var(--muted);
-    }
-
-    .chip .val{
-      font-weight:900;
-      font-size:.98rem;                 /* antes 1.05rem */
-      color:var(--brand);
-    }
-
-    /* ===== Datos del alumno ===== */
+    /* ===== Datos del alumno + QR ===== */
     .info-card{
-      border:1px solid var(--line);
-      border-radius:12px;
-      background:#fff;
+      border:1px solid var(--line); border-radius:12px; background:#fff;
       box-shadow:0 1px 8px rgba(2,6,23,.05);
-      margin-top:.55rem;
-      padding:.6rem .75rem;             /* antes .8rem 1rem */
-      font-size:.86rem;                 /* antes .9rem */
-      line-height:1.25;
+      margin-top:.55rem; padding:.6rem .75rem; font-size:.86rem; line-height:1.25;
       page-break-inside:avoid;
+    }
+    .info-grid{
+      display:grid;
+      grid-template-columns: 1fr 120px;   /* datos | QR */
+      gap:12px; align-items:start;
     }
     .info-card strong{ color:var(--brand); }
+    .qr-box{
+      display:flex; flex-direction:column; align-items:center; gap:6px;
+    }
+    .qr-img{
+      width:120px; height:120px; object-fit:contain; background:#fff;
+      border:1px solid var(--line); border-radius:10px; padding:6px;
+    }
+    .qr-cap{ font-size:.7rem; color:var(--muted); text-align:center; }
 
     /* ===== Tabla de pagos ===== */
     .table-wrap {
-      margin-top:.6rem;                 /* antes 1rem */
-      border:1px solid var(--line);
-      border-radius:12px;
-      overflow:hidden;
-      box-shadow:0 2px 8px rgba(15,23,42,0.05);
-      page-break-inside:auto;           /* importante */
+      margin-top:.6rem; border:1px solid var(--line); border-radius:12px;
+      overflow:hidden; box-shadow:0 2px 8px rgba(15,23,42,0.05);
+      page-break-inside:auto;
     }
-
-    table.estado-table {
-      width:100%;
-      border-collapse:collapse;
-      font-size:.78rem;                 /* antes .9rem */
+    table.estado-table { width:100%; border-collapse:collapse; font-size:.78rem; }
+    table.estado-table thead th{
+      background:var(--brand); color:#fff; padding:6px 5px; font-weight:700;
+      text-align:center; border-bottom:3px solid var(--brand-2); letter-spacing:.02em;
+      vertical-align:middle; white-space:nowrap;
     }
-
-    table.estado-table thead th {
-      background:var(--brand);
-      color:#fff;
-      padding:6px 5px;                  /* antes 8px 6px */
-      font-weight:700;
-      text-align:center;
-      border-bottom:3px solid var(--brand-2);
-      letter-spacing:.02em;
-      vertical-align:middle;
-      white-space:nowrap;
+    table.estado-table tbody td{
+      padding:6px 5px; border-bottom:1px solid #eee; text-align:center; vertical-align:middle; color:#374151;
     }
-
-    table.estado-table tbody td {
-      padding:6px 5px;                  /* antes 8px 6px */
-      border-bottom:1px solid #eee;
-      text-align:center;
-      vertical-align:middle;
-      color:#374151;
-    }
-
-    table.estado-table tbody tr:nth-child(even) { background:#faf9ff; }
-    table.estado-table tbody tr:hover { background:#f3f0ff; }
-
-    table.estado-table td:first-child {
-      text-align:right;
-      color:var(--brand);
-      font-weight:700;
-      white-space:nowrap;
-    }
-    table.estado-table td:last-child { text-align:left; }
+    table.estado-table tbody tr:nth-child(even){ background:#faf9ff; }
+    table.estado-table tbody tr:hover{ background:#f3f0ff; }
+    table.estado-table td:first-child{ text-align:right; color:var(--brand); font-weight:700; white-space:nowrap; }
+    table.estado-table td:last-child{ text-align:left; }
 
     /* ===== Pie ===== */
-    .foot{
-      margin-top:.55rem;
-      font-size:.76rem;
-      color:var(--muted);
-      text-align:center;
-    }
+    .foot{ margin-top:.55rem; font-size:.76rem; color:var(--muted); text-align:center; }
 
     /* ===== Impresión ===== */
     @media print {
       @page { size: Letter; margin: 0; }
       html, body { background:#fff; }
       .sheet { margin:0; box-shadow:none; border:none; }
-      table.estado-table thead th {
-        -webkit-print-color-adjust: exact;
-        print-color-adjust: exact;
-        background: var(--brand) !important;
-        color: white !important;
+      table.estado-table thead th{
+        -webkit-print-color-adjust: exact; print-color-adjust: exact;
+        background: var(--brand) !important; color: white !important;
       }
     }
 
-    /* Marcador genérico para secciones que no deben partirse */
     .page-break { page-break-inside:avoid; }
   </style>
 </head>
@@ -218,21 +153,31 @@
 
     <!-- ===== Totales ===== -->
     <div class="totales-box page-break">
-      <div class="chip"><div class="lbl">Total Programa</div><div class="val">$ {{ total_programa }}</div></div>
+      <div class="chip"><div class="lbl">Total Programa</div><div class="val">$ {{ precio_total }}</div></div>
       <div class="chip"><div class="lbl">Total Pagado</div><div class="val">$ {{ total_pagado }}</div></div>
-      <div class="chip"><div class="lbl text-danger">Adeudo</div><div class="val text-danger">$ {{ adeudo }}</div></div>
+      <div class="chip"><div class="lbl text-danger">Adeudo</div><div class="val text-danger">$ {{ deuda }}</div></div>
       <div class="chip"><div class="lbl">Núm. de Colegiaturas</div><div class="val">{{ numero_colegiatura }}</div></div>
     </div>
 
-    <!-- ===== Datos del alumno ===== -->
+    <!-- ===== Datos del alumno + QR ===== -->
     <div class="info-card page-break">
-      <div><strong>Matrícula:</strong> {{ alumno.matricula }}</div>
-      <div><strong>Nombre:</strong> {{ alumno.nombre }}</div>
-      <div><strong>Grupo:</strong> {{ alumno.grupo }}</div>
-      <div><strong>Programa:</strong> {{ alumno.programa }}</div>
-      <div><strong>Fecha 1er Pago:</strong> {{ alumno.fecha_1er_pago }}</div>
-      <div><strong>CURP:</strong> {{ alumno.curp }} &nbsp;&nbsp;
-        <strong>No. Alumno:</strong> {{ alumno.no_alumno }}</div>
+      <div class="info-grid">
+        <div>
+          <div><strong>Matrícula:</strong> {{ alumno.matricula }}</div>
+          <div><strong>Nombre:</strong> {{ alumno.nombre }}</div>
+          <div><strong>Grupo:</strong> {{ alumno.grupo }}</div>
+          <div><strong>Programa:</strong> {{ alumno.programa }}</div>
+          <div><strong>Fecha 1er Pago:</strong> {{ alumno.fecha_1er_pago }}</div>
+          <div><strong>CURP:</strong> {{ alumno.curp }} &nbsp;&nbsp;
+            <strong>No. Alumno:</strong> {{ alumno.no_alumno }}</div>
+        </div>
+
+        <!-- QR a la derecha -->
+        <div class="qr-box">
+          <img class="qr-img" src="{% static 'iuaf/codigoqr.png' %}" alt="Código QR">
+          <div class="qr-cap">Escanéame</div>
+        </div>
+      </div>
     </div>
 
     <!-- ===== Tabla de pagos ===== -->
@@ -264,10 +209,10 @@
         </tbody>
       </table>
     </div>
-
+{% comment %} 
     <div class="foot page-break">
       Documento informativo — No válido como comprobante fiscal
-    </div>
+    </div> {% endcomment %}
   </div>
 </body>
 </html>

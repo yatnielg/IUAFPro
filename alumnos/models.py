@@ -296,6 +296,8 @@ class Financiamiento(models.Model):
         ("porcentaje", "Porcentaje"),
         ("monto", "Monto fijo"),
     ]
+
+    programa = models.ForeignKey("Programa", blank=True, null=True, on_delete=models.PROTECT, related_name="financiamientos", verbose_name="Programa")
     beca = models.CharField("Beca", max_length=120, blank=True)
     tipo_descuento = models.CharField("Tipo de descuento", max_length=20, choices=TIPO_DESCUENTO, default="ninguno")
     porcentaje_descuento = models.DecimalField("Porcentaje de descuento", max_digits=5, decimal_places=2, null=True, blank=True,
@@ -309,11 +311,12 @@ class Financiamiento(models.Model):
         ordering = ["id"]
 
     def __str__(self):
+        etiqueta = "Sin nombre" if not self.beca else self.beca
         if self.tipo_descuento == "porcentaje" and self.porcentaje_descuento is not None:
-            return f"{self.beca or 'Sin nombre'} — {self.porcentaje_descuento}%"
-        if self.tipo_descuento == "monto" and self.monto_descuento is not None:
-            return f"{self.beca or 'Sin nombre'} — ${self.monto_descuento}"
-        return self.beca or "Sin nombre"
+            etiqueta = f"{etiqueta} — {self.porcentaje_descuento}%"
+        elif self.tipo_descuento == "monto" and self.monto_descuento is not None:
+            etiqueta = f"{etiqueta} — ${self.monto_descuento}"
+        return f"[{self.programa.codigo if self.programa else ''}] {etiqueta}"
 
     def clean(self):
         if self.tipo_descuento == "porcentaje":
@@ -330,6 +333,7 @@ class Financiamiento(models.Model):
             if (self.porcentaje_descuento not in (None, Decimal("0"), 0)) or (self.monto_descuento not in (None, Decimal("0"), 0)):
                 raise ValidationError("Si el tipo es 'Sin descuento', no establezcas porcentaje ni monto.")
 
+
     def calcular_descuento(self, base: Decimal) -> Decimal:
         base = base or Decimal("0")
         if self.tipo_descuento == "porcentaje" and self.porcentaje_descuento:
@@ -337,7 +341,6 @@ class Financiamiento(models.Model):
         if self.tipo_descuento == "monto" and self.monto_descuento:
             return Decimal(self.monto_descuento).quantize(Decimal("0.01"))
         return Decimal("0.00")
-
 
 class Pais(models.Model):
     nombre = models.CharField(max_length=120, unique=True)

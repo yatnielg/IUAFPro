@@ -83,6 +83,8 @@ urlpatterns = [
     path('estado-cuenta/<int:numero_estudiante>/', views.estado_cuenta, name='estado_cuenta'),
     path('estado-cuenta/', views.estado_cuenta, name='estado_cuenta_demo'),
 
+    path("alumnos/api/financiamientos/", views.api_financiamientos_list, name="api_financiamientos_list"),
+
     #path("banco/movimientos/", views.MovimientoBancoListView.as_view(), name="movimientos_banco_lista"),
 
 ]

@@ -377,7 +377,31 @@ def alumnos_editar(request, pk):
             "active_tab": active_tab,
         },
     )
+####################################################################
+from django.views.decorators.http import require_GET
+@login_required
+@require_GET
+def api_financiamientos_list(request):
+    prog_id = request.GET.get("programa")
+    qs = Financiamiento.objects.all()
 
+    if prog_id and prog_id.isdigit():
+        pid = int(prog_id)
+        qs = qs.filter(Q(programa_id=pid) | Q(programa__isnull=True))
+    else:
+        # Sin programa seleccionado => solo globales
+        qs = qs.filter(programa__isnull=True)
+
+    items = []
+    for f in qs.order_by("programa_id", "id"):
+        label = f"{str(f)} (Global)" if f.programa_id is None else str(f)
+        items.append({
+            "id": f.id,
+            "label": label,
+            "is_global": f.programa_id is None,
+        })
+
+    return JsonResponse({"ok": True, "items": items})
 
 ####################################################################
 
@@ -2940,6 +2964,9 @@ def estado_cuenta(request, numero_estudiante):
     )
 
     numero_colegiatura = pagos_qs.first().alumno.informacionEscolar.meses_programa if pagos_qs.exists() else 0
+    precio_final  = pagos_qs.first().alumno.informacionEscolar.precio_final if pagos_qs.exists() else 0
+    precio_total = precio_final * numero_colegiatura
+
     pagos = []
     for p in pagos_qs:
         pagos.append({
@@ -2973,7 +3000,7 @@ def estado_cuenta(request, numero_estudiante):
 
     # ================= Datos de institución =================
     institucion = {
-        "nombre": "INSTITUTO UNIVERSITARIO DE ALTA FORMACION",
+        "nombre": "INSTITUTO UNIVERSITARIO DE ALTA FORMACIÓN IUAF SC.",
         "direccion": "Blvd Kukulcan km 3.5 plaza nautilus local 53, Zona Hotelera",
         "ciudad": "Cancún, Q.ROO.",
         "telefono": "998 253 6750",
@@ -2995,6 +3022,8 @@ def estado_cuenta(request, numero_estudiante):
             else "",
     }
 
+    deuda = precio_total - total_pagado_num
+
     # ================= Contexto final =================
     context = {
         "institucion": institucion,
@@ -3004,6 +3033,9 @@ def estado_cuenta(request, numero_estudiante):
         "total_pagado": f"{total_pagado_num:,.2f}",
         "adeudo": f"{adeudo_num:,.2f}",
         "numero_colegiatura": numero_colegiatura,
+        "precio_final": f"{precio_final:,.2f}",
+        "precio_total": f"{precio_total:,.2f}",
+        "deuda": f"{deuda:,.2f}",
         # imágenes (coloca en /static/iuaf/)
         "logo": "iuaf/logo-placeholder.png",
         "qr": "iuaf/qr-placeholder.png",

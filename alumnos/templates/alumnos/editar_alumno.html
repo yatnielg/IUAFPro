@@ -776,4 +776,100 @@ function setValueAndFloat(el,value){
   }
 </script>
 
+
+
+
+<script>
+(function(){
+  const selPrograma = document.getElementById("{{ form_info.programa.auto_id }}");
+  const selFinan    = document.getElementById("{{ form_info.financiamiento.auto_id }}");
+
+  if(!selPrograma || !selFinan) return;
+
+  const EMPTY_LABEL = "— Selecciona un financiamiento —";
+
+  function setDisabled(el, disabled=true){
+    el.disabled = !!disabled;
+    try { $(el).selectpicker('refresh'); } catch(e){}
+  }
+
+  function refreshSelectpicker(el){
+    try { $(el).selectpicker('refresh'); } catch(e){}
+  }
+
+  function repoblarFinanciamientos(items, keepSelectedId){
+    // Guardar selección actual si sigue siendo válida
+    const current = keepSelectedId ?? selFinan.value;
+    const allowedIds = new Set(items.map(i => String(i.id)));
+
+    // Vaciar y poblar
+    selFinan.innerHTML = "";
+    const optEmpty = document.createElement("option");
+    optEmpty.value = "";
+    optEmpty.textContent = EMPTY_LABEL;
+    selFinan.appendChild(optEmpty);
+
+    for(const it of items){
+      const opt = document.createElement("option");
+      opt.value = String(it.id);
+      opt.textContent = it.label || String(it.id);
+      selFinan.appendChild(opt);
+    }
+
+    // Reseleccionar si aún es válido, si no, dejar vacío
+    if(current && allowedIds.has(String(current))){
+      selFinan.value = String(current);
+    } else {
+      selFinan.value = "";
+    }
+
+    refreshSelectpicker(selFinan);
+    // Disparar change para que tu lógica de descuento se ejecute si cambió
+    selFinan.dispatchEvent(new Event("change", {bubbles:true}));
+  }
+
+  async function cargarFinanciamientos(programaId, keepSelectedId=null){
+    setDisabled(selFinan, true);
+
+    const url = new URL("{% url 'api_financiamientos_list' %}", window.location.origin);
+    if(programaId) url.searchParams.set("programa", programaId);
+
+    try{
+      const resp = await fetch(url.toString(), { headers: {"X-Requested-With":"XMLHttpRequest"} });
+      if(!resp.ok) throw new Error("HTTP "+resp.status);
+      const data = await resp.json();
+      if(!data.ok) throw new Error("Respuesta no OK");
+      repoblarFinanciamientos(data.items || [], keepSelectedId);
+    }catch(err){
+      console.warn("No se pudieron cargar financiamientos:", err);
+      // Fallback vacío
+      repoblarFinanciamientos([], null);
+    }finally{
+      setDisabled(selFinan, false);
+    }
+  }
+
+  // 1) Al cambiar de programa => recargar financiamientos
+  selPrograma.addEventListener("change", function(e){
+    const pid = e.target.value || "";
+    // Mantener selección si sigue siendo válida:
+    const keepId = selFinan.value || null;
+    cargarFinanciamientos(pid, keepId);
+  });
+
+  // 2) Al cargar la página (modo editar) => inicializar financiamientos en función del programa mostrado
+  //    (si el backend ya aplicó queryset y hay opciones, esto no estorba; si no, garantiza consistencia)
+  window.addEventListener("DOMContentLoaded", function(){
+    const pid = selPrograma.value || "";
+    // Mantener lo que venga pre-seleccionado en el HTML si aplica:
+    const keepId = selFinan.value || null;
+    cargarFinanciamientos(pid, keepId);
+  });
+})();
+</script>
+
+
+
+
+
 {% endblock %}
