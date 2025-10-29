@@ -466,9 +466,27 @@
     <div class="card-icon"><i class="material-icons">shopping_cart</i></div>
     <h4 class="card-title">Cargos del alumno</h4>
     <p class="card-category">
-      Pendientes: <strong>{{ cargos_pendientes|length }}</strong>
+      Pendientes: <strong>{{ cargos_pendientes|length }}</strong>      
     </p>
+
+
+<div class="ml-auto">
+    <button
+      id="btnGenerarCargos"
+      class="btn btn-outline-primary btn-sm d-inline-flex align-items-center"
+      data-url="{% url 'generar_cargos_mensuales' alumno.numero_estudiante %}"
+      title="Generar cargos mensuales (día 6 por {{ alumno.informacionEscolar.meses_programa|default:'0' }} meses)"
+    >
+      <i class="material-icons align-middle mr-1">playlist_add</i>
+      Generar cargos mensuales
+    </button>
   </div>
+
+
+
+
+  </div>
+
 
   <div class="card-body table-responsive">
     <table class="table table-hover">
@@ -483,28 +501,52 @@
         </tr>
       </thead>
       <tbody>
-        {% for c in cargos %}
-        <tr>
-          <td>{{ c.fecha_cargo|date:"d/m/Y" }}</td>
-          <td>{{ c.concepto.nombre }}</td>
-          <td class="text-right">$ {{ c.monto }}</td>
-          <td>{% if c.fecha_vencimiento %}{{ c.fecha_vencimiento|date:"d/m/Y" }}{% else %}—{% endif %}</td>
-          <td>
-            {% if c.pagado %}
-              <span class="badge badge-success">Pagado</span>
-            {% else %}
-              <span class="badge badge-warning text-dark">Pendiente</span>
-            {% endif %}
-          </td>
-          <td class="text-right">
-            {% if not c.pagado %}
-              <a class="btn btn-primary btn-sm" href="{% url 'clip_crear_pago_cargo' c.id %}">Pagar con tarjeta (Clip)</a>
-            {% endif %}
-          </td>
-        </tr>
-        {% empty %}
-        <tr><td colspan="6" class="text-center text-muted">Sin cargos.</td></tr>
-        {% endfor %}
+{% for c in cargos %}
+<tr class="{% if c.is_overdue %}{% endif %}">
+  <td>{{ c.fecha_cargo|date:"d/m/Y" }}</td>
+  <td>{{ c.concepto.nombre }}</td>
+  <td class="text-right">$ {{ c.monto }}</td>
+
+  {# Fecha de vencimiento (o fallback) con resaltado si está vencido #}
+  <td>
+    {% if c.fecha_vencimiento %}
+      <span class="{% if c.is_overdue %}text-danger font-weight-bold{% endif %}">
+        {{ c.fecha_vencimiento|date:"d/m/Y" }}
+      </span>
+    {% else %}
+      <span class="{% if c.is_overdue %}text-danger font-weight-bold{% endif %}">
+        {{ c.fecha_cargo|date:"d/m/Y" }}
+      </span>
+    {% endif %}
+    {% if c.is_overdue %}
+      <span class="badge badge-danger ml-1">Vencido</span>
+    {% endif %}
+  </td>
+
+  <td>
+    {% if c.pagado %}
+      <span class="badge badge-success">Pagado</span>
+    {% else %}
+      <span class="badge badge-warning text-dark">Pendiente</span>
+    {% endif %}
+  </td>
+
+{% if request.user.is_superuser %}
+  <td class="text-right">
+    {% if not c.pagado %}
+      <a class="btn btn-primary btn-sm" href="{% url 'clip_crear_pago_cargo' c.id %}">
+        Pagar con tarjeta (Clip)
+      </a>
+    {% endif %}
+  </td>
+{% else %}
+  <td></td>
+{% endif %}
+
+</tr>
+{% empty %}
+<tr><td colspan="6" class="text-center text-muted">Sin cargos.</td></tr>
+{% endfor %}
       </tbody>
     </table>
   </div>
@@ -753,6 +795,72 @@ document.addEventListener('click', async (e) => {
   }
 });
 </script>
+
+
+
+
+
+<script>
+(function(){
+  function getCookie(name){
+    const m=document.cookie.match('(^|;)\\s*'+name+'\\s*=\\s*([^;]+)');
+    return m?m.pop():'';
+  }
+
+  async function generarCargos(url){
+    const csrftoken = getCookie('csrftoken');
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-CSRFToken': csrftoken
+      },
+      body: new URLSearchParams({}) // aquí puedes enviar 'concepto_id' si quieres
+    });
+    if (!resp.ok) {
+      const txt = await resp.text().catch(()=> '');
+      throw new Error(txt || ('HTTP '+resp.status));
+    }
+    return resp.json();
+  }
+
+  document.getElementById('btnGenerarCargos')?.addEventListener('click', async (e)=>{
+    e.preventDefault();
+    const url = e.currentTarget.getAttribute('data-url');
+
+    // Confirmación
+    const seguro = confirm('Esto generará los cargos mensuales (día 6) desde el mes de inicio del programa por todos los meses del plan. ¿Continuar?');
+    if (!seguro) return;
+
+    try {
+      e.currentTarget.disabled = true;
+      const data = await generarCargos(url);
+
+      if (data.ok) {
+        const msg = `Creados: ${data.creados} • Ya existían: ${data.existentes}\n` +
+                    `Concepto: ${data.concepto} • Monto: $${data.monto}\n` +
+                    `Desde: ${data.desde} • Meses: ${data.meses}`;
+        if (window.notify) {
+          notify('Cargos generados correctamente. ' + msg.replace(/\n/g, ' • '), 'success');
+        } else {
+          alert('Cargos generados correctamente.\n\n' + msg);
+        }
+        // Recarga para ver la tabla actualizada
+        window.location.reload();
+      } else {
+        throw new Error(data.error || 'No se pudo generar cargos.');
+      }
+    } catch(err) {
+      console.error(err);
+      if (window.notify) notify('Error: ' + err.message, 'danger');
+      else alert('Error: ' + err.message);
+    } finally {
+      e.currentTarget.disabled = false;
+    }
+  });
+})();
+</script>
+
 
 
 

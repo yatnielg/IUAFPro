@@ -315,7 +315,7 @@ class Financiamiento(models.Model):
         if self.tipo_descuento == "porcentaje" and self.porcentaje_descuento is not None:
             etiqueta = f"{etiqueta} — {self.porcentaje_descuento}%"
         elif self.tipo_descuento == "monto" and self.monto_descuento is not None:
-            etiqueta = f"{etiqueta} — ${self.monto_descuento}"
+            etiqueta = f"{etiqueta} — Descuento de ${self.monto_descuento}"
         return f"[{self.programa.codigo if self.programa else ''}] {etiqueta}"
 
     def clean(self):

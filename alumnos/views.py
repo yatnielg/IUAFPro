@@ -727,11 +727,44 @@ def alumnos_detalle(request, pk):
         )
         pagos_total = round(pagos.aggregate(total=Sum("monto"))["total"] or 0, 2)
 
+        hoy = timezone.now().date()
+        from django.db.models.functions import Coalesce
         cargos = (
             Cargo.objects
-            .filter(alumno=alumno)
+            .filter(
+                alumno=alumno,
+                pagado=False
+            )
+            # Mostrar los que ya están en fecha de pago (fecha_cargo ≤ hoy)
+            # o que ya vencieron (fecha_vencimiento ≤ hoy).
+            .filter(
+                Q(fecha_cargo__lte=hoy) |
+                Q(fecha_vencimiento__lte=hoy)
+            )
+            .annotate(
+                # Fecha “exigible” solo para ordenar/mostrar
+                due_date=Coalesce("fecha_vencimiento", "fecha_cargo"),
+                # Vencido = si tiene fecha_vencimiento y es < hoy,
+                # o si NO tiene fecha_vencimiento y la fecha_cargo es < hoy.
+                is_overdue=Case(
+                    When(Q(fecha_vencimiento__isnull=False) & Q(fecha_vencimiento__lt=hoy), then=Value(True)),
+                    When(Q(fecha_vencimiento__isnull=True)  & Q(fecha_cargo__lt=hoy),         then=Value(True)),
+                    default=Value(False),
+                    output_field=BooleanField()
+                )
+            )
             .select_related("concepto")
-            .order_by("-fecha_cargo", "-id")
+            # Orden: primero vencidos, luego los “en fecha de pago” (hoy),
+            # y dentro de cada grupo por due_date descendente.
+            .order_by(
+                # Vencidos arriba
+                Case(
+                    When(is_overdue=True, then=Value(0)),
+                    default=Value(1),
+                ),
+                "-due_date",
+                "-id",
+            )
         )
         cargos_pendientes = cargos.filter(pagado=False)
 
@@ -3043,3 +3076,170 @@ def estado_cuenta(request, numero_estudiante):
     }
 
     return render(request, "reportes/estado_cuenta.html", context)
+###########################################################################################
+from calendar import monthrange
+def _mes_year_siguiente(base: date, offset: int) -> date:
+    y = base.year + (base.month - 1 + offset) // 12
+    m = (base.month - 1 + offset) % 12 + 1
+    day = 1
+    last_day = monthrange(y, m)[1]
+    return date(y, m, min(day, last_day))
+
+def _resolve_concepto(request):
+    concepto_id = request.POST.get("concepto_id")
+    if concepto_id and concepto_id.isdigit():
+        c = ConceptoPago.objects.filter(pk=int(concepto_id)).first()
+        if c:
+            return c
+    c = ConceptoPago.objects.filter(codigo="COLEGIATURA").first()
+    if c:
+        return c
+    return ConceptoPago.objects.first()
+
+@login_required
+@require_POST
+def generar_cargos_mensuales(request, numero_estudiante):
+    alumno = get_object_or_404(Alumno, pk=numero_estudiante)
+
+    # permisos (usa tu helper si lo tienes)
+    try:
+        from alumnos.permisos import user_can_edit_alumno
+        if not user_can_edit_alumno(request.user, alumno):
+            return HttpResponseForbidden("No tienes permiso para generar cargos para este alumno.")
+    except Exception:
+        if not (request.user.is_staff or request.user.is_superuser):
+            return HttpResponseForbidden("No tienes permiso para generar cargos para este alumno.")
+
+    info = getattr(alumno, "informacionEscolar", None)
+    if not info:
+        return JsonResponse({"ok": False, "error": "El alumno no tiene Información Escolar."}, status=400)
+
+    meses = int(info.meses_programa or 0)
+    if meses <= 0:
+        return JsonResponse({"ok": False, "error": "Meses de programa inválido (<= 0)."}, status=400)
+
+    base = info.inicio_programa or date.today()
+
+    concepto = _resolve_concepto(request)
+    if not concepto:
+        return JsonResponse({"ok": False, "error": "No se encontró un Concepto de pago para crear cargos."}, status=400)
+
+    monto = info.precio_final if info.precio_final not in (None, "") else info.precio_colegiatura
+    try:
+        monto = Decimal(monto or "0.00")
+    except Exception:
+        monto = Decimal("0.00")
+
+    creados, existentes, actualizados_venc = 0, 0, 0
+    created_ids = []
+
+    with transaction.atomic():
+        for i in range(meses):
+            fch = _mes_year_siguiente(base, i)     # día 6 de cada mes
+            vence = fch + timedelta(days=6)        # 👈 vencimiento = 7 días después
+
+            obj, created = Cargo.objects.get_or_create(
+                alumno=alumno,
+                concepto=concepto,
+                fecha_cargo=fch,
+                defaults={
+                    "monto": monto,
+                    "pagado": False,
+                    "fecha_vencimiento": vence,     # 👈 se guarda al crear
+                },
+            )
+            if created:
+                creados += 1
+                created_ids.append(obj.id)
+            else:
+                existentes += 1
+                # Si ya existía pero sin vencimiento, lo actualizamos
+                if obj.fecha_vencimiento is None:
+                    obj.fecha_vencimiento = vence
+                    obj.save(update_fields=["fecha_vencimiento"])
+                    actualizados_venc += 1
+
+    return JsonResponse({
+        "ok": True,
+        "creados": creados,
+        "existentes": existentes,
+        "actualizados_venc": actualizados_venc,
+        "concepto": getattr(concepto, "codigo", str(concepto)),
+        "monto": f"{monto:.2f}",
+        "desde": base.strftime("%Y-%m-%d"),
+        "meses": meses,
+        "ids": created_ids,
+    })
+
+############################################################################################
+# views.py
+from django.contrib.auth.decorators import login_required
+from django.shortcuts import render
+from django.utils import timezone
+from django.db.models import Q, Case, When, Value, BooleanField
+from django.db.models.functions import Coalesce
+from django.core.paginator import Paginator
+
+from alumnos.models import Cargo  # ajusta el import a tu app
+
+@login_required
+def cargos_pendientes_todos(request):
+    """
+    Lista cargos de TODOS los alumnos que:
+      - no están pagados (pagado=False), y
+      - ya están en fecha de pago (fecha_cargo <= hoy) o ya vencieron (fecha_vencimiento <= hoy).
+    Muestra vencidos primero y resalta en rojo.
+    """
+    hoy = timezone.now().date()
+
+    # Filtros opcionales (búsqueda sencilla)
+    q = (request.GET.get("q") or "").strip()
+
+    cargos = (
+        Cargo.objects
+        .filter(pagado=False)
+        .filter(
+            Q(fecha_cargo__lte=hoy) |
+            Q(fecha_vencimiento__lte=hoy)
+        )
+        .annotate(
+            due_date=Coalesce("fecha_vencimiento", "fecha_cargo"),
+            is_overdue=Case(
+                When(Q(fecha_vencimiento__isnull=False) & Q(fecha_vencimiento__lt=hoy), then=Value(True)),
+                When(Q(fecha_vencimiento__isnull=True)  & Q(fecha_cargo__lt=hoy),         then=Value(True)),
+                default=Value(False),
+                output_field=BooleanField(),
+            )
+        )
+        .select_related("alumno", "concepto")
+        .order_by(
+            # Vencidos primero
+            Case(When(is_overdue=True, then=Value(0)), default=Value(1)),
+            "-due_date",
+            "-id",
+        )
+    )
+
+    if q:
+        # Búsqueda por número, nombre y correo (ajusta campos si deseas)
+        cargos = cargos.filter(
+            Q(alumno__numero_estudiante__icontains=q) |
+            Q(alumno__nombre__icontains=q) |
+            Q(alumno__apellido_p__icontains=q) |
+            Q(alumno__apellido_m__icontains=q) |
+            Q(alumno__email__icontains=q)
+        )
+
+    paginator = Paginator(cargos, 50)  # 50 por página
+    page_number = request.GET.get("page")
+    page_obj = paginator.get_page(page_number)
+
+    return render(
+        request,
+        "alumnos/cargos_pendientes_todos.html",
+        {
+            "page_obj": page_obj,
+            "q": q,
+            "hoy": hoy,
+        },
+    )

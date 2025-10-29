@@ -1,0 +1,202 @@
+{# alumnos/cargos_pendientes_todos.html #}
+{% extends "panel/grafico.html" %}
+{% load static %}
+
+{% block title %}Cargos pendientes/vencidos — CampusIUAF{% endblock %}
+
+{% block main_content %}
+
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
+<script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+
+<style>
+  .section-title{font-size:.95rem;letter-spacing:.06em;text-transform:uppercase;color:#9aa0a6;margin:1.25rem 0 .5rem;display:flex;align-items:center;gap:.5rem}
+  .section-title .material-icons{font-size:1.1rem}
+  .table-responsive{overflow-x:auto}
+  .tag-muted{opacity:.7}
+</style>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="h4 m-0 text-white">
+    <i class="material-icons align-middle mr-1">warning_amber</i>
+    Cargos pendientes y vencidos (todos los alumnos)
+  </h1>
+
+  <div class="btn-group">
+    <a class="btn btn-outline-secondary" href="{% url 'estudiantes' %}">
+      <i class="material-icons align-middle">arrow_back</i> Volver
+    </a>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header card-header-primary card-header-icon d-flex align-items-center">
+    <div class="card-icon"><i class="material-icons">shopping_cart</i></div>
+    <div>
+      <h4 class="card-title m-0">Listado</h4>
+      <p class="card-category m-0">Fecha de corte: {{ hoy|date:"d/m/Y" }}</p>
+    </div>
+
+    <form class="ml-auto d-flex align-items-center" method="get" action="">
+      <div class="input-group input-group-sm">
+        <input type="text" name="q" class="form-control" placeholder="Buscar alumno / correo / #estudiante" value="{{ q|default:'' }}">
+        <div class="input-group-append">
+          <button class="btn btn-outline-light" type="submit">
+            <i class="material-icons" style="font-size:18px;vertical-align:middle;">search</i>
+          </button>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <div class="card-body table-responsive">
+    <table class="table table-hover" id="tabla-cargos">
+      <thead>
+        <tr>
+          <th>Alumno</th>
+          <th>Concepto</th>
+          <th class="text-right">Monto</th>
+          <th>Fecha cargo</th>
+          <th>Vence</th>
+          <th>Estado</th>
+          <th class="text-right">Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in page_obj.object_list %}
+        <tr class="{% if c.is_overdue %}{% endif %}">
+          <td>
+            <a href="{% url 'alumnos_detalle' c.alumno.pk %}">
+              #{{ c.alumno.numero_estudiante }} — {{ c.alumno.nombre }} {{ c.alumno.apellido_p }} {{ c.alumno.apellido_m }}
+            </a>
+          </td>
+          <td>{{ c.concepto.nombre }}</td>
+          <td class="text-right">$ {{ c.monto }}</td>
+          <td>{{ c.fecha_cargo|date:"d/m/Y" }}</td>
+          <td>
+            {% if c.fecha_vencimiento %}
+              <span class="{% if c.is_overdue %}text-danger font-weight-bold{% endif %}">
+                {{ c.fecha_vencimiento|date:"d/m/Y" }}
+              </span>
+            {% else %}
+              <span class="tag-muted">
+                {{ c.fecha_cargo|date:"d/m/Y" }}
+              </span>
+            {% endif %}
+          </td>
+          <td>
+            {% if c.is_overdue %}
+              <span class="badge badge-danger">Vencido</span>
+            {% else %}
+              <span class="badge badge-warning text-dark">En fecha (hoy)</span>
+            {% endif %}
+          </td>
+          <td class="text-right">
+            <div class="btn-group">
+              <a class="btn btn-outline-primary btn-sm" href="{% url 'alumnos_detalle' c.alumno.pk %}">
+                Ver alumno
+              </a>
+
+              {% if c.alumno.telefono %}
+                <button type="button"
+                        class="btn btn-success btn-sm btn-whatsapp d-inline-flex align-items-center"
+                        title="Enviar recordatorio por WhatsApp"
+                        data-tel="{{ c.alumno.telefono|cut:' '|cut:'-'|cut:'('|cut:')' }}"
+                        data-nombre="{{ c.alumno.nombre }} {{ c.alumno.apellido_p }} {{ c.alumno.apellido_m }}"
+                        data-fecha="{% if c.fecha_vencimiento %}{{ c.fecha_vencimiento|date:'d/m/Y' }}{% else %}{{ c.fecha_cargo|date:'d/m/Y' }}{% endif %}"
+                        data-monto="{{ c.monto }}"
+                        data-overdue="{{ c.is_overdue|yesno:'1,0' }}">
+                  <span class="material-icons align-middle" style="font-size:18px;line-height:1;">chat</span>
+                  &nbsp;WhatsApp
+                </button>
+              {% else %}
+                <button type="button" class="btn btn-secondary btn-sm" disabled title="Sin teléfono">
+                  <span class="material-icons align-middle" style="font-size:18px;line-height:1;">chat</span>
+                  &nbsp;WhatsApp
+                </button>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7" class="text-center text-muted py-4">No hay cargos pendientes o vencidos.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    {% if page_obj.paginator.num_pages > 1 %}
+    <nav class="mt-3">
+      <ul class="pagination justify-content-center">
+        {% if page_obj.has_previous %}
+          <li class="page-item">
+            <a class="page-link" href="?q={{ q }}&page={{ page_obj.previous_page_number }}">«</a>
+          </li>
+        {% else %}
+          <li class="page-item disabled"><span class="page-link">«</span></li>
+        {% endif %}
+
+        {% for i in page_obj.paginator.page_range %}
+          {% if page_obj.number == i %}
+            <li class="page-item active"><span class="page-link">{{ i }}</span></li>
+          {% elif i >= page_obj.number|add:'-2' and i <= page_obj.number|add:'2' %}
+            <li class="page-item"><a class="page-link" href="?q={{ q }}&page={{ i }}">{{ i }}</a></li>
+          {% endif %}
+        {% endfor %}
+
+        {% if page_obj.has_next %}
+          <li class="page-item">
+            <a class="page-link" href="?q={{ q }}&page={{ page_obj.next_page_number }}">»</a>
+          </li>
+        {% else %}
+          <li class="page-item disabled"><span class="page-link">»</span></li>
+        {% endif %}
+      </ul>
+    </nav>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+  // DataTables (opcional; ya llega ordenado desde el servidor)
+  $(function(){
+    $('#tabla-cargos').DataTable({
+      language: { url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/es-ES.json' },
+      order: [],
+      pageLength: 50,
+      autoWidth: false,
+      scrollX: true
+    });
+  });
+
+  // Botón WhatsApp por fila
+  document.addEventListener('click', function(e){
+    const btn = e.target.closest('.btn-whatsapp');
+    if(!btn) return;
+
+    // Sanitizar número
+    let tel = (btn.dataset.tel || '').replace(/\D+/g, '');
+    if (!tel) { alert('El alumno no tiene teléfono válido.'); return; }
+    if (!tel.startsWith('52')) {
+      if (tel.length === 10) tel = '52' + tel;
+      else if (tel.length < 12) tel = '52' + tel;
+    }
+
+    const nombre = (btn.dataset.nombre || '').trim();
+    const fecha  = (btn.dataset.fecha  || '').trim();
+    const monto  = (btn.dataset.monto  || '').trim();
+    const isOver = btn.dataset.overdue === '1';
+
+    const saludo = nombre ? `Hola ${nombre},` : 'Hola,';
+    const cuerpoVencido = `nos comunicamos de IUAF para recordarle que su pago de colegiatura se encuentra VENCIDO.`;
+    const cuerpoHoy     = `nos comunicamos de IUAF para recordarle que su pago de colegiatura está programado para hoy.`;    
+    const detalle = `\n\n• Fecha: ${fecha}\n• Monto: $${monto}\n\nPor favor, realice su pago a la brevedad. Si ya efectuó el pago, le pedimos amablemente enviarnos su comprobante.`;
+    const firma  = `\n\nGracias.`;
+    const msg = `${saludo} ${isOver ? cuerpoVencido : cuerpoHoy}${detalle}${firma}`;
+
+    const url = `https://wa.me/${tel}?text=${encodeURIComponent(msg)}`;
+    window.open(url, '_blank', 'noopener');
+  });
+</script>
+
+{% endblock %}

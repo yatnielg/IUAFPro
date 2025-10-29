@@ -89,6 +89,16 @@
             </a>
           </li>
 
+          <li class="nav-item {% if  request.resolver_match.url_name == 'cargos_pendientes_todos'  %} active {% endif %}">
+            <a class="nav-link" href="{% url 'cargos_pendientes_todos' %}">
+              <i class="material-icons">payment</i>
+              <p> Cargos Pendientes </p>
+            </a>
+          </li>
+
+
+
+
 
 
          <li class="nav-item {% if  request.resolver_match.url_name == 'movimientos_banco_lista'  %} active {% endif %}">
