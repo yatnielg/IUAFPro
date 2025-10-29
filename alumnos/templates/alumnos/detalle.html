@@ -462,96 +462,280 @@
 <!-- ===================== CARGOS PENDIENTES ===================== -->
 {% if can_view_pagos %}
 <div class="card mt-4">
-  <div class="card-header card-header-primary card-header-icon">
+  <div class="card-header card-header-primary card-header-icon d-flex align-items-center">
     <div class="card-icon"><i class="material-icons">shopping_cart</i></div>
-    <h4 class="card-title">Cargos del alumno</h4>
-    <p class="card-category">
-      Pendientes: <strong>{{ cargos_pendientes|length }}</strong>      
-    </p>
+    <div>
+      <h4 class="card-title m-0">Cargos del alumno</h4>
+      <p class="card-category m-0">
+        Pendientes (exigibles): <strong>{{ cargos_pendientes|length }}</strong>
+        {% if cargos_todos %}&nbsp;•&nbsp; Pendientes (total): <strong>{{ cargos_todos|length }}</strong>{% endif %}
+      </p>
+    </div>
 
-
-<div class="ml-auto">
-    <button
-      id="btnGenerarCargos"
-      class="btn btn-outline-primary btn-sm d-inline-flex align-items-center"
-      data-url="{% url 'generar_cargos_mensuales' alumno.numero_estudiante %}"
-      title="Generar cargos mensuales (día 6 por {{ alumno.informacionEscolar.meses_programa|default:'0' }} meses)"
-    >
-      <i class="material-icons align-middle mr-1">playlist_add</i>
-      Generar cargos mensuales
-    </button>
+    <div class="ml-auto">
+      <button
+        id="btnGenerarCargos"
+        class="btn btn-outline-primary btn-sm d-inline-flex align-items-center"
+        data-url="{% url 'generar_cargos_mensuales' alumno.numero_estudiante %}"
+        title="Generar cargos mensuales (día 6 por {{ alumno.informacionEscolar.meses_programa|default:'0' }} meses)"
+      >
+        <i class="material-icons align-middle mr-1">playlist_add</i>
+        Generar cargos mensuales
+      </button>
+    </div>
   </div>
 
+  <div class="card-body">
+
+    <!-- Nav tabs -->
+    <ul class="nav nav-tabs" role="tablist">
+      <li class="nav-item">
+        <a class="nav-link active" id="tab-exigibles" data-toggle="tab" href="#pane-exigibles" role="tab">
+          Vencidos / En fecha
+        </a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" id="tab-todos" data-toggle="tab" href="#pane-todos" role="tab">
+          Todos (pendientes)
+        </a>
+      </li>
+    </ul>
+
+    <!-- Tab panes -->
+    <div class="tab-content pt-3">
+      <!-- === Pestaña 1: Exigibles (lo que ya tenías) === -->
+      <div class="tab-pane fade show active" id="pane-exigibles" role="tabpanel" aria-labelledby="tab-exigibles">
+        <div class="table-responsive">
+          <table class="table table-hover">
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Concepto</th>
+                <th class="text-right">Monto</th>
+                <th>Vence</th>
+                <th>Estado</th>
+                <th class="text-right">Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for c in cargos %}
+              <tr>
+                <td>{{ c.fecha_cargo|date:"d/m/Y" }}</td>
+                <td>{{ c.concepto.nombre }}</td>
+                <td class="text-right">$ {{ c.monto }}</td>
+                <td>
+                  {% if c.fecha_vencimiento %}
+                    <span class="{% if c.is_overdue %}text-danger font-weight-bold{% endif %}">
+                      {{ c.fecha_vencimiento|date:"d/m/Y" }}
+                    </span>
+                  {% else %}
+                    <span class="{% if c.is_overdue %}text-danger font-weight-bold{% endif %}">
+                      {{ c.fecha_cargo|date:"d/m/Y" }}
+                    </span>
+                  {% endif %}
+                  {% if c.is_overdue %}
+                    <span class="badge badge-danger ml-1">Vencido</span>
+                  {% else %}
+                    <span class="badge badge-warning text-dark ml-1">En fecha</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if c.pagado %}
+                    <span class="badge badge-success">Pagado</span>
+                  {% else %}
+                    <span class="badge badge-warning text-dark">Pendiente</span>
+                  {% endif %}
+                </td>
+
+                
+{% comment %}                 {% if request.user.is_superuser %}
+                  <td class="text-right">
+                    {% if not c.pagado %}
+                      <a class="btn btn-primary btn-sm" href="{% url 'clip_crear_pago_cargo' c.id %}">
+                        Pagar con tarjeta (Clip)
+                      </a>
+                    {% endif %}
+                  </td>
 
 
 
-  </div>
+                {% else %}
+                  <td></td>
+                {% endif %} {% endcomment %}
 
 
-  <div class="card-body table-responsive">
-    <table class="table table-hover">
-      <thead>
-        <tr>
-          <th>Fecha</th>
-          <th>Concepto</th>
-          <th class="text-right">Monto</th>
-          <th>Vence</th>
-          <th>Estado</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody>
-{% for c in cargos %}
-<tr class="{% if c.is_overdue %}{% endif %}">
-  <td>{{ c.fecha_cargo|date:"d/m/Y" }}</td>
-  <td>{{ c.concepto.nombre }}</td>
-  <td class="text-right">$ {{ c.monto }}</td>
 
-  {# Fecha de vencimiento (o fallback) con resaltado si está vencido #}
-  <td>
-    {% if c.fecha_vencimiento %}
-      <span class="{% if c.is_overdue %}text-danger font-weight-bold{% endif %}">
-        {{ c.fecha_vencimiento|date:"d/m/Y" }}
-      </span>
+<td class="text-right">
+  <div class="btn-group">
+    {% if alumno.telefono %}
+      <button type="button"
+              class="btn btn-success btn-sm btn-whatsapp-cargo d-inline-flex align-items-center"
+              title="Enviar recordatorio por WhatsApp"
+              data-tel="{{ alumno.telefono|cut:' '|cut:'-'|cut:'('|cut:')' }}"
+              data-nombre="{{ alumno.nombre }} {{ alumno.apellido_p }} {{ alumno.apellido_m }}"
+              data-fecha="{% if c.fecha_vencimiento %}{{ c.fecha_vencimiento|date:'d/m/Y' }}{% else %}{{ c.fecha_cargo|date:'d/m/Y' }}{% endif %}"
+              data-monto="{{ c.monto }}"
+              data-overdue="{{ c.is_overdue|yesno:'1,0' }}"
+              data-due-today="{% if c.is_overdue %}0{% else %}1{% endif %}">
+        <span class="material-icons align-middle" style="font-size:18px;line-height:1;">chat</span>
+        &nbsp;WhatsApp
+      </button>
     {% else %}
-      <span class="{% if c.is_overdue %}text-danger font-weight-bold{% endif %}">
-        {{ c.fecha_cargo|date:"d/m/Y" }}
-      </span>
+      <button type="button" class="btn btn-secondary btn-sm" disabled title="Sin teléfono">
+        <span class="material-icons align-middle" style="font-size:18px;line-height:1;">chat</span>
+        &nbsp;WhatsApp
+      </button>
     {% endif %}
-    {% if c.is_overdue %}
-      <span class="badge badge-danger ml-1">Vencido</span>
-    {% endif %}
-  </td>
 
-  <td>
-    {% if c.pagado %}
-      <span class="badge badge-success">Pagado</span>
-    {% else %}
-      <span class="badge badge-warning text-dark">Pendiente</span>
-    {% endif %}
-  </td>
-
-{% if request.user.is_superuser %}
-  <td class="text-right">
-    {% if not c.pagado %}
+{% comment %}     {% if request.user.is_superuser and not c.pagado %}
       <a class="btn btn-primary btn-sm" href="{% url 'clip_crear_pago_cargo' c.id %}">
         Pagar con tarjeta (Clip)
       </a>
-    {% endif %}
-  </td>
-{% else %}
-  <td></td>
-{% endif %}
+    {% endif %} {% endcomment %}
+  </div>
+</td>
 
-</tr>
-{% empty %}
-<tr><td colspan="6" class="text-center text-muted">Sin cargos.</td></tr>
-{% endfor %}
-      </tbody>
-    </table>
+
+
+
+
+
+
+              </tr>
+              {% empty %}
+              <tr><td colspan="6" class="text-center text-muted">Sin cargos exigibles.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- === Pestaña 2: Todos los pendientes (incluye Por pagar) === -->
+      <div class="tab-pane fade" id="pane-todos" role="tabpanel" aria-labelledby="tab-todos">
+        <div class="table-responsive">
+
+        <div class="d-flex justify-content-end mb-2">
+          <a class="btn btn-outline-primary btn-sm"
+            href="{% url 'cargo_crear' alumno.pk %}?next={{ request.get_full_path|urlencode }}#pane-todos">
+            <i class="material-icons align-middle">add</i>
+            Añadir cargo
+          </a>
+        </div>
+
+
+          <table class="table table-hover">
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Concepto</th>
+                <th class="text-right">Monto</th>
+                <th>Vence</th>
+                <th>Estado</th>          
+                <th class="text-right">Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for c in cargos_todos %}
+              <tr>
+                <td>{{ c.fecha_cargo|date:"d/m/Y" }}</td>
+                <td>{{ c.concepto.nombre }}</td>
+                <td class="text-right">$ {{ c.monto }}</td>
+                <td>
+                  {% if c.fecha_vencimiento %}
+                    {{ c.fecha_vencimiento|date:"d/m/Y" }}
+                  {% else %}
+                    {{ c.fecha_cargo|date:"d/m/Y" }}
+                  {% endif %}
+                </td>
+                <td>
+                  {% if c.is_overdue %}
+                    <span class="badge badge-danger">Vencido</span>
+                  {% elif c.is_due_today %}
+                    <span class="badge badge-warning text-dark">En fecha</span>
+                  {% else %}
+                    <span class="badge badge-info">Por pagar</span>
+                  {% endif %}
+                </td>
+
+
+
+        {% comment %}         {% if request.user.is_superuser %}
+                  <td class="text-right">
+                    {% if not c.pagado %}
+                      <a class="btn btn-primary btn-sm" href="{% url 'clip_crear_pago_cargo' c.id %}">
+                        Pagar con tarjeta (Clip)
+                      </a>
+                    {% endif %}
+                  </td>
+                {% else %}
+                  <td></td>
+                {% endif %} {% endcomment %}
+
+
+
+ <td class="text-right">
+      <div class="btn-group">
+        <a class="btn btn-outline-primary btn-sm"
+           href="{% url 'cargo_editar' alumno.pk c.id %}?next={{ request.get_full_path|urlencode }}#pane-todos">
+          <i class="material-icons align-middle" style="font-size:18px;line-height:1;">edit</i>
+          Editar
+        </a>
+
+        {% if alumno.telefono %}
+    {% comment %}       <button type="button"
+                  class="btn btn-success btn-sm btn-whatsapp-cargo d-inline-flex align-items-center"
+                  title="Enviar recordatorio por WhatsApp"
+                  data-tel="{{ alumno.telefono|cut:' '|cut:'-'|cut:'('|cut:')' }}"
+                  data-nombre="{{ alumno.nombre }} {{ alumno.apellido_p }} {{ alumno.apellido_m }}"
+                  data-fecha="{% if c.fecha_vencimiento %}{{ c.fecha_vencimiento|date:'d/m/Y' }}{% else %}{{ c.fecha_cargo|date:'d/m/Y' }}{% endif %}"
+                  data-monto="{{ c.monto }}"
+                  data-overdue="{{ c.is_overdue|yesno:'1,0' }}"
+                  data-due-today="{{ c.is_due_today|yesno:'1,0' }}">
+            <span class="material-icons align-middle" style="font-size:18px;line-height:1;">chat</span>
+            &nbsp;WhatsApp
+          </button> {% endcomment %}
+        {% else %}
+          <button type="button" class="btn btn-secondary btn-sm" disabled title="Sin teléfono">
+            <span class="material-icons align-middle" style="font-size:18px;line-height:1;">chat</span>
+            &nbsp;WhatsApp
+          </button>
+        {% endif %}
+      </div>
+    </td>
+
+
+
+
+
+
+  {% comment %}   {% if request.user.is_superuser and not c.pagado %}
+      <a class="btn btn-primary btn-sm" href="{% url 'clip_crear_pago_cargo' c.id %}">
+        Pagar con tarjeta (Clip)
+      </a>
+    {% endif %} {% endcomment %}
+  </div>
+</td>
+
+
+
+              </tr>
+              {% empty %}
+              <tr><td colspan="6" class="text-center text-muted">Sin cargos pendientes.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div> <!-- /tab-content -->
+
   </div>
 </div>
 {% endif %}
+
+
+
+
+
 
 {% if can_view_documentos %}
 <!-- ===================== DOCUMENTOS DINÁMICOS (solo lectura) ===================== -->
@@ -859,6 +1043,49 @@ document.addEventListener('click', async (e) => {
     }
   });
 })();
+</script>
+
+
+
+
+<script>
+  document.addEventListener('click', function(e){
+    const btn = e.target.closest('.btn-whatsapp-cargo');
+    if(!btn) return;
+
+    // Sanitizar número
+    let tel = (btn.dataset.tel || '').replace(/\D+/g, '');
+    if (!tel) { alert('El alumno no tiene teléfono válido.'); return; }
+    if (!/^52/.test(tel)) {
+      // Asume MX si no incluye prefijo; ajusta si necesitas otro país
+      if (tel.length === 10) tel = '52' + tel;
+      else if (tel.length < 12) tel = '52' + tel;
+    }
+
+    const nombre   = (btn.dataset.nombre || '').trim();
+    const fecha    = (btn.dataset.fecha  || '').trim();
+    const monto    = (btn.dataset.monto  || '').trim();
+    const overdue  = btn.dataset.overdue === '1';
+    const dueToday = btn.dataset.dueToday === '1';
+
+    const saludo = nombre ? `Hola ${nombre},` : 'Hola,';
+    let cuerpo   = '';
+
+    if (overdue) {
+      cuerpo = 'nos comunicamos de IUAF para recordarle que su pago de colegiatura se encuentra VENCIDO.';
+    } else if (dueToday) {
+      cuerpo = 'nos comunicamos de IUAF para recordarle que su pago de colegiatura está programado para hoy.';
+    } else {
+      cuerpo = `nos comunicamos de IUAF para recordarle que su pago de colegiatura está programado para el ${fecha}.`;
+    }
+
+    const detalle = `\n\n• Fecha: ${fecha}\n• Monto: $${monto}\n\nPor favor, realice su pago a la brevedad. Si ya efectuó el pago, le pedimos amablemente enviarnos su comprobante.`;
+    const firma   = `\n\nGracias.`;
+    const msg     = `${saludo} ${cuerpo}${detalle}${firma}`;
+
+    const url = `https://wa.me/${tel}?text=${encodeURIComponent(msg)}`;
+    window.open(url, '_blank', 'noopener');
+  });
 </script>
 
 

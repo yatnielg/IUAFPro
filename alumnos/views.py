@@ -768,6 +768,36 @@ def alumnos_detalle(request, pk):
         )
         cargos_pendientes = cargos.filter(pagado=False)
 
+
+    # === TAB 2: TODOS los cargos pendientes (vencidos, en fecha, y por pagar) ===
+    from django.db.models import IntegerField
+    cargos_todos = (
+        Cargo.objects
+        .filter(alumno=alumno, pagado=False)
+        .annotate(
+            due_date=Coalesce("fecha_vencimiento", "fecha_cargo"),
+            is_overdue=Case(
+                When(Q(fecha_vencimiento__isnull=False, fecha_vencimiento__lt=hoy), then=Value(True)),
+                When(Q(fecha_vencimiento__isnull=True,  fecha_cargo__lt=hoy),      then=Value(True)),
+                default=Value(False), output_field=BooleanField()
+            ),
+            is_due_today=Case(
+                When(Q(fecha_vencimiento__isnull=False, fecha_vencimiento=hoy), then=Value(True)),
+                When(Q(fecha_vencimiento__isnull=True,  fecha_cargo=hoy),       then=Value(True)),
+                default=Value(False), output_field=BooleanField()
+            ),
+            status_order=Case(
+                When(is_overdue=True, then=Value(0)),
+                When(is_due_today=True, then=Value(1)),
+                default=Value(2),
+                output_field=IntegerField(),
+            ),
+        )
+        .select_related("concepto")
+        # Orden: Vencidos → En fecha → Por pagar; dentro, por fecha ascendente
+        .order_by("status_order", "due_date", "-id")
+    )    
+
     # -------- Documentos DINÁMICOS por programa --------
     docs = []
     docs_total = 0
@@ -831,6 +861,7 @@ def alumnos_detalle(request, pk):
             "docs_total": docs_total,
             "docs_last_update": docs_last_update,
             "faltantes": faltantes,
+            "cargos_todos": cargos_todos,
 
             # <<< NUEVO en el contexto para pintar en el template >>>
             "fin_programa_is_future": fin_programa_is_future,
@@ -3243,3 +3274,113 @@ def cargos_pendientes_todos(request):
             "hoy": hoy,
         },
     )
+############################################################################################
+from .models import Cargo
+from .forms import CargoForm
+
+@login_required
+def cargo_crear(request, pk):
+    alumno = get_object_or_404(
+        Alumno.objects.select_related(
+            "pais", "estado", "informacionEscolar",
+            "informacionEscolar__programa", "informacionEscolar__sede",
+        ),
+        pk=pk,
+    )
+
+    # ---- Permisos (similar a alumnos_detalle) ----
+    user = request.user
+    can_view = False
+    if user.is_superuser:
+        can_view = True
+    elif user.groups.filter(name="admisiones").exists():
+        can_view = (alumno.created_by_id == user.id)
+    else:
+        profile = getattr(user, "profile", None)
+        if profile:
+            sede_id = getattr(getattr(alumno, "informacionEscolar", None), "sede_id", None)
+            if sede_id and profile.sedes.filter(id=sede_id).exists():
+                can_view = True
+    if not can_view:
+        return HttpResponseForbidden("No tienes permiso para crear cargos para este alumno.")
+
+    if request.method == "POST":
+        form = CargoForm(request.POST)
+        if form.is_valid():
+            cargo = form.save(commit=False)
+            cargo.alumno = alumno          # <- fija alumno
+            cargo.pagado = False           # <- por defecto
+            cargo.save()
+            messages.success(request, "Cargo creado correctamente.")
+
+            # Redirección a donde venías (si trae ?next=...), o al detalle con la pestaña "todos".
+            next_url = request.GET.get("next")
+            if not next_url:
+                next_url = reverse("alumnos_detalle", args=[alumno.pk]) + "#pane-todos"
+            return redirect(next_url)
+    else:
+        form = CargoForm()
+
+    return render(request, "alumnos/cargo_form.html", {
+        "alumno": alumno,
+        "form": form,
+        "titulo": "Añadir cargo",
+    })
+
+############################################################################################
+@login_required
+def cargo_editar(request, alumno_pk, cargo_id):
+    alumno = get_object_or_404(
+        Alumno.objects.select_related(
+            "pais", "estado", "informacionEscolar",
+            "informacionEscolar__programa", "informacionEscolar__sede",
+        ),
+        pk=alumno_pk,
+    )
+    cargo = get_object_or_404(Cargo.objects.select_related("alumno", "concepto"), pk=cargo_id)
+
+    # Verifica que el cargo sea del mismo alumno
+    if cargo.alumno_id != alumno.pk:
+        return HttpResponseForbidden("Este cargo no pertenece a este alumno.")
+
+    # ---- Permisos (mismo criterio que detalle) ----
+    user = request.user
+    can_view = False
+    if user.is_superuser:
+        can_view = True
+    elif user.groups.filter(name="admisiones").exists():
+        can_view = (alumno.created_by_id == user.id)
+    else:
+        profile = getattr(user, "profile", None)
+        if profile:
+            sede_id = getattr(getattr(alumno, "informacionEscolar", None), "sede_id", None)
+            if sede_id and profile.sedes.filter(id=sede_id).exists():
+                can_view = True
+    if not can_view:
+        return HttpResponseForbidden("No tienes permiso para editar cargos de este alumno.")
+
+    # (Opcional) si no quieres permitir editar cargos pagados:
+    # if cargo.pagado:
+    #     return HttpResponseForbidden("No es posible editar un cargo pagado.")
+
+    if request.method == "POST":
+        form = CargoForm(request.POST, instance=cargo)
+        if form.is_valid():
+            cargo_edit = form.save(commit=False)
+            # Blindaje: no permitir cambiar alumno ni pagado vía formulario
+            cargo_edit.alumno_id = cargo.alumno_id
+            cargo_edit.pagado = cargo.pagado
+            cargo_edit.save()
+            messages.success(request, "Cargo actualizado correctamente.")
+            next_url = request.GET.get("next")
+            if not next_url:
+                next_url = reverse("alumnos_detalle", args=[alumno.pk]) + "#pane-todos"
+            return redirect(next_url)
+    else:
+        form = CargoForm(instance=cargo)
+
+    return render(request, "alumnos/cargo_form.html", {
+        "alumno": alumno,
+        "form": form,
+        "titulo": "Editar cargo",
+    })

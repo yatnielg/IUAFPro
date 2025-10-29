@@ -57,37 +57,27 @@ urlpatterns = [
     path("sms/send", views.enviar_sms, name="twilio_send_sms"),
     path("wa/send", views.enviar_wa, name="twilio_send_wa"),
     path("status-callback/", csrf_exempt(views.twilio_status_callback), name="twilio_status_callback"),
-
-
     path("tools/leer-google-sheet/", views.run_leer_google_sheet, name="run_leer_google_sheet"),
     path("banco/movimientos/", views.MovimientoBancoListView.as_view(), name="movimientos_banco_lista"),
     path("banco/movimientos/run-update/", views.run_movimientos_banco_update, name="movimientos_banco_update"),
-
     path("uploads/<str:token>/", views.public_upload, name="public_upload"),
     path("alumnos/<int:pk>/generar-enlace/", views.generar_enlace_subida, name="generar_enlace_subida"),
     path("alumnos/<int:pk>/generar-enlace-json/",views.generar_enlace_subida_json,name="generar_enlace_subida_json"),
-
     path("banco/abonos/", views.movimientos_abonos_pendientes, name="movimientos_abonos_pendientes"),
     path("banco/conciliar/<int:mov_id>/", views.conciliar_movimiento, name="conciliar_movimiento"),
-
     path("banco/movimientos/<int:pk>/set-nds/",views.set_nombre_detectado_save,name="mov_set_nds"),
-
     path('movimiento/<int:mov_id>/deshacer/', views.deshacer_conciliacion, name='mov_deshacer_conciliacion'),
-
     path("pagos/<int:pk>/recibo.pdf", views.pago_recibo_pdf, name="pago_recibo_pdf"),
-
     path("reportes/recibo2/", views.recibo2_from_excel, name="recibo2_from_excel"),
-
     path("<int:pk>/recibo/", views.recibo_pago_carta, name="recibo_carta"),
-
     path('estado-cuenta/<int:numero_estudiante>/', views.estado_cuenta, name='estado_cuenta'),
     path('estado-cuenta/', views.estado_cuenta, name='estado_cuenta_demo'),
-
     path("alumnos/api/financiamientos/", views.api_financiamientos_list, name="api_financiamientos_list"),
-
     path("alumnos/<int:numero_estudiante>/generar_cargos/",alumnos_views.generar_cargos_mensuales,name="generar_cargos_mensuales"),
+    path("alumnos/cargos/pendientes/", alumnos_views.cargos_pendientes_todos, name="cargos_pendientes_todos"),
 
-     path("alumnos/cargos/pendientes/", alumnos_views.cargos_pendientes_todos, name="cargos_pendientes_todos"),
+    path("alumnos/<int:pk>/cargos/nuevo/", views.cargo_crear, name="cargo_crear"),
+    path("alumnos/<int:alumno_pk>/cargos/<int:cargo_id>/editar/", views.cargo_editar, name="cargo_editar"), 
 
     #path("banco/movimientos/", views.MovimientoBancoListView.as_view(), name="movimientos_banco_lista"),
 

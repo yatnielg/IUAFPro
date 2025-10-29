@@ -575,3 +575,45 @@ DocumentoInlineFormSet = inlineformset_factory(
     extra=0,
     can_delete=True,
 )
+
+from .models import Cargo
+
+class HTML5DateInput(forms.DateInput):
+    input_type = "date"
+
+    # Forzar formato que entiende el input HTML5 (YYYY-MM-DD)
+    def __init__(self, **kwargs):
+        kwargs.setdefault("format", "%Y-%m-%d")
+        super().__init__(**kwargs)
+
+class CargoForm(forms.ModelForm):
+    class Meta:
+        model = Cargo
+        fields = ["concepto", "monto", "fecha_cargo", "fecha_vencimiento", "folio"]
+        widgets = {
+            "fecha_cargo": HTML5DateInput(),
+            "fecha_vencimiento": HTML5DateInput(),
+        }
+
+    # Acepta tanto YYYY-MM-DD (navegador) como DD/MM/YYYY (si lo escriben manual)
+    fecha_cargo = forms.DateField(
+        widget=HTML5DateInput(),
+        input_formats=["%Y-%m-%d", "%d/%m/%Y"],
+        required=True,
+    )
+    fecha_vencimiento = forms.DateField(
+        widget=HTML5DateInput(),
+        input_formats=["%Y-%m-%d", "%d/%m/%Y"],
+        required=False,
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # Si es edición, asegura que el initial salga como YYYY-MM-DD
+        inst = getattr(self, "instance", None)
+        if inst and inst.pk:
+            if inst.fecha_cargo:
+                self.fields["fecha_cargo"].initial = inst.fecha_cargo.strftime("%Y-%m-%d")
+            if inst.fecha_vencimiento:
+                self.fields["fecha_vencimiento"].initial = inst.fecha_vencimiento.strftime("%Y-%m-%d")
