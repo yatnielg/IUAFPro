@@ -29,6 +29,62 @@
   .mt-0 { margin-top:0!important; }
   .card-compact .card-header{ padding-top:.6rem; padding-bottom:.6rem; }
   .tag-missing { opacity:.6 }
+
+
+
+
+
+
+
+
+
+/* ---- Resumen de saldos (tab "Todos") ---- */
+.saldo-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0,1fr));
+  gap: .75rem;
+  margin-bottom: .75rem;
+}
+
+.saldo-tile {
+  background: linear-gradient(180deg, #ffffff, #fafbfc);
+  border: 1px solid rgba(0,0,0,.06);
+  border-radius: 12px;
+  padding: .9rem 1rem;
+  box-shadow: 0 1px 2px rgba(0,0,0,.04);
+}
+
+.saldo-tile .label {
+  font-size: .8rem;
+  color: #6b7280;
+  letter-spacing: .02em;
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+}
+
+.saldo-tile .value {
+  margin-top: .25rem;
+  font-weight: 700;
+  font-size: 1.15rem;
+  line-height: 1.2;
+}
+
+.saldo-tile.total { border-color: rgba(16,185,129,.25); }
+.saldo-tile.aplicado { border-color: rgba(59,130,246,.25); }
+.saldo-tile.restante { border-color: rgba(239,68,68,.25); }
+
+.saldo-tile.total   .value { color: #10b981; }   /* verde */
+.saldo-tile.aplicado .value { color: #3b82f6; }  /* azul */
+.saldo-tile.restante .value { color: #ef4444; }  /* rojo */
+
+@media (max-width: 992px) {
+  .saldo-summary { grid-template-columns: 1fr; }
+}
+
+
+
+
 </style>
 
 <div class="d-flex justify-content-between align-items-center">
@@ -201,10 +257,10 @@
             <div class="text-muted small">País</div>
             <div>{{ alumno.pais.nombre|default:"—" }}</div>
           </div>
-          <div class="col-sm-4 mb-3">
+       {% comment %}    <div class="col-sm-4 mb-3">
             <div class="text-muted small">Estado / Provincia</div>
             <div>{% if alumno.estado %}{{ alumno.estado.nombre }}{% else %}<span class="text-muted">—</span>{% endif %}</div>
-          </div>
+          </div> {% endcomment %}
           <div class="col-sm-4 mb-3">
             <div class="text-muted small">Sede</div>
             <div>
@@ -370,7 +426,7 @@
 
   <div class="d-flex gap-2">
     {% if request.user.is_superuser %}
-      <a class="btn btn-outline-secondary btn-sm"
+      <a class="btn btn-outline-primary btn-sm"
          href="/admin/alumnos/pagodiario/?alumno__id__exact={{ alumno.id }}" target="_blank">
         Ver en Admin
       </a>
@@ -470,9 +526,15 @@
         Pendientes (exigibles): <strong>{{ cargos_pendientes|length }}</strong>
         {% if cargos_todos %}&nbsp;•&nbsp; Pendientes (total): <strong>{{ cargos_todos|length }}</strong>{% endif %}
       </p>
+
+
+      
+
     </div>
 
     <div class="ml-auto">
+      {% if hay_cargos_vinculados %}
+      {% else %}
       <button
         id="btnGenerarCargos"
         class="btn btn-outline-primary btn-sm d-inline-flex align-items-center"
@@ -482,6 +544,7 @@
         <i class="material-icons align-middle mr-1">playlist_add</i>
         Generar cargos mensuales
       </button>
+      {% endif %}
     </div>
   </div>
 
@@ -586,12 +649,6 @@
         &nbsp;WhatsApp
       </button>
     {% endif %}
-
-{% comment %}     {% if request.user.is_superuser and not c.pagado %}
-      <a class="btn btn-primary btn-sm" href="{% url 'clip_crear_pago_cargo' c.id %}">
-        Pagar con tarjeta (Clip)
-      </a>
-    {% endif %} {% endcomment %}
   </div>
 </td>
 
@@ -623,63 +680,112 @@
         </div>
 
 
+{# === Resumen de Totales (solo si viene en el contexto) === #}
+{% if totales %}
+  <div class="saldo-summary">
+    <div class="saldo-tile total">
+      <div class="label">
+        <i class="material-icons" style="font-size:18px;">summarize</i>
+        Total cargos
+      </div>
+      <div class="value">$ {{ totales.original }}</div>
+    </div>
+    <div class="saldo-tile aplicado">
+      <div class="label">
+        <i class="material-icons" style="font-size:18px;">done_all</i>
+        Pagos aplicados
+      </div>
+      <div class="value">$ {{ totales.aplicado }}</div>
+    </div>
+    <div class="saldo-tile restante">
+      <div class="label">
+        <i class="material-icons" style="font-size:18px;">account_balance_wallet</i>
+        Pendiente
+      </div>
+      <div class="value">$ {{ totales.restante }}</div>
+    </div>
+  </div>
+{% endif %}
+
+
+
+
+
+
           <table class="table table-hover">
-            <thead>
-              <tr>
-                <th>Fecha</th>
-                <th>Concepto</th>
-                <th class="text-right">Monto</th>
-                <th>Vence</th>
-                <th>Estado</th>          
-                <th class="text-right">Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for c in cargos_todos %}
-              <tr>
-                <td>{{ c.fecha_cargo|date:"d/m/Y" }}</td>
-                <td>{{ c.concepto.nombre }}</td>
-                <td class="text-right">$ {{ c.monto }}</td>
-                <td>
-                  {% if c.fecha_vencimiento %}
-                    {{ c.fecha_vencimiento|date:"d/m/Y" }}
-                  {% else %}
-                    {{ c.fecha_cargo|date:"d/m/Y" }}
-                  {% endif %}
-                </td>
-                <td>
-                  {% if c.is_overdue %}
-                    <span class="badge badge-danger">Vencido</span>
-                  {% elif c.is_due_today %}
-                    <span class="badge badge-warning text-dark">En fecha</span>
-                  {% else %}
-                    <span class="badge badge-info">Por pagar</span>
-                  {% endif %}
-                </td>
+  <thead>
+    <tr>
+      <th>Fecha</th>
+      <th>Vence</th>  {# 👈 NUEVA COLUMNA #}
+      <th>Concepto</th>
+      <th class="text-right">Monto</th>
+      <th class="text-right">Aplicado</th>
+      <th class="text-right">Pendiente</th>
+      <th class="text-right">Acciones</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for r in rows %}
+      <tr>
+        <td>{{ r.fecha_cargo|date:"d/m/Y" }}</td>
+
+   <td>
+  {% with fv=r.fecha_vencimiento|default:r.fecha_cargo %}
+    {# Fecha visible, en rojo si está vencido #}
+    <span class="{% if r.is_overdue %}text-danger font-weight-bold{% endif %}">
+      {{ fv|date:"d/m/Y" }}
+    </span>
+
+    {# Estado solo si hay saldo pendiente #}
+    {% if r.monto_restante > 0 %}
+      {% if r.is_overdue %}
+        <span class="badge badge-danger ml-1">Vencido</span>
+      {% elif r.is_in_date_window %}
+        <span class="badge badge-warning text-dark ml-1">En fecha</span>
+      {% else %}
+        <span class="badge badge-info ml-1">Por pagar</span>
+      {% endif %}
+    {% endif %}
 
 
+  {% endwith %}
+</td>
 
-        {% comment %}         {% if request.user.is_superuser %}
-                  <td class="text-right">
-                    {% if not c.pagado %}
-                      <a class="btn btn-primary btn-sm" href="{% url 'clip_crear_pago_cargo' c.id %}">
-                        Pagar con tarjeta (Clip)
-                      </a>
-                    {% endif %}
-                  </td>
-                {% else %}
-                  <td></td>
-                {% endif %} {% endcomment %}
+        <td>
+          {{ r.concepto_codigo|default:"—" }}
+          {% if r.concepto_nombre %}<small class="text-muted"> — {{ r.concepto_nombre }}</small>{% endif %}
+        </td>
 
+        <td class="text-right">$ {{ r.monto_original }}</td>
+        <td class="text-right">$ {{ r.monto_aplicado }}</td>
+        <td class="text-right {% if r.monto_restante > 0 %}text-danger font-weight-bold{% endif %}">$ {{ r.monto_restante }}</td>
 
 
  <td class="text-right">
       <div class="btn-group">
         <a class="btn btn-outline-primary btn-sm"
-           href="{% url 'cargo_editar' alumno.pk c.id %}?next={{ request.get_full_path|urlencode }}#pane-todos">
+           href="{% url 'cargo_editar' alumno.pk r.cargo_id %}?next={{ request.get_full_path|urlencode }}#pane-todos">
           <i class="material-icons align-middle" style="font-size:18px;line-height:1;">edit</i>
           Editar
         </a>
+
+   {% if not c.pagado %}
+      <button type="button"
+              class="btn btn-outline-danger btn-sm btn-eliminar-cargo"
+              data-url="{% url 'cargo_eliminar' alumno.pk r.cargo_id %}?next={{ request.get_full_path|urlencode }}#pane-todos"
+              title="Eliminar cargo">
+        <i class="material-icons align-middle" style="font-size:18px;line-height:1;">delete_outline</i>
+        Eliminar
+      </button>
+    {% else %}
+      <button type="button" class="btn btn-outline-secondary btn-sm" disabled
+              title="No se puede eliminar un cargo pagado">
+        <i class="material-icons align-middle" style="font-size:18px;line-height:1;">delete_outline</i>
+        Eliminar
+      </button>
+    {% endif %}
+
+
 
         {% if alumno.telefono %}
     {% comment %}       <button type="button"
@@ -707,23 +813,12 @@
 
 
 
-
-  {% comment %}   {% if request.user.is_superuser and not c.pagado %}
-      <a class="btn btn-primary btn-sm" href="{% url 'clip_crear_pago_cargo' c.id %}">
-        Pagar con tarjeta (Clip)
-      </a>
-    {% endif %} {% endcomment %}
-  </div>
-</td>
-
-
-
-              </tr>
-              {% empty %}
-              <tr><td colspan="6" class="text-center text-muted">Sin cargos pendientes.</td></tr>
-              {% endfor %}
-            </tbody>
-          </table>
+      </tr>
+    {% empty %}
+      <tr><td colspan="6" class="text-center text-muted">Sin cargos para este alumno.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
         </div>
       </div>
     </div> <!-- /tab-content -->
@@ -1088,6 +1183,64 @@ document.addEventListener('click', async (e) => {
   });
 </script>
 
+
+<script>
+document.addEventListener('click', async (e) => {
+  const btn = e.target.closest('.btn-eliminar-cargo');
+  if (!btn) return;
+  e.preventDefault();
+
+  const url = btn.getAttribute('data-url') || btn.getAttribute('href');
+
+  // Confirmación
+  const ok = confirm('¿Está seguro de eliminar este cargo? Esta acción no se puede deshacer.');
+  if (!ok) return;
+
+  // CSRF (reutiliza getCookie ya definido arriba)
+  function getCookie(name){
+    const m=document.cookie.match('(^|;)\\s*'+name+'\\s*=\\s*([^;]+)');
+    return m?m.pop():'';
+  }
+  const csrftoken = getCookie('csrftoken');
+
+  try {
+    btn.disabled = true;
+
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-CSRFToken': csrftoken,
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      // Si tu vista espera algún flag para distinguir borrado, envíalo:
+      // body: new URLSearchParams({ action: 'delete' })
+      body: new URLSearchParams({})
+    });
+
+    if (!resp.ok) {
+      const txt = await resp.text().catch(()=> '');
+      throw new Error(txt || ('HTTP ' + resp.status));
+    }
+
+    // Intenta leer JSON {ok:true} si tu vista lo envía; si no, recarga igual
+    let data = null;
+    try { data = await resp.json(); } catch(_) {}
+    if (!data || data.ok) {
+      if (window.notify) notify('Cargo eliminado correctamente.', 'success');
+      window.location.reload();
+    } else {
+      throw new Error(data.error || 'No se pudo eliminar el cargo.');
+    }
+  } catch (err) {
+    console.error(err);
+    if (window.notify) notify('Error: ' + err.message, 'danger');
+    else alert('Error: ' + err.message);
+  } finally {
+    btn.disabled = false;
+  }
+});
+</script>
 
 
 

@@ -14,7 +14,6 @@ from .models import Financiamiento
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
 
-
 from django.utils import timezone
 from django.http import JsonResponse, Http404
 from datetime import date
@@ -717,6 +716,7 @@ def alumnos_detalle(request, pk):
     can_view_docs  = user_can_view_documentos(user)
 
     # -------- Pagos / Cargos (solo si puede ver) --------
+    hay_cargos_vinculados = Cargo.objects.filter(alumno=alumno).exists()
     pagos = cargos = cargos_pendientes = None
     pagos_total = 0
     if can_view_pagos:
@@ -770,33 +770,40 @@ def alumnos_detalle(request, pk):
 
 
     # === TAB 2: TODOS los cargos pendientes (vencidos, en fecha, y por pagar) ===
+    from django.db.models.functions import Coalesce
     from django.db.models import IntegerField
     cargos_todos = (
         Cargo.objects
         .filter(alumno=alumno, pagado=False)
         .annotate(
             due_date=Coalesce("fecha_vencimiento", "fecha_cargo"),
+
+            # VENCIDO
             is_overdue=Case(
                 When(Q(fecha_vencimiento__isnull=False, fecha_vencimiento__lt=hoy), then=Value(True)),
-                When(Q(fecha_vencimiento__isnull=True,  fecha_cargo__lt=hoy),      then=Value(True)),
+                When(Q(fecha_vencimiento__isnull=True,  fecha_cargo__lt=hoy),        then=Value(True)),
                 default=Value(False), output_field=BooleanField()
             ),
-            is_due_today=Case(
-                When(Q(fecha_vencimiento__isnull=False, fecha_vencimiento=hoy), then=Value(True)),
-                When(Q(fecha_vencimiento__isnull=True,  fecha_cargo=hoy),       then=Value(True)),
+
+            # EN FECHA (ventana) => hoy entre fecha_cargo y fecha_vencimiento (incl.)
+            # si no hay vencimiento, en fecha solo si hoy == fecha_cargo
+            is_in_date_window=Case(
+                When(Q(fecha_vencimiento__isnull=False, fecha_cargo__lte=hoy, fecha_vencimiento__gte=hoy), then=Value(True)),
+                When(Q(fecha_vencimiento__isnull=True,  fecha_cargo=hoy),                                   then=Value(True)),
                 default=Value(False), output_field=BooleanField()
             ),
+
+            # Orden: Vencidos → En fecha → Por pagar
             status_order=Case(
-                When(is_overdue=True, then=Value(0)),
-                When(is_due_today=True, then=Value(1)),
+                When(is_overdue=True,        then=Value(0)),
+                When(is_in_date_window=True, then=Value(1)),
                 default=Value(2),
                 output_field=IntegerField(),
             ),
         )
         .select_related("concepto")
-        # Orden: Vencidos → En fecha → Por pagar; dentro, por fecha ascendente
         .order_by("status_order", "due_date", "-id")
-    )    
+    )
 
     # -------- Documentos DINÁMICOS por programa --------
     docs = []
@@ -808,12 +815,10 @@ def alumnos_detalle(request, pk):
     prog = getattr(info, "programa", None)
 
     # <<< NUEVO: flag para “Fin del programa en futuro” >>>
+# -------- Documentos / fin_programa --------
     fin_programa_is_future = False
     if info and getattr(info, "fin_programa", None):
-        hoy = timezone.localdate()
-        # Si fin_programa es DateField -> comparación directa
         fin_programa_is_future = info.fin_programa > hoy
-    # <<< FIN NUEVO >>>
 
     if can_view_docs and info and prog:
         # Documentos subidos para el plan escolar del alumno
@@ -842,12 +847,60 @@ def alumnos_detalle(request, pk):
         # Faltantes = tipos requeridos cuyo id no está en subidos
         faltantes = [t for t in req_tipos if t.id not in subidos_tipo_ids]
 
+  
+    # Si quieres permitir cambiar la regla de prioridad (?orden=antiguos)
+    orden = request.GET.get('orden', 'recientes')
+    restar_mas_recientes = (orden != 'antiguos')
+
+    data = calcular_cargos_con_saldo(alumno, restar_pagos_mas_recientes=restar_mas_recientes)
+
+    def anotar_flags(items):
+        if not items:
+            return
+        for d in items:
+            fv = d.get("fecha_vencimiento") or d.get("fecha_cargo")
+            if d.get("monto_restante", 0) > 0 and fv:
+                # solo si el helper no lo trae
+                if "is_overdue" not in d:
+                    d["is_overdue"] = (fv < hoy)
+                if "is_due_today" not in d:
+                    d["is_due_today"] = (fv == hoy)
+
+    # --- Normaliza 'rows' a una lista y anota flags si faltan ---
+    if isinstance(data, dict):
+        # ajusta a la colección que usas en el template "Todos (pendientes)"
+        rows = data.get("cargos_pendientes") or data.get("cargos_todos") or []
+    else:
+        rows = data or []
+
+    for d in rows:
+        fc = d.get("fecha_cargo")
+        fv = d.get("fecha_vencimiento") or None
+        if d.get("monto_restante", 0) > 0 and fc:
+            # Vencido
+            d.setdefault("is_overdue",
+                        (fv is not None and fv < hoy) or (fv is None and fc < hoy))
+            # En fecha (ventana)
+            in_window = (
+                (fv is not None and fc <= hoy <= fv) or
+                (fv is None and fc == hoy)
+            )
+            d.setdefault("is_in_date_window", in_window)
+
+    # Totales
+    total_original = sum(d['monto_original'] for d in data) if data else 0
+    total_aplicado = sum(d['monto_aplicado'] for d in data) if data else 0
+    total_restante = sum(d['monto_restante'] for d in data) if data else 0
+
+ 
+
+
     return render(
         request,
         "alumnos/detalle.html",
         {
             "alumno": alumno,
-
+            "hoy": hoy,   
             # pagos/cargos
             "pagos": pagos,
             "pagos_total": pagos_total,
@@ -862,9 +915,17 @@ def alumnos_detalle(request, pk):
             "docs_last_update": docs_last_update,
             "faltantes": faltantes,
             "cargos_todos": cargos_todos,
+            "hay_cargos_vinculados": hay_cargos_vinculados,
 
             # <<< NUEVO en el contexto para pintar en el template >>>
             "fin_programa_is_future": fin_programa_is_future,
+            'orden': orden,
+            'rows': data,
+            'totales': {
+            'original': total_original,
+            'aplicado': total_aplicado,
+            'restante': total_restante,
+            },
         },
     )
 
@@ -3384,3 +3445,53 @@ def cargo_editar(request, alumno_pk, cargo_id):
         "form": form,
         "titulo": "Editar cargo",
     })
+
+###########################################################################
+@require_POST
+def cargo_eliminar(request, alumno_id, cargo_id):
+    if not request.user.is_authenticated:
+        return HttpResponseForbidden('No autorizado')
+    cargo = get_object_or_404(Cargo, pk=cargo_id, alumno_id=alumno_id)
+    # opcional: bloquear si pagado
+    if getattr(cargo, 'pagado', False):
+        return JsonResponse({'ok': False, 'error': 'No se puede eliminar un cargo pagado.'}, status=400)
+    cargo.delete()
+    if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+        return JsonResponse({'ok': True})
+    next_url = request.GET.get('next') or request.META.get('HTTP_REFERER') or '/'
+    return redirect(next_url)
+############################################################################
+from .servicios import calcular_saldos_por_concepto
+@login_required
+def saldos_por_concepto_view(request, alumno_id, concepto_codigo):
+    alumno = get_object_or_404(Alumno, pk=alumno_id)
+    data = calcular_saldos_por_concepto(alumno, concepto_codigo=concepto_codigo, restar_mas_recientes=True)
+    return render(request, 'alumnos/saldos_por_concepto.html', {'alumno': alumno, 'data': data})
+
+#####################################################################
+from .cartera import calcular_cargos_con_saldo
+
+def cargos_con_saldo_view(request, alumno_id):
+    alumno = get_object_or_404(Alumno, pk=alumno_id)
+    # Si quieres permitir cambiar la regla de prioridad (?orden=antiguos)
+    orden = request.GET.get('orden', 'recientes')
+    restar_mas_recientes = (orden != 'antiguos')
+
+    data = calcular_cargos_con_saldo(alumno, restar_pagos_mas_recientes=restar_mas_recientes)
+
+    # Totales
+    total_original = sum(d['monto_original'] for d in data) if data else 0
+    total_aplicado = sum(d['monto_aplicado'] for d in data) if data else 0
+    total_restante = sum(d['monto_restante'] for d in data) if data else 0
+
+    ctx = {
+        'alumno': alumno,
+        'rows': data,
+        'totales': {
+            'original': total_original,
+            'aplicado': total_aplicado,
+            'restante': total_restante,
+        },
+        'orden': orden,
+    }
+    return render(request, 'alumnos/cargos_con_saldo.html', ctx)

@@ -680,8 +680,8 @@ if(!ok){
   async function lookup(){
     const curp=(inputCurp?.value||"").trim().toUpperCase();
     if(!curp){ showStatus("Escribe un CURP primero.",true); return; }
-    btn.disabled=true; showLoading(); startCountdown(60);
-    const ctrl=new AbortController(); const timeoutId=setTimeout(()=>ctrl.abort(),60000);
+    btn.disabled=true; showLoading(); startCountdown(70);
+    const ctrl=new AbortController(); const timeoutId=setTimeout(()=>ctrl.abort(),70000);
     try{
       const resp=await fetch(
         url,
