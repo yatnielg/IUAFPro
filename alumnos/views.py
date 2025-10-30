@@ -1994,7 +1994,7 @@ class MovimientoBancoListView(ListView):
         if fmax:
             qs = qs.filter(fecha__lte=fmax)
 
-        return qs.order_by("-fecha", "-id")
+        return qs.order_by("id")
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -2015,11 +2015,37 @@ class MovimientoBancoListView(ListView):
 
         return ctx
 
+###############################################################
+def _salidas_dir():
+    base = getattr(settings, "BASE_DIR", Path.cwd())
+    # opción alternativa: Path(settings.MEDIA_ROOT) / "salidas"
+    return Path(base) / "salidas"
+
+def _print_header(title: str):
+    print("\n" + "=" * 80)
+    print(f"[{datetime.now().isoformat(timespec='seconds')}] {title}")
+    print("=" * 80, flush=True)
 
 ###############################################################
 SHEET_ID = "1G0P64LVOfxG4siNXmTm0gCORoaPby2W2_wu0Z869Dvk"
 SHEET_NAME = "2022"
 SHEET_GID = "1206699819"
+
+import io
+import os
+import sys
+import json
+import traceback
+from datetime import datetime
+from pathlib import Path
+
+from django.conf import settings
+from django.contrib.admin.views.decorators import staff_member_required
+from django.contrib import messages
+from django.shortcuts import redirect
+from django.views.decorators.http import require_POST
+from django.core.management import call_command
+
 
 @staff_member_required
 @require_POST
@@ -2027,56 +2053,135 @@ def run_movimientos_banco_update(request):
     """
     Ejecuta el comando que lee el Google Sheet (hoja '2022'),
     guarda un JSON y luego hace upsert en DB.
-    No renderiza salida; solo mensajes y redirige al listado.
+    Imprime en consola cada paso para depurar en Linux.
     """
-    print("**** Ejecutando importación de movimientos de banco... ****")
-    out_path = Path("salidas/movimientos_2022.json")
-    out_path.parent.mkdir(parents=True, exist_ok=True)
+    _print_header("INICIO importación de movimientos de banco")
 
+    # --- Contexto del proceso / entorno ---
+    try:
+        uid = os.geteuid() if hasattr(os, "geteuid") else "N/A"
+        gid = os.getegid() if hasattr(os, "getegid") else "N/A"
+    except Exception:
+        uid = gid = "N/A"
+
+    print(f"Python: {sys.version}")
+    print(f"Platform: {sys.platform}")
+    print(f"PID: {os.getpid()} | UID:GID = {uid}:{gid}")
+    print(f"CWD: {os.getcwd()}")
+    print(f"__file__: {__file__}")
+    print(f"DJANGO_SETTINGS_MODULE: {os.environ.get('DJANGO_SETTINGS_MODULE')}")
+    print(f"DEBUG: {getattr(settings, 'DEBUG', None)}")
+    print(f"BASE_DIR: {getattr(settings, 'BASE_DIR', None)}")
+    print(f"MEDIA_ROOT: {getattr(settings, 'MEDIA_ROOT', None)}")
+    print(f"SHEET_ID: {SHEET_ID} | SHEET_NAME: {SHEET_NAME} | SHEET_GID: {SHEET_GID}")
+
+    out_dir = _salidas_dir()
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = out_dir / "movimientos_2022.json"
+    print(f"out_dir: {out_dir}  (exists={out_dir.exists()}, mode={oct(out_dir.stat().st_mode) if out_dir.exists() else 'N/A'})")
+    print(f"out_path: {out_path}")
+
+    # Probar escritura en out_dir (para detectar permisos/bind mounts)
+    try:
+        probe = out_dir / ".perm_probe"
+        probe.write_text("ok", encoding="utf-8")
+        print(f"Prueba de escritura OK en {probe} (owner uid={probe.stat().st_uid}, gid={probe.stat().st_gid})")
+        probe.unlink(missing_ok=True)
+    except Exception as e_probe:
+        print(f"[ERROR] No puedo escribir en {out_dir}: {e_probe}")
+        traceback.print_exc()
+        messages.error(request, f"No puedo escribir en {out_dir}: {e_probe}")
+        return redirect("movimientos_banco_lista")
+
+    # Buffers de captura del management command
     stdout_buf = io.StringIO()
     stderr_buf = io.StringIO()
 
+    # 1) Ejecutar el management command que genera el JSON
+    _print_header("EJECUTANDO management command leer_google_sheet")
     try:
-        # 1) Ejecutar el management command que genera el JSON
         call_command(
             "leer_google_sheet",
             "--por", "nombre",
             "--out-json", str(out_path),
-            # sin --debug para no llenar buffers (aun así capturamos por si hay error)
             stdout=stdout_buf,
             stderr=stderr_buf,
         )
-
-        # 2) Cargar JSON
-        try:
-            data = json.loads(out_path.read_text(encoding="utf-8"))
-        except Exception as e_json:
-            messages.error(request, f"No pude leer el JSON ({out_path}): {e_json}")
-            return redirect("movimientos_banco_lista")
-
-        # 3) Guardar/actualizar en DB
-        try:
-            res = upsert_movimientos(
-                data,
-                source_sheet_id=SHEET_ID,
-                source_sheet_name=SHEET_NAME,
-                source_gid=SHEET_GID,
-            )
-            created = res.get("created", 0)
-            updated = res.get("updated", 0)
-            messages.success(request, f"Movimientos actualizados. Creados: {created} · Actualizados: {updated}.")
-        except Exception as e_db:
-            messages.error(request, f"Error guardando en BD: {e_db}")
-
     except Exception as e_cmd:
-        # Si el comando falla, mostramos su stderr resumido
-        err = stderr_buf.getvalue().strip()
-        if err:
-            messages.error(request, f"Error al ejecutar importación: {e_cmd}. Detalle: {err[:500]}")
-        else:
-            messages.error(request, f"Error al ejecutar importación: {e_cmd}")
+        # Mostrar todo lo capturado
+        cmd_out = stdout_buf.getvalue()
+        cmd_err = stderr_buf.getvalue()
+        print("[EXCEPCIÓN] call_command('leer_google_sheet') lanzó excepción:")
+        traceback.print_exc()
+        print("--- STDOUT (completo) ---")
+        print(cmd_out if cmd_out else "(vacío)")
+        print("--- STDERR (completo) ---")
+        print(cmd_err if cmd_err else "(vacío)")
+        messages.error(request, f"Error al ejecutar importación: {e_cmd}.")
+        return redirect("movimientos_banco_lista")
 
-    return redirect("movimientos_banco_lista")    
+    # Imprimir lo que arrojó el comando (aunque no haya excepción)
+    cmd_out = stdout_buf.getvalue()
+    cmd_err = stderr_buf.getvalue()
+    print("--- STDOUT (completo) ---")
+    print(cmd_out if cmd_out else "(vacío)")
+    print("--- STDERR (completo) ---")
+    print(cmd_err if cmd_err else "(vacío)")
+
+    # 2) Validar el archivo generado
+    _print_header("VALIDANDO archivo JSON generado")
+    if not out_path.exists():
+        print(f"[ERROR] El archivo no existe: {out_path}")
+        messages.error(request, f"El comando no generó el archivo: {out_path}")
+        return redirect("movimientos_banco_lista")
+
+    try:
+        stat = out_path.stat()
+        print(f"Archivo generado: {out_path} | size={stat.st_size} bytes | uid={stat.st_uid} gid={stat.st_gid} mode={oct(stat.st_mode)}")
+    except Exception as e_stat:
+        print(f"[WARN] No pude leer stat del archivo: {e_stat}")
+
+    # 3) Cargar JSON
+    _print_header("LEYENDO JSON")
+    try:
+        raw = out_path.read_text(encoding="utf-8")
+        print(f"Primeras 500 chars del JSON:\n{raw[:500]}")
+        data = json.loads(raw)
+        print(f"JSON OK. Tipo: {type(data)} | resumen: {('len=' + str(len(data))) if hasattr(data, '__len__') else 'sin __len__'}")
+    except Exception as e_json:
+        print(f"[ERROR] No pude leer/parsear el JSON ({out_path}): {e_json}")
+        traceback.print_exc()
+        messages.error(request, f"No pude leer el JSON ({out_path}): {e_json}")
+        return redirect("movimientos_banco_lista")
+
+    # 4) Guardar/actualizar en DB
+    _print_header("UPSERT en Base de Datos")
+    try:
+       pass
+    except Exception:
+        # si ya estaba importado arriba, ignora esta sección
+        pass
+
+    try:
+        res = upsert_movimientos(
+            data,
+            source_sheet_id=SHEET_ID,
+            source_sheet_name=SHEET_NAME,
+            source_gid=SHEET_GID,
+        )
+        created = res.get("created", 0)
+        updated = res.get("updated", 0)
+        print(f"UPSERT OK → Creados: {created} | Actualizados: {updated}")
+        messages.success(request, f"Movimientos actualizados. Creados: {created} · Actualizados: {updated}.")
+    except Exception as e_db:
+        print(f"[ERROR] Falló upsert_movimientos: {e_db}")
+        traceback.print_exc()
+        messages.error(request, f"Error guardando en BD: {e_db}")
+
+    _print_header("FIN importación de movimientos de banco")
+    sys.stdout.flush()
+    sys.stderr.flush()
+    return redirect("movimientos_banco_lista")
 
 ###########################################################################################
 from django.views.decorators.csrf import csrf_protect

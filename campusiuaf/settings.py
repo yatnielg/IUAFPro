@@ -34,6 +34,8 @@ DEBUG = os.getenv("DEBUG", default=True) in [True, 'True', '1', 1]
 
 ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", default="localhost").split(",")
 
+CSRF_TRUSTED_ORIGINS = ["https://admin.campusiuaf.com"]
+
 
 # Application definition
 
@@ -213,5 +215,14 @@ ACCOUNT_EMAIL_REQUIRED = True
 ACCOUNT_EMAIL_VERIFICATION = "optional"  # "mandatory" si quieres exigir verificación
 DEFAULT_FROM_EMAIL = "no-reply@tu-dominio.com"
 
-EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"  # dev
+#EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"  # dev
 # En prod: django.core.mail.backends.smtp.EmailBackend + credenciales SMTP
+
+EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+EMAIL_HOST = os.environ.get("EMAIL_HOST", "smtp.gmail.com")
+EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "587"))
+EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "True") == "True"
+EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER")
+EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD")
+DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", EMAIL_HOST_USER)
+SEND_WELCOME_EMAILS = os.environ.get("SEND_WELCOME_EMAILS", "False") == "True"
