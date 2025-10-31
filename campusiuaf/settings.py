@@ -48,7 +48,8 @@ INSTALLED_APPS = [
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
-    'django.contrib.staticfiles',    
+    'django.contrib.staticfiles',   
+    "django.contrib.humanize",
     'alumnos',
 ]
 
@@ -210,19 +211,13 @@ STATIC_ROOT = BASE_DIR / "staticfiles"      # /app/staticfiles (salida)
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 
-ACCOUNT_AUTHENTICATION_METHOD = "username_email"   # o "email"
-ACCOUNT_EMAIL_REQUIRED = True
-ACCOUNT_EMAIL_VERIFICATION = "optional"  # "mandatory" si quieres exigir verificación
-DEFAULT_FROM_EMAIL = "no-reply@tu-dominio.com"
 
-#EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"  # dev
-# En prod: django.core.mail.backends.smtp.EmailBackend + credenciales SMTP
 
+# Email (Gmail SMTP)
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
-EMAIL_HOST = os.environ.get("EMAIL_HOST", "smtp.gmail.com")
-EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "587"))
-EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "True") == "True"
-EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER")
-EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD")
-DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", EMAIL_HOST_USER)
-SEND_WELCOME_EMAILS = os.environ.get("SEND_WELCOME_EMAILS", "False") == "True"
+EMAIL_HOST = "smtp.gmail.com"
+EMAIL_PORT = 587
+EMAIL_HOST_USER = "yatniel@gmail.com"
+EMAIL_HOST_PASSWORD = "rswz xudn engb cejp"  # app password de 16 caracteres (con espacios, ok)
+EMAIL_USE_TLS = True
+DEFAULT_FROM_EMAIL = "CampusIUAF <yatniel@gmail.com>"

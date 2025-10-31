@@ -44,6 +44,25 @@ class DocumentoTipo(models.Model):
     slug = models.SlugField(max_length=60, unique=True)
     nombre = models.CharField(max_length=120)
     descripcion = models.TextField(blank=True)
+
+    # NUEVOS CAMPOS
+    presentacion = models.CharField(
+        "Presentación",
+        max_length=120,
+        blank=True,
+        help_text="Ej.: Original / Original y copia / 2 copias / 1 copia."
+    )
+    observaciones = models.TextField(
+        blank=True,
+        help_text="Notas u observaciones adicionales para el alumno o control interno."
+    )
+    orden = models.PositiveIntegerField(
+        default=0,
+        db_index=True,
+        help_text="Orden de aparición en listados y formularios."
+    )
+
+
     multiple = models.BooleanField(
         default=False,
         help_text="Si permite más de un archivo por alumno/plan."
@@ -51,9 +70,13 @@ class DocumentoTipo(models.Model):
     activo = models.BooleanField(default=True)
 
     class Meta:
-        ordering = ["nombre"]
-        verbose_name = "Tipo de documento"
-        verbose_name_plural = "Tipos de documento"
+            ordering = ["orden", "nombre"]  # antes: ["nombre"]
+            verbose_name = "Tipo de documento"
+            verbose_name_plural = "Tipos de documento"
+            indexes = [
+                models.Index(fields=["orden"]),
+                models.Index(fields=["activo"]),
+            ]
 
     def __str__(self):
         return f"{self.nombre} ({self.slug})"
@@ -472,6 +495,16 @@ class InformacionEscolar(models.Model):
     modalidad = models.CharField("Modalidad", max_length=15, choices=MODALIDAD_OPCIONES, default="en_linea")
     matricula = models.CharField("Matrícula", max_length=64, null=True, blank=True)
 
+    bienvenida_enviada = models.BooleanField(default=False, db_index=True, verbose_name="Bienvenida enviada")
+    bienvenida_enviada_en = models.DateTimeField(null=True, blank=True, verbose_name="Bienvenida enviada en")
+    bienvenida_enviada_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name="bienvenidas_enviadas",
+        verbose_name="Bienvenida enviada por"
+    )
+
     estatus_academico = models.ForeignKey("EstatusAcademico", on_delete=models.PROTECT, related_name="informaciones_academicas",
                                           verbose_name="Estatus académico", null=True, blank=True)
     estatus_administrativo = models.ForeignKey("EstatusAdministrativo", on_delete=models.PROTECT, related_name="informaciones_administrativas",
@@ -712,7 +745,7 @@ class PagoDiario(models.Model):
 
     monto = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     grado = models.CharField(max_length=16, null=True, blank=True)
-    forma_pago = models.CharField(max_length=32, null=True, blank=True)
+    forma_pago = models.CharField(max_length=128, null=True, blank=True)
     fecha = models.DateField(null=True, blank=True)
 
     concepto = models.CharField(max_length=120, null=True, blank=True)

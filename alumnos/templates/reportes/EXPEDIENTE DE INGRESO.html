@@ -1,0 +1,226 @@
+{% load static %}
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <title>{{ titulo }}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+
+  <style>
+    :root{
+      --brand:#6f42c1; --brand-2:#8a63d2;
+      --ink:#0f172a; --muted:#6b7280; --line:#e5e7eb; --bg:#f6f7fb;
+      --panel:#ffffff; --note:#faf7ff; --ok:#15803d; --late:#b91c1c;
+    }
+    html,body{ background:var(--bg); color:var(--ink); }
+    .sheet{ width:8.5in; min-height:11in; margin:24px auto; background:var(--panel);
+      border:1px solid #ececf3; border-radius:14px; box-shadow:0 12px 36px rgba(2,6,23,.08); }
+    .doc{ padding:.6in; }
+
+    /* Brand band */
+    .brandband{
+      background:linear-gradient(90deg, var(--brand), var(--brand-2));
+      color:#fff; border-radius:12px; padding:14px 16px; display:grid;
+      grid-template-columns:96px 1fr auto; gap:14px; align-items:center;
+    }
+    .brandband .logo{
+      width:88px; height:88px; object-fit:contain; background:#fff; border-radius:12px; padding:10px;
+      border:1px solid rgba(255,255,255,.6);
+    }
+    .brandband .name{ font-weight:900; letter-spacing:.2px; text-transform:uppercase; line-height:1.15; }
+    .brandband .meta{ font-size:.9rem; opacity:.95; }
+    .tag{ background:rgba(255,255,255,.12); border:1px solid rgba(255,255,255,.35); padding:6px 10px; border-radius:999px; font-weight:700; }
+
+    /* Chips (datos del alumno) */
+    .chip{ background:#fff; border:1px solid var(--line); border-radius:14px; padding:10px 14px; box-shadow:0 2px 10px rgba(2,6,23,.04); }
+    .chip .lbl{ font-size:.7rem; text-transform:uppercase; letter-spacing:.12em; color:var(--muted); }
+    .chip .val{ font-weight:800; }
+    .mono{ font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-feature-settings:"tnum" 1,"lnum" 1; }
+
+    /* Título centrado */
+    .title-wrap{ margin:16px 0 10px; position:relative; }
+    .title-wrap::before,.title-wrap::after{ content:""; position:absolute; left:0; right:0; height:1px; background:linear-gradient(90deg,transparent,var(--line),transparent); }
+    .title-wrap::before{ top:-4px; } .title-wrap::after{ bottom:-4px; }
+    .title{ text-align:center; color:var(--brand); letter-spacing:.28em; font-weight:900; font-size:.95rem; }
+
+    /* Tabla */
+    table.doc-table{ width:100%; border-collapse:collapse; }
+    table.doc-table th, table.doc-table td{ border:1px solid #222; padding:6px 8px; vertical-align:top; }
+    table.doc-table th{ background:#f3f4f6; text-transform:uppercase; font-size:10pt; letter-spacing:.3px; }
+    .w-num{ width: 8%; text-align:center; }
+    .w-desc{ width: 34%; }
+    .w-pres{ width: 18%; }
+    .w-ent{ width: 10%; text-align:center; }
+    .w-obs{ width: auto; }
+    .check{ display:inline-block; min-width:14px; text-align:center; font-weight:700; }
+    .muted{ color:#666; font-style:italic; }
+    .note{ background:var(--note); border:1px dashed rgba(111,66,193,.35); border-radius:12px; padding:10px 12px; font-size:.9rem; color:#4b5563; }
+
+    /* Print */
+    @media print{
+      -webkit-print-color-adjust: exact; print-color-adjust: exact;
+      @page{ size:Letter; margin:.55in; }
+      html,body{ background:#fff; }
+      .sheet{ width:auto; min-height:auto; margin:0; border:none; border-radius:0; box-shadow:none; }
+      .doc{ padding:0; }
+      a[href]:after{ content:""; }
+    }
+  </style>
+</head>
+<body>
+  <div class="sheet">
+    <div class="doc">
+
+      <!-- Encabezado -->
+      <div class="brandband">
+        <img class="logo" src="{% static 'iuaf/iuaf-logo3.png' %}" alt="Logo IUAF">
+        <div>
+          <div class="name">
+            {{ institucion.nombre|default:"Instituto Universitario de Alta Formación" }}
+          </div>
+          <div class="meta">
+            <strong>R.F.C.</strong> {{ institucion.rfc|default:"—" }} &nbsp; · &nbsp;
+            <strong>CCT</strong> {{ institucion.cct|default:"23PSU0064H" }}<br>
+            {{ institucion.direccion|default:"Blvd. Kukulkán Km 3.5, Plaza Nautilus Int. 53, Cancún, Q.R." }},
+            {{ institucion.ciudad|default:"México" }}
+            · Tel. {{ institucion.telefono|default:"998 939 4481" }}
+            · {{ institucion.email|default:"cadministrativa@iuaf.edu.mx" }}
+          </div>
+        </div>
+        <div class="tag">EXPEDIENTE</div>
+      </div>
+
+      <!-- Chips -->
+      <div class="row g-3 mt-3">
+        <div class="col-12 col-lg-4">
+          <div class="chip h-100">
+            <div class="lbl">Alumno</div>
+            <div class="val">{{ alumno.numero_estudiante }} — {{ alumno.nombre }} {{ alumno.apellido_p }} {{ alumno.apellido_m }}</div>
+          </div>
+        </div>
+        <div class="col-6 col-lg-4">
+          <div class="chip h-100">
+            <div class="lbl">CURP</div>
+            <div class="val mono">{{ alumno.curp|default:"—" }}</div>
+          </div>
+        </div>
+        <div class="col-6 col-lg-4">
+          <div class="chip h-100">
+            <div class="lbl">Programa</div>
+            <div class="val text-uppercase">{{ plan.programa.codigo }} — {{ plan.programa.nombre }}</div>
+          </div>
+        </div>
+        <div class="col-6 col-lg-2">
+          <div class="chip h-100">
+            <div class="lbl">Grupo</div>
+            <div class="val">{{ plan.grupo|default:"—" }}</div>
+          </div>
+        </div>
+        <div class="col-6 col-lg-2">
+          <div class="chip h-100">
+            <div class="lbl">Modalidad</div>
+            <div class="val">{{ plan.get_modalidad_display }}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Título -->
+      <div class="title-wrap mt-3">
+        <div class="title">{{ titulo|default:"EXPEDIENTE DE INGRESO" }}</div>
+      </div>
+      {% if subtitulo %}<p class="text-center text-muted mb-2">{{ subtitulo }}</p>{% endif %}
+
+      <!-- Tabla de requisitos -->
+      <div class="card-plain p-2 border-0">
+        <div class="table-responsive">
+          <table class="doc-table table mb-0">
+            <thead>
+              <tr>
+                <th class="w-num">#</th>
+                <th class="w-desc">Descripción</th>
+                <th class="w-pres">Presentación</th>
+                <th class="w-ent">Entregó<br>SI</th>
+                <th class="w-ent">Entregó<br>NO</th>
+                <th class="w-obs">Observaciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for r in rows %}
+              <tr>
+                <td class="w-num">{{ r.num }}.</td>
+                <td class="w-desc">{{ r.descripcion }}</td>
+                <td class="w-pres">
+                  {% if r.presentacion %}{{ r.presentacion }}{% else %}<span class="muted">—</span>{% endif %}
+                </td>
+                <td class="w-ent"><span class="check">{% if r.entrego_si %}✓{% endif %}</span></td>
+                <td class="w-ent"><span class="check">{% if r.entrego_no %}✓{% endif %}</span></td>
+                <td class="w-obs">
+                  {% if r.observaciones %}{{ r.observaciones }}{% else %}<span class="muted">—</span>{% endif %}
+                </td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="6" class="muted">No hay requisitos configurados para este programa.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+     <!-- Aviso final (callout) -->
+      <style>
+        .cta-note{
+          background: linear-gradient(180deg,#fbfaff,#f8f5ff);
+          border:1px solid rgba(111,66,193,.28);
+          border-left:6px solid var(--brand);
+          border-radius:12px;
+          padding:14px 16px;
+          color:#3b3b4f;
+          box-shadow:0 4px 18px rgba(111,66,193,.08);
+        }
+        .cta-note .lead{
+          font-weight:900; letter-spacing:.02em; text-transform:uppercase; color:var(--brand);
+          margin-bottom:.25rem;
+        }
+        .footer-band{
+          margin-top:14px;
+          text-align:center;
+          color:#64748b;
+          font-weight:700;
+          border-top:1px dashed var(--line);
+          padding-top:10px;
+        }
+        .footer-band .site{ color:var(--brand); font-weight:900; }
+        @media print{
+          .cta-note{ -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+        }
+      </style>
+
+      <div class="cta-note mt-3">
+        <div class="lead">Instrucciones de entrega</div>
+        <div class="small">
+          REMITIR al correo <strong>cadministrativa@iuaf.edu.mx</strong> una vez que complete su proceso de pago para
+          validación y <strong>POSTERIOR ENTREGA DE ORIGINALES Y COPIAS EN LA SEDE</strong>.<br>
+          Cualquier duda favor de escribir por WhatsApp al <strong>998&nbsp;939&nbsp;4481</strong>.<br>
+          En caso de no enviar copias, el costo es de <strong>$15 pesos por documento</strong>.
+        </div>
+      </div>
+
+      <!-- Acciones -->
+      <div class="d-flex gap-2 justify-content-end mt-3">
+        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="window.print()">
+          Imprimir / PDF
+        </button>
+      </div>
+
+      <!-- Pie con sitio y hashtags -->
+      <div class="footer-band small">
+        <span class="site">www.iuaf.edu.mx</span> &nbsp; · &nbsp; #HablemosDerecho &nbsp; · &nbsp; #IUAF
+      </div>
+
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

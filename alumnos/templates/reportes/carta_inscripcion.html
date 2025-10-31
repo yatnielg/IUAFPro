@@ -1,0 +1,357 @@
+{% load static %}
+{% load humanize %}
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <title>Carta de Inscripción — {{ programa.nombre|default:"Programa" }}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  {% if not pdf_mode %}
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+  {% endif %}
+
+  <style>
+    :root{
+      --brand:#6f42c1; --brand-2:#8a63d2;
+      --ink:#0f172a; --muted:#6b7280; --line:#e5e7eb; --bg:#f6f7fb;
+      --panel:#ffffff; --accent:#16a34a; --accent-ink:#064e3b; --ink-2:#111827;
+    }
+    html,body{ background:var(--bg); color:var(--ink); font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji","Segoe UI Emoji", sans-serif; }
+    .sheet{ width:8.5in; min-height:11in; margin:28px auto; background:var(--panel);
+      border:1px solid #ececf3; border-radius:16px; box-shadow:0 16px 44px rgba(2,6,23,.10); }
+    .doc{ padding:.7in; }
+
+    .brandband{
+      position:relative;
+      background:linear-gradient(90deg, var(--brand), var(--brand-2));
+      color:#fff; border-radius:14px; padding:16px 18px; display:grid;
+      grid-template-columns:100px 1fr auto; gap:16px; align-items:center; overflow:hidden;
+    }
+    .brandband:after{
+      content:""; position:absolute; inset:0; background: radial-gradient(1200px 300px at 70% -50%, rgba(255,255,255,.18), transparent 60%);
+      pointer-events:none;
+    }
+    .brandband .logo{
+      width:92px; height:92px; object-fit:contain; background:#fff; border-radius:12px; padding:10px;
+      border:1px solid rgba(255,255,255,.55);
+    }
+    .brandband .name{ font-weight:900; letter-spacing:.2px; text-transform:uppercase; line-height:1.1; }
+    .brandband .meta{ font-size:.92rem; opacity:.98; }
+    .tag{ background:rgba(255,255,255,.14); border:1px solid rgba(255,255,255,.40); padding:8px 12px; border-radius:999px; font-weight:800; }
+
+    .pill-date{ background:#def7e5; color:var(--accent-ink); border:1px solid #b2e7c0; padding:6px 10px; border-radius:10px; font-weight:800; }
+    .h-title{ font-weight:900; text-transform:uppercase; letter-spacing:.06em; color:var(--brand); }
+    .lead-small{ font-size:.97rem; color:#475569; }
+
+    .chip{ background:#fff; border:1px solid var(--line); border-radius:14px; padding:12px 14px; box-shadow:0 2px 10px rgba(2,6,23,.04); height:100%; }
+    .chip .lbl{ font-size:.7rem; text-transform:uppercase; letter-spacing:.12em; color:var(--muted); }
+    .chip .val{ font-weight:800; color:var(--ink-2); }
+    .mono{ font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-feature-settings:"tnum" 1,"lnum" 1; }
+
+    .card-solid{ border:1.5px solid #0f172a; border-radius:14px; overflow:hidden; }
+    .card-solid .card-header{ background:#0f172a; color:#fff; font-weight:900; text-transform:uppercase; letter-spacing:.06em; padding:10px 12px; }
+
+    table.tidy{ width:100%; border-collapse:separate; border-spacing:0; overflow:hidden; border-radius:12px; }
+    table.tidy th, table.tidy td{ border:1px solid #111827; padding:9px 12px; vertical-align:middle; }
+    table.tidy th{ background:#f3f4f6; text-transform:uppercase; font-size:.85rem; letter-spacing:.04em; }
+    .money{ font-weight:900; text-align:right; white-space:nowrap; }
+
+    .rules-callout{
+      background:#fffbea; border:1px solid #f2e29f; border-left:8px solid #c99711;
+      border-radius:14px; padding:16px 18px; color:#3b2f0b; box-shadow:0 6px 20px rgba(0,0,0,.04); margin-top:18px;
+    }
+    .rules-callout .title{ font-weight:900; text-transform:uppercase; letter-spacing:.02em; margin-bottom:.4rem; color:#7a5900; }
+    .rules-callout ol{ margin:0; padding-left:1.15rem; }
+    .rules-callout li{ margin:.28rem 0; }
+
+    .reglamento{ background:#fafafa; border:1px solid #e5e7eb; border-radius:14px; padding:16px 18px 18px 18px; box-shadow:0 8px 26px rgba(2,6,23,.06); margin-top:18px; }
+    .reg-head{ display:grid; grid-template-columns:84px 1fr 84px; align-items:center; gap:12px; margin-bottom:8px; }
+    .reg-head .title{ text-align:center; font-weight:900; letter-spacing:.18em; text-transform:uppercase; color:#111827; }
+    .reg-logo{ width:76px; height:76px; object-fit:contain; opacity:.95; }
+    .reg-body{ background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:12px 14px; }
+    .reg-body ol{ margin:0; padding-left:1.1rem; }
+    .reg-body li{ margin:.35rem 0; line-height:1.5; color:#374151; }
+
+    .hero-img{ width:100%; height:auto; border-radius:14px; border:1px solid #e5e7eb; object-fit:cover; }
+
+    .beca{ margin-top:18px; background:#fff; border:1px solid #e5e7eb; border-radius:14px; box-shadow:0 10px 28px rgba(2,6,23,.06); }
+    .beca-head{ padding:16px 20px; border-bottom:1px solid #eef0f4; display:grid; gap:6px; justify-items:center; text-align:center; }
+    .beca-title{ font-weight:900; letter-spacing:.28em; text-transform:uppercase; color:#111827; }
+    .beca-sub{ font-size:.95rem; color:#374151; }
+    .beca-body{ padding:14px 18px; }
+    .beca-highlight{ background:#f9fafb; border:1px dashed var(--brand-2); border-radius:12px; padding:10px 12px; display:flex; align-items:center; gap:10px; margin-bottom:12px; }
+    .beca-chip{ background:linear-gradient(90deg,var(--brand),var(--brand-2)); color:#fff; padding:6px 10px; border-radius:999px; font-weight:800; font-size:.8rem; letter-spacing:.06em; }
+    .beca-price{ font-weight:900; font-size:1.05rem; }
+    .beca-grid{ display:grid; grid-template-columns: 1fr 1.25fr; gap:18px; }
+    .beca-left small{ color:#6b7280; display:block; }
+    .beca-conds ol{ margin:0; padding-left:1.15rem; }
+    .beca-conds li{ margin:.35rem 0; line-height:1.45; color:#374151; }
+    .firma-box{ margin-top:16px; display:grid; grid-template-columns: 170px 1fr; gap:16px; align-items:center; }
+    .firma-img{ width:100%; height:auto; object-fit:contain; }
+    .firma-meta small{ color:#6b7280; display:block; }
+    .beca-foot{ padding:10px 18px 16px; text-align:center; color:#6b7280; font-size:.95rem; }
+
+    .footer-block{ color:#6b7280; background:#f9fafb; border:1px solid #eef0f4; border-radius:12px; padding:10px 12px; }
+
+    @media (max-width: 768px){
+      .brandband{ grid-template-columns:72px 1fr; }
+      .tag{ display:none; }
+      .beca-grid{ grid-template-columns:1fr; }
+      .firma-box{ grid-template-columns: 140px 1fr; }
+    }
+    @media print{
+      -webkit-print-color-adjust: exact; print-color-adjust: exact;
+      @page{ size:Letter; margin:.55in; }
+      html,body{ background:#fff; }
+      .sheet{ box-shadow:none; border:none; margin:0; border-radius:0; }
+      .doc{ padding:0; }
+      a[href]:after{ content:""; }
+    }
+  </style>
+</head>
+<body>
+  <div class="sheet" role="document">
+    <div class="doc">
+
+      <!-- Encabezado -->
+      <header class="brandband">
+        <img class="logo" src="{% static 'iuaf/iuaf-logo3.png' %}" alt="Logo IUAF">
+        <div>
+          <div class="name">{{ institucion.nombre|default:"Instituto Universitario de Alta Formación" }}</div>
+          <div class="meta">
+            <strong>R.F.C.</strong> {{ institucion.rfc|default:"—" }} &nbsp; · &nbsp;
+            <strong>CCT</strong> {{ institucion.cct|default:"—" }}<br>
+            {{ institucion.direccion|default:"—" }}, {{ institucion.ciudad|default:"—" }}
+            · Tel. {{ institucion.telefono|default:"—" }} · {{ institucion.email|default:"—" }}
+          </div>
+        </div>
+        <div class="tag">Carta de Inscripción</div>
+      </header>
+
+      <!-- Título + fecha -->
+      <div class="mt-3 d-flex flex-wrap align-items-center justify-content-between g-2">
+        <h2 class="h-title m-0">CARTA DE INSCRIPCIÓN A&nbsp;{{ programa.nombre|default:"—" }}</h2>
+        <div class="pill-date">
+          {% if hoy %} {{ hoy|date:"l, d \\d\\e F \\d\\e Y" }} {% else %} — {% endif %}
+        </div>
+      </div>
+
+      <!-- Banda de alumno -->
+      <section class="row g-3 mt-2">
+        <div class="col-12 col-lg-6">
+          <div class="chip">
+            <div class="lbl">Estimada(o) alumna(o)</div>
+            <div class="val text-uppercase">{{ alumno.apellido_p }} {{ alumno.apellido_m }} {{ alumno.nombre }}</div>
+            <div class="small lead-small mt-1">A nombre del Instituto Universitario de Alta Formación IUAF te damos la más cordial bienvenida al programa de <strong>{{ programa.nombre|default:"—" }}</strong>.</div>
+          </div>
+        </div>
+        <div class="col-6 col-lg-2">
+          <div class="chip">
+            <div class="lbl">Número de estudiante</div>
+            <div class="val mono">{{ alumno.numero_estudiante }}</div>
+          </div>
+        </div>
+        <div class="col-6 col-lg-4">
+          <div class="chip">
+            <div class="lbl">CURP</div>
+            <div class="val mono">{{ alumno.curp|default:"—" }}</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Grupo / calendario -->
+      <section class="card card-solid mt-3">
+        <div class="card-header">Grupo de Clase</div>
+        <div class="card-body p-3">
+          <div class="row g-2">
+            <div class="col-6 col-lg-3"><div class="chip"><div class="lbl">Código de grupo</div><div class="val">{{ grupo_codigo|default:"—" }}</div></div></div>
+            <div class="col-6 col-lg-3"><div class="chip"><div class="lbl">Inicio de clases</div><div class="val">{% if fecha_inicio %} {{ fecha_inicio|date:"d/m/Y" }} {% else %} — {% endif %}</div></div></div>
+            <div class="col-6 col-lg-3"><div class="chip"><div class="lbl">Asistencia</div><div class="val">{{ asistencia|default:"—" }}</div></div></div>
+            <div class="col-6 col-lg-3"><div class="chip"><div class="lbl">Horario</div><div class="val">{{ horario|default:"—" }}</div></div></div>
+            <div class="col-6 col-lg-3"><div class="chip"><div class="lbl">Duración Total</div><div class="val">{{ duracion_texto|default:"—" }}</div></div></div>
+            <div class="col-6 col-lg-3"><div class="chip"><div class="lbl">Modalidad</div><div class="val">{{ plan.get_modalidad_display }}</div></div></div>
+            <div class="col-12 col-lg-6"><div class="chip"><div class="lbl">Programa</div><div class="val text-uppercase">{{ programa.codigo }} — {{ programa.nombre }}</div></div></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Cuotas -->
+      <section class="card card-solid mt-3">
+        <div class="card-header">Cuotas y Condiciones</div>
+        <div class="card-body p-3">
+          <div class="d-flex align-items-center gap-2 mb-2">
+            {% if etiqueta_beca %}
+              <span class="badge text-bg-success rounded-pill px-3 py-2">BECA: {{ etiqueta_beca }}</span>
+            {% else %}
+              <span class="badge text-bg-secondary rounded-pill px-3 py-2">Sin beca registrada</span>
+            {% endif %}
+            <span class="text-muted small">Montos en MXN</span>
+          </div>
+
+          <div class="table-responsive">
+            <table class="tidy">
+              <thead>
+                <tr>
+                  <th style="width:40%;">Concepto</th>
+                  <th style="width:20%; text-align:right;">Monto</th>
+                  <th style="width:40%;">Notas</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Inscripción</td>
+                  <td class="money">{% if inscripcion is not None %}$ {{ inscripcion|floatformat:2|intcomma }}{% else %}—{% endif %}</td>
+                  <td>Pago único al inicio</td>
+                </tr>
+                <tr>
+                  <td>Colegiatura mensual {% if etiqueta_beca %}(con beca){% endif %}</td>
+                  <td class="money">{% if colegiatura_mensual is not None %}$ {{ colegiatura_mensual|floatformat:2|intcomma }}{% else %}—{% endif %}</td>
+                  <td>{% if meses_pago %}{{ meses_pago }} meses{% else %}—{% endif %}</td>
+                </tr>
+                <tr>
+                  <td>Reinscripción</td>
+                  <td class="money">{% if reinscripcion is not None %}$ {{ reinscripcion|floatformat:2|intcomma }}{% else %}—{% endif %}</td>
+                  <td>Según calendario académico</td>
+                </tr>
+                <tr>
+                  <td>Derechos de titulación</td>
+                  <td class="money">{% if titulacion is not None %}$ {{ titulacion|floatformat:2|intcomma }}{% else %}—{% endif %}</td>
+                  <td>Aplica al finalizar el programa</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <p class="mt-2 small text-muted mb-0">
+            Los importes pueden variar por actualización de plan o regularizaciones. Favor de confirmar con control escolar.
+          </p>
+        </div>
+      </section>
+
+      <!-- Reglas / notas importantes -->
+      <aside class="rules-callout">
+        <div class="title">Indicaciones importantes de pago y documentos</div>
+        <ol class="small mb-0">
+          <li>Favor de realizar pago por mes los primeros <strong>6 días</strong> del mes.</li>
+          <li>En caso de <strong>beca por referido</strong> es importante para que aplique que ellos hagan su pago puntual. Sus recomendaciones deben mencionar que vienen de su parte al solicitar información. <strong>El descuento de titulación se sujeta al pago puntual.</strong></li>
+          <li><strong>Nota:* El descuento es válido mientras sus colegiaturas sean puntuales.</strong></li>
+          <li>En caso de cancelación del alumno no se reembolsará cualquier tipo de pago a menos que sean <strong>colegiaturas anticipadas</strong> y se dé aviso con <strong>10 días hábiles</strong> anteriores al registro del cuatrimestre, siendo el <strong>50% máximo reembolsable</strong>.</li>
+          <li>Todos los pagos de su curso se deberán efectuar dentro de los primeros <strong>6 días</strong> de cada mes.</li>
+          <li>En caso de beca, para conservarla es indispensable realizar el <strong>pago puntual mensual</strong>. Se penaliza con un <strong>10%</strong> el pago extemporáneo y se cancela la beca con <strong>3 pagos extemporáneos</strong>.</li>
+          <li><strong>ANOTAR COMO CONCEPTO DE PAGO SU CURP o APELLIDO COMO REFERENCIA</strong> si solo le da un campo su banca.</li>
+          <li>El expediente académico debe ser enviado en los primeros días posteriores a su inscripción; si excede <strong>1 mes</strong> en caso de jornada puede ser atrasado de generación y, en programa completo, la autoridad puede mover de generación cobrando una <strong>reinscripción</strong> si excede los <strong>6 meses</strong>.</li>
+          <li>En caso de cancelación se aplica el <strong>50% de una colegiatura</strong> a derechos administrativos; solo se reembolsará el excedente con <strong>5 días</strong> de anticipación a la clase.</li>
+        </ol>
+      </aside>
+
+      <!-- Reglamento resumido -->
+      <section class="reglamento">
+        <div class="reg-head">
+          <img class="reg-logo" src="{% static 'iuaf/logo-email.png' %}" alt="IUAF">
+          <div class="title">Reglamento resumido</div>
+          <div></div>
+        </div>
+        <div class="reg-body">
+          <ol class="small mb-0">
+            <li>Al inscribirse se le dará acceso a la plataforma con usuario y contraseña. El uso de materiales didácticos es para fines académicos; queda prohibido su reproducción o distribución sin autorización (<strong>derechos de autor</strong>).</li>
+            <li>El <strong>calendario de clases</strong> puede ajustarse por agenda de ponentes; los cambios se comunicarán por los canales oficiales.</li>
+            <li>Si falta a una materia, <strong>justifique</strong> y revise opciones de reposición (en línea o con el grupo inmediato).</li>
+            <li>El avance del cuatrimestre está sujeto a estar al día en <strong>lo académico y lo administrativo</strong>.</li>
+            <li>Para <strong>reinscripción</strong> con pago impuntual es necesario gestionar un convenio con la Dirección Administrativa.</li>
+            <li>Si se inscribe sin exhibir documentación oficial completa, su ingreso es <strong>temporal</strong>. Debe regularizar en tiempo; de lo contrario, procede baja temporal. La gestión de documentos es <strong>responsabilidad del alumno</strong>.</li>
+            <li>Fechas y entregas de <strong>ensayos/proyectos</strong> dependen del docente; la plataforma cierra en la fecha establecida.</li>
+            <li>Para sesiones en línea: contar con <strong>Internet ≥ 5&nbsp;Mb</strong>, cámara y micrófono. Participación con vestimenta y entorno adecuados.</li>
+            <li>En becas, se exige <strong>promedio mínimo</strong>, <strong>asistencia</strong> y <strong>pagos puntuales</strong>; el incumplimiento puede cancelar la beca.</li>
+            <li>Si reprueba, podrá presentar extraordinario o trabajo/ensayo según el grado y la autorización del docente y del Instituto.</li>
+            <li>Las <strong>calificaciones</strong> se emiten por cuatrimestre, conforme al tiempo de cursar las materias.</li>
+            <li>Con <strong>adeudo</strong> financiero no se puede cursar/continuar ni reinscribirse hasta regularizar pagos.</li>
+            <li>Comunicados y avisos oficiales se envían por <strong>medios digitales</strong> (correo/plataforma). Revise con frecuencia.</li>
+            <li>El correo registrado será el medio de contacto. El IUAF podrá emitir <strong>boletas/certificados</strong> impresos o digitales al cierre de cuatrimestre.</li>
+          </ol>
+        </div>
+      </section>
+
+      <!-- Imagen de bienvenida (al final del cuerpo principal) -->
+      <figure class="mt-3 mb-0">
+        <img src="{% static 'iuaf/bienvenida/medi.jpg' %}" alt="Bienvenida IUAF" class="img-fluid hero-img">
+      </figure>
+
+      <!-- === Beca Académica === -->
+      <section class="beca">
+        <div class="beca-head">
+          <div class="beca-title">B E C A &nbsp; A C A D É M I C A</div>
+          <div class="beca-sub">
+            Mediante el presente se extiende la <strong>BECA incentivo</strong> a
+            <u class="text-uppercase">{{ alumno.apellido_p }} {{ alumno.apellido_m }} {{ alumno.nombre }}</u>
+            para cursar el programa <u class="text-uppercase">{{ programa.nombre|default:"—" }}</u>
+            {% if plan.generacion %} en la generación <u>{{ plan.generacion }}</u>{% endif %}
+            del <strong>{{ institucion.nombre }}</strong>.
+          </div>
+        </div>
+
+        <div class="beca-body">
+          <div class="beca-highlight">
+            <span class="beca-chip">Monto mensual</span>
+            <div class="beca-price">
+              Por lo cual el precio de <u>$&nbsp;{{ colegiatura_mensual|default_if_none:0|floatformat:2|intcomma }}</u> pesos mensuales
+              se reduce con el compromiso de asistir al menos al 80% de las sesiones y realizar su pago puntual.
+            </div>
+          </div>
+
+          <div class="beca-grid">
+            <div class="beca-left">
+              <div class="fw-bold mb-1">por MEXICANA MEDI</div>
+              <small>Es posible con la Educación</small>
+
+              <div class="firma-box">
+                <img class="firma-img" src="{% static 'iuaf/bienvenida/firma.png' %}" alt="Firma representante">
+                <div class="firma-meta">
+                  <div class="fw-bold">D.D. YASMÍN CAMPOS</div>
+                  <small>Representante</small>
+                </div>
+              </div>
+            </div>
+
+            <div class="beca-conds">
+              <div class="fw-bold mb-1">Condiciones de permanencia de beca:</div>
+              <ol class="small">
+                <li>Entrega puntual de trabajos (cada entrega <strong>no realizada</strong> penaliza 30% de la beca; 3 entregas extemporáneas cancelan la beca).</li>
+                <li>Pago puntual de la colegiatura (3 pagos extemporáneos cancelan la beca).</li>
+                <li>Cumplimiento del Reglamento interno del IUAF.</li>
+                <li>Participación en campañas de promoción y referidos.</li>
+                <li>Aprovechamiento mínimo de <strong>9.0</strong> por materia.</li>
+                <li>El pago del monto reducido implica la aceptación formal de la presente BECA.</li>
+              </ol>
+            </div>
+          </div>
+        </div>
+
+        <div class="beca-foot">
+          CANCÚN, QUINTANA ROO &nbsp;&middot;&nbsp; ¡Felicidades!
+        </div>
+      </section>
+
+      <!-- Firmas / contacto -->
+      <footer class="mt-3">
+        <div class="footer-block">
+          <div class="small">Director(a): Dra. en D. Erika Muñoz Salazar.</div>
+          <div class="small">Dirección General y Servicios Escolares: Dra. en D. Yasmín Campos Cohuo.</div>
+          <div class="small mb-0">Tel. para aclaraciones: <strong>998&nbsp;939&nbsp;4481</strong> · Correo: <strong>cadministrativa@iuaf.edu.mx</strong></div>
+        </div>
+        {% if not pdf_mode %}
+        <div class="d-flex gap-2 justify-content-end mt-2">
+          <button type="button" class="btn btn-outline-secondary btn-sm" onclick="window.print()">Imprimir / PDF</button>
+        </div>
+        {% endif %}
+      </footer>
+
+    </div>
+  </div>
+
+  {% if not pdf_mode %}
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  {% endif %}
+</body>
+</html>

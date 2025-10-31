@@ -73,8 +73,12 @@ urlpatterns = [
     ),
 
     path('alumnos/<int:alumno_id>/saldos/<str:concepto_codigo>/', views.saldos_por_concepto_view, name='saldos_por_concepto'),
-
     path('alumnos/<int:alumno_id>/cargos-con-saldo/', views.cargos_con_saldo_view, name='cargos_con_saldo'),
+    path("alumnos/<int:alumno_id>/enviar-bienvenida/", views.enviar_bienvenida_estatica, name="enviar_bienvenida_estatica"),
+
+    path("alumnos/<int:alumno_id>/expediente/", views.expediente_maestria_view, name="expediente_maestria"),
+
+    path("alumnos/<int:alumno_id>/carta/", views.carta_inscripcion_view, name="alumno_carta"),
 
 
     #path("banco/movimientos/", views.MovimientoBancoListView.as_view(), name="movimientos_banco_lista"),

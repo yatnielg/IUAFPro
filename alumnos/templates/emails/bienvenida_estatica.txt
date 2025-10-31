@@ -1,0 +1,14 @@
+Bienvenida al Instituto Universitario de Alta Formación (IUAF)
+
+Estimad{% if alumno.sexo == "F" %}a{% else %}o{% endif %} {{ alumno.nombre }} {{ alumno.apellido_p }} {{ alumno.apellido_m }},
+
+Nos alegra contar con usted en la comunidad IUAF. Aquí están sus accesos y recursos:
+
+Correo IUAF: {{ alumno.email_institucional|default:"(pendiente)" }}
+Plataforma: Classroom / IUAF
+
+Portal IUAF: https://www.iuaf.edu.mx
+Facebook: https://www.facebook.com/IuafOficial/
+Instagram: https://www.instagram.com/iuafoficial/
+
+¿Dudas? recibos@iuaf.edu.mx — WhatsApp 9989 39 44 81

@@ -129,21 +129,52 @@ class ProgramaAdmin(admin.ModelAdmin):
 # =============================
 # INFORMACION ESCOLAR
 # =============================
+# ——— Acciones opcionales ———
+@admin.action(description="Marcar 'Bienvenida enviada' en los seleccionados")
+def marcar_bienvenida(modeladmin, request, queryset):
+    updated = queryset.update(
+        bienvenida_enviada=True,
+        bienvenida_enviada_en=timezone.now(),
+        bienvenida_enviada_por=request.user
+    )
+    modeladmin.message_user(request, f"Se marcaron {updated} registros como 'bienvenida enviada'.")
+
+@admin.action(description="Desmarcar 'Bienvenida enviada' en los seleccionados")
+def desmarcar_bienvenida(modeladmin, request, queryset):
+    updated = queryset.update(
+        bienvenida_enviada=False,
+        bienvenida_enviada_en=None,
+        bienvenida_enviada_por=None
+    )
+    modeladmin.message_user(request, f"Se desmarcaron {updated} registros.")
+
 @admin.register(InformacionEscolar)
 class InformacionEscolarAdmin(admin.ModelAdmin):
     list_display = (
         "programa", "sede", "estatus_academico",
-        "estatus_administrativo", "precio_final", "creado_en"
+        "estatus_administrativo", "precio_final",
+        "bienvenida_enviada", "bienvenida_enviada_en", "bienvenida_enviada_por",
+        "creado_en",
     )
-    list_filter = ("programa", "sede", "estatus_academico", "estatus_administrativo")
+    list_filter = (
+        "programa", "sede", "estatus_academico", "estatus_administrativo",
+        "bienvenida_enviada",
+    )
     search_fields = (
         "programa__codigo", "programa__nombre",
         "sede__nombre",
         "estatus_academico__nombre", "estatus_administrativo__nombre",
         "alumno__numero_estudiante", "alumno__nombre", "alumno__apellido_p", "alumno__apellido_m",
     )
-    readonly_fields = ("creado_en", "actualizado_en", "precio_final")
-    actions = [exportar_csv, borrar_todo_modelo]
+    readonly_fields = (
+        "creado_en", "actualizado_en", "precio_final",
+        "bienvenida_enviada", "bienvenida_enviada_en", "bienvenida_enviada_por",
+    )
+    date_hierarchy = "creado_en"
+    ordering = ("-creado_en",)
+
+    # Mantén tus acciones previas y suma las nuevas
+    actions = [exportar_csv, borrar_todo_modelo, marcar_bienvenida, desmarcar_bienvenida]
 
 # =============================
 # ALUMNOS
@@ -368,9 +399,12 @@ class MovimientoBancoAdmin(admin.ModelAdmin):
 # =============================
 @admin.register(DocumentoTipo)
 class DocumentoTipoAdmin(admin.ModelAdmin):
-    list_display = ("nombre", "slug", "multiple", "activo")
+    list_display = ("nombre", "slug", "presentacion", "orden", "multiple", "activo")
+    list_editable = ("orden", "activo")
     list_filter = ("activo", "multiple")
-    search_fields = ("nombre", "slug")
+    search_fields = ("nombre", "slug", "presentacion", "observaciones")
+    ordering = ("orden", "nombre")
+    prepopulated_fields = {"slug": ("nombre",)}
     actions = [exportar_csv, borrar_todo_modelo]
 
 @admin.register(ProgramaDocumentoRequisito)
@@ -440,8 +474,8 @@ class UserProfileAdmin(admin.ModelAdmin):
         ("sedes", admin.RelatedOnlyFieldListFilter),
     )
     search_fields = ("user__username", "user__first_name", "user__last_name", "user__email", "sedes__nombre")
-    autocomplete_fields = ("user", "sedes")
-    filter_horizontal = ()
+    autocomplete_fields = ("user",)
+    filter_horizontal = ("sedes",)
     ordering = ("user__username",)
     actions = [exportar_csv, borrar_todo_modelo]
 
@@ -459,12 +493,12 @@ class UserProfileInline(admin.StackedInline):
     can_delete = False
     fk_name = "user"
     extra = 0
-    autocomplete_fields = ("sedes",)
+    filter_horizontal = ("sedes",)
     fieldsets = (
-        (None, {"fields": ("sedes",)}),
-        ("Permisos de alcance", {
-            "fields": ("puede_ver_todo", "puede_editar_todo", "ver_todos_los_pagos")
-        }),
+            (None, {"fields": ("sedes",)}),
+            ("Permisos de alcance", {
+                "fields": ("puede_ver_todo", "puede_editar_todo", "ver_todos_los_pagos")
+            }),
     )
 
 try:

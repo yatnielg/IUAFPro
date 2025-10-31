@@ -5,6 +5,122 @@
 
 {% block main_content %}
 
+
+
+
+{% if alumno.informacionEscolar and alumno.informacionEscolar.programa_id %}
+  <a href="{% url 'alumno_carta' alumno.pk %}"
+     class="btn btn-primary btn-sm" target="_blank" rel="noopener">
+    📝 Carta de inscripción
+  </a>
+{% endif %}
+
+
+
+
+
+
+
+{% comment %}  {% endcomment %}
+ {% if alumno and alumno.pk %}
+  {% with plan=alumno.informacionEscolar %}
+    {% if plan and plan.programa_id %}
+      <a
+        href="{% url 'expediente_maestria' alumno.pk %}"
+        class="btn btn-primary btn-sm"
+        target="_blank" rel="noopener"
+        title="Ver expediente de ingreso">
+        <i class="material-icons align-middle">assignment</i>
+        Expediente de ingreso
+      </a>
+      {# Opcional: versión PDF si luego habilitas ?format=pdf en la vista #}
+      {# <a href="{% url 'expediente_maestria' alumno.pk %}?format=pdf" class="btn btn-outline-secondary btn-sm ms-2" target="_blank" rel="noopener">
+           <i class="material-icons align-middle">picture_as_pdf</i> PDF
+         </a> #}
+    {% endif %}
+  {% endwith %}
+{% endif %}
+
+ {% comment %}  {% endcomment %}
+
+
+
+
+
+{% comment %}  {% endcomment %}
+
+{% if request.user.is_superuser %}
+{% if alumno and alumno.pk %}
+  {% with plan=alumno.informacionEscolar %}
+    {% if plan and not plan.bienvenida_enviada %}
+      <button
+        id="btnEnviarBienvenida"
+        class="btn btn-outline-info btn-sm"
+        data-url="{% url 'enviar_bienvenida_estatica' alumno.pk %}">
+        <i class="material-icons align-middle">outgoing_mail</i>
+        Enviar bienvenida
+      </button>
+    {% else %}
+      {# Opcional: mostrar estado o botón de reenviar #}
+      {% if plan and plan.bienvenida_enviada %}
+        <span class="text-success small">
+          Bienvenida enviada {{ plan.bienvenida_enviada_en|date:"d/m/Y H:i" }}
+          {% if plan.bienvenida_enviada_por %} por {{ plan.bienvenida_enviada_por.get_full_name|default:plan.bienvenida_enviada_por.username }}{% endif %}
+        </span>
+        <!-- Botón para reenviar manualmente -->
+        {% if request.user.is_superuser %}
+        <a href="{% url 'enviar_bienvenida_estatica' alumno.pk %}?force=1"
+           class="btn btn-outline-secondary btn-sm ms-2">
+          Reenviar
+        </a>
+        {% endif %}
+
+
+      {% endif %}
+    {% endif %}
+  {% endwith %}
+{% endif %}
+
+{% endif %}
+<script>
+(function(){
+  const btn=document.getElementById('btnEnviarBienvenida');
+  if(!btn) return;
+
+  function getCookie(name){
+    const m=document.cookie.match('(^|;)\\s*'+name+'\\s*=\\s*([^;]+)'); return m?m.pop():'';
+  }
+  btn.addEventListener('click', async ()=>{
+    const ok = confirm('¿Enviar correo de bienvenida con adjuntos?');
+    if(!ok) return;
+    btn.disabled = true;
+    try{
+      const resp = await fetch(btn.dataset.url, {
+        method:'POST',
+        headers:{'X-CSRFToken':getCookie('csrftoken')},
+        credentials:'same-origin'
+      });
+      // Django redirige con messages
+      if (resp.redirected) location.href = resp.url; else location.reload();
+    }catch(e){
+      alert('Error enviando correo: '+e.message);
+    }finally{
+      btn.disabled = false;
+    }
+  });
+})();
+</script>
+
+
+
+{% comment %}  {% endcomment %}
+
+
+
+
+
+
+
 <!-- DataTables (solo para la tabla de pagos) -->
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
 <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>

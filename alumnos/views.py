@@ -484,7 +484,7 @@ def estudiantes(request):
                 default=Value(False),
                 output_field=BooleanField(),
             )
-        )
+        ).order_by("-numero_estudiante")  # 👈 forzar orden en Postgres
     )
 
     if q:
@@ -696,6 +696,7 @@ def alumnos_detalle(request, pk):
     )
 
     # -------- Permisos de visualización del alumno --------
+    hoy = timezone.now().date()
     user = request.user
     can_view = False
     if user.is_superuser:
@@ -727,7 +728,7 @@ def alumnos_detalle(request, pk):
         )
         pagos_total = round(pagos.aggregate(total=Sum("monto"))["total"] or 0, 2)
 
-        hoy = timezone.now().date()
+        
         from django.db.models.functions import Coalesce
         cargos = (
             Cargo.objects
@@ -1721,30 +1722,52 @@ from alumnos.models import Alumno, DocumentoAlumno, DocumentoTipo, ProgramaDocum
 from alumnos.permisos import user_can_view_documentos  # ajusta si tu helper se llama distinto
 
 
-IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".gif", ".webp"}
+from io import BytesIO
 
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import A4
+from PIL import Image
+import os
 
-def _image_file_to_pdf_bytes(django_file) -> BytesIO:
-    """
-    Convierte una imagen (subida) a un PDF monoplano en memoria.
-    Retorna un BytesIO posicionado al inicio.
-    """
+IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff"}
+
+def _image_file_to_pdf_bytes(django_file):
     django_file.open("rb")
     try:
-        img = Image.open(django_file)
-        # Asegurar modo compatible
-        if img.mode in ("RGBA", "P"):
-            img = img.convert("RGB")
-        out = BytesIO()
-        img.save(out, format="PDF")
-        out.seek(0)
-        return out
-    finally:
-        try:
-            django_file.close()
-        except Exception:
-            pass
+        im = Image.open(django_file).convert("RGB")
+        W, H = A4
+        max_w, max_h = W - 80, H - 160
+        iw, ih = im.size
+        scale = min(max_w/iw, max_h/ih, 1.0)
+        im = im.resize((max(1,int(iw*scale)), max(1,int(ih*scale))), Image.LANCZOS)
 
+        pdf_buf = BytesIO()
+        c = canvas.Canvas(pdf_buf, pagesize=A4)
+        x = (W - im.size[0]) / 2
+        y = (H - im.size[1]) / 2
+        from reportlab.lib.utils import ImageReader
+        mem = BytesIO(); im.save(mem, format="PNG"); mem.seek(0)
+        c.drawImage(ImageReader(mem), x, y, width=im.size[0], height=im.size[1],
+                    preserveAspectRatio=True, mask='auto')
+        c.showPage(); c.save(); pdf_buf.seek(0)
+        return pdf_buf
+    finally:
+        try: django_file.close()
+        except: pass
+
+def draw_fullwidth_image_bottom(c, left_margin, right_margin, bottom_margin, img_path):
+    if not img_path or not os.path.isfile(img_path):
+        return
+    from reportlab.lib.utils import ImageReader
+    W, H = c._pagesize  # ← aquí obtenemos el ancho/alto de la página
+    img = ImageReader(img_path)
+    iw, ih = img.getSize()
+    avail_w = W - left_margin - right_margin
+    if avail_w <= 0:
+        return
+    new_h = ih * (avail_w / iw)
+    c.drawImage(img, left_margin, bottom_margin, width=avail_w, height=new_h,
+                preserveAspectRatio=True, mask='auto')
 
 def documentos_a_pdf_dinamico(*, info_escolar=None, documentos_qs=None, titulo="Documentos del alumno") -> bytes:
     """
@@ -1847,7 +1870,7 @@ def documentos_a_pdf_dinamico(*, info_escolar=None, documentos_qs=None, titulo="
 
         #footer_img_path = os.path.join(settings.BASE_DIR, "static", "recibos", "footer.png")
         # Ejemplo alterno: footer_img_path = r"C:\ruta\a\tu\imagen\footer.png"
-        from alumnos.utils import draw_fullwidth_image_bottom
+      
 
         draw_fullwidth_image_bottom(c, W, left_margin, right_margin, bottom_margin, footer_img_path)
 
@@ -3236,7 +3259,7 @@ def estado_cuenta(request, numero_estudiante):
         "telefono": "998 253 6750",
         "rfc": "IUA170913LI2",
         "cct": "23PSU0064H",
-        "email": "contacto@iuaf.mx",
+        "email": "cadministrativa@iuaf.edu.mx",
     }
 
     # ================= Datos del alumno =================
@@ -3600,3 +3623,381 @@ def cargos_con_saldo_view(request, alumno_id):
         'orden': orden,
     }
     return render(request, 'alumnos/cargos_con_saldo.html', ctx)
+
+#############################################################################################################################################
+
+import os
+import mimetypes
+from email.mime.image import MIMEImage
+from io import BytesIO
+
+from django.conf import settings
+from django.contrib import messages
+from django.contrib.auth.decorators import login_required
+from django.contrib.staticfiles import finders
+from django.shortcuts import get_object_or_404, redirect
+from django.template.loader import render_to_string
+from django.utils import timezone
+from django.core.mail import EmailMultiAlternatives
+
+from .models import Alumno  # ajusta si está en otra app
+
+
+# =========================
+# Helper: recoger archivos estáticos de una carpeta
+# =========================
+def collect_program_docs(rel_dir: str):
+    """
+    Devuelve [(abs_path, filename, mimetype), ...] para todos los archivos
+    dentro de la carpeta estática 'rel_dir'. Funciona con FileSystemFinder y AppDirectoriesFinder.
+    """
+    items, candidates = [], []
+
+    for finder in finders.get_finders():
+        if hasattr(finder, "locations"):
+            for prefix, root in getattr(finder, "locations", []):
+                sub = os.path.join(prefix, rel_dir) if prefix else rel_dir
+                candidates.append(os.path.join(root, sub))
+        if hasattr(finder, "storages"):
+            for storage in finder.storages.values():
+                root = getattr(storage, "location", None)
+                if root:
+                    candidates.append(os.path.join(root, rel_dir))
+
+    for cand in candidates:
+        if os.path.isdir(cand):
+            for name in os.listdir(cand):
+                path = os.path.join(cand, name)
+                if os.path.isfile(path):
+                    mime, _ = mimetypes.guess_type(path)
+                    items.append((path, name, mime or "application/octet-stream"))
+
+    seen, unique = set(), []
+    for abs_path, fname, mime in items:
+        if abs_path not in seen:
+            unique.append((abs_path, fname, mime))
+            seen.add(abs_path)
+    return unique
+
+
+# =========================
+# Helper: construir contexto para la carta (igual que la vista HTML)
+# =========================
+def build_carta_ctx(alumno):
+    plan = getattr(alumno, "informacionEscolar", None)
+    if not plan or not getattr(plan, "programa_id", None):
+        return None, None
+
+    programa = plan.programa
+    ctx = {
+        "alumno": alumno,
+        "plan": plan,
+        "programa": programa,
+        "institucion": {
+            "nombre": "Instituto Universitario de Alta Formación",
+            "rfc": "—",
+            "cct": "23PSU0064H",
+            "direccion": "Blvd. Kukulkán Km 3.5, Plaza Nautilus Int. 53, Cancún, Q.R.",
+            "ciudad": "México",
+            "telefono": "998 939 4481",
+            "email": "cadministrativa@iuaf.edu.mx",
+        },
+        "hoy": timezone.localdate(),
+        # Datos grupo / calendario
+        "grupo_codigo": getattr(plan, "grupo", "") or "",
+        "fecha_inicio": getattr(plan, "inicio_programa", None),
+        "fecha_fin": getattr(plan, "fin_programa", None),
+        "meses_programa": getattr(plan, "meses_programa", None),
+        # Cuotas
+        "inscripcion": getattr(plan, "precio_inscripcion", None),
+        "reinscripcion": getattr(plan, "precio_reinscripcion", None),
+        "colegiatura_mensual": getattr(plan, "precio_final", None) or getattr(plan, "precio_colegiatura", None),
+        "meses_pago": getattr(plan, "meses_programa", None),
+        "titulacion": getattr(programa, "titulacion", None) if programa else None,
+        "etiqueta_beca": (plan.financiamiento.beca if getattr(plan, "financiamiento_id", None) else None),
+        # Texto libre
+        "asistencia": "Viernes y Sábado",
+        "horario": "V: 17 a 21 hrs · S: 9 a 14 hrs",
+        "duracion_texto": f"{getattr(plan, 'meses_programa', '—')} MESES",
+    }
+    return ctx, plan
+
+
+# =========================
+# xhtml2pdf link_callback: resuelve STATIC/MEDIA a disco
+# =========================
+def xhtml2pdf_link_callback(uri, rel):
+    s_url, s_root = settings.STATIC_URL, getattr(settings, "STATIC_ROOT", "")
+    m_url, m_root = settings.MEDIA_URL, getattr(settings, "MEDIA_ROOT", "")
+
+    if uri.startswith(s_url):
+        # Busca primero con finders (soporta múltiples storages/apps)
+        relpath = uri[len(s_url):]
+        path = finders.find(relpath)
+        if not path and s_root:
+            path = os.path.join(s_root, relpath)
+        return path or uri
+
+    if m_root and uri.startswith(m_url):
+        return os.path.join(m_root, uri[len(m_url):])
+
+    # Cualquier otra URL: déjala tal cual (evita externas en modo PDF)
+    return uri
+
+
+# =========================
+# HTML -> PDF (WeasyPrint si existe; si no, xhtml2pdf)
+# =========================
+def html_to_pdf_bytes(html: str, base_url: str) -> bytes:
+    # 1) WeasyPrint (recomendado)
+    try:
+        from weasyprint import HTML
+        return HTML(string=html, base_url=base_url).write_pdf()
+    except Exception:
+        pass
+
+    # 2) xhtml2pdf (fallback)
+    from xhtml2pdf import pisa
+    pdf_out = BytesIO()
+    status = pisa.CreatePDF(
+        src=html, dest=pdf_out,
+        link_callback=xhtml2pdf_link_callback,
+        encoding="utf-8",
+    )
+    if status.err:
+        raise RuntimeError("xhtml2pdf no pudo generar el PDF (revisa CSS/recursos).")
+    return pdf_out.getvalue()
+
+
+# =========================
+# Vista: enviar bienvenida + adjuntos por programa + CARTA PDF
+# =========================
+@login_required
+def enviar_bienvenida_estatica(request, alumno_id):
+    """
+    Envía el correo de bienvenida con imágenes inline y adjunta:
+      - Archivos en static/iuaf/bienvenida/<CODIGO_PROGRAMA>/ (o /comun)
+      - La CARTA DE INSCRIPCIÓN (PDF) generada desde reportes/carta_inscripcion.html
+    Reenvío forzado: agregar ?force=1
+    """
+    alumno = get_object_or_404(Alumno, pk=alumno_id)
+    plan = getattr(alumno, "informacionEscolar", None)
+    force = request.GET.get("force") in ("1", "true", "True")
+
+    if plan and getattr(plan, "bienvenida_enviada", False) and not force:
+        messages.info(request, "Este alumno ya tiene marcada la bienvenida como enviada. Usa ?force=1 para reenviar.")
+        return redirect("alumnos_detalle", pk=alumno.pk)
+
+    to_email = (alumno.email or alumno.email_institucional or "").strip()
+    if not to_email:
+        messages.error(request, "El alumno no tiene correo.")
+        return redirect("alumnos_detalle", pk=alumno.pk)
+
+    subject = "Bienvenida al Instituto Universitario de Alta Formación (IUAF)"
+    ctx_mail = {
+        "alumno": alumno,
+        "facebook_url": "https://www.facebook.com/IuafOficial/",
+        "instagram_url": "https://www.instagram.com/iuafoficial/",
+    }
+
+    # Email (texto/HTML)
+    html_mail = render_to_string("emails/bienvenida_estatica.html", ctx_mail, request=request)
+    text_mail = render_to_string("emails/bienvenida_estatica.txt", ctx_mail, request=request)
+
+    msg = EmailMultiAlternatives(
+        subject=subject,
+        body=text_mail,
+        from_email=None,   # usa DEFAULT_FROM_EMAIL
+        to=[to_email],
+    )
+    msg.mixed_subtype = "related"
+    msg.attach_alternative(html_mail, "text/html")
+
+    # --- Imágenes inline (CID) ---
+    logo_path = finders.find("iuaf/iuaf-logo3.png")
+    if logo_path:
+        with open(logo_path, "rb") as f:
+            img = MIMEImage(f.read(), _subtype="png")
+            img.add_header("Content-ID", "<logo-iuaf>")
+            img.add_header("Content-Disposition", "inline", filename="iuaf-logo3.png")
+            msg.attach(img)
+
+    hero_path = finders.find("iuaf/imagencorreo.png")
+    if hero_path:
+        with open(hero_path, "rb") as f:
+            img = MIMEImage(f.read(), _subtype="png")
+            img.add_header("Content-ID", "<hero-iuaf>")
+            img.add_header("Content-Disposition", "inline", filename="imagencorreo.png")
+            msg.attach(img)
+
+    # --- Adjuntos por PROGRAMA ---
+    docs_attached = 0
+    program_code = ""
+    if plan and getattr(plan, "programa", None) and getattr(plan.programa, "codigo", None):
+        program_code = (plan.programa.codigo or "").strip()
+
+    if program_code:
+        rel_dir = os.path.join("iuaf", "bienvenida", program_code)
+        program_docs = collect_program_docs(rel_dir)
+
+        if program_docs:
+            for abs_path, download_name, mime in program_docs:
+                try:
+                    with open(abs_path, "rb") as f:
+                        msg.attach(download_name, f.read(), mime)
+                        docs_attached += 1
+                except Exception as e:
+                    messages.warning(request, f"No se pudo adjuntar {download_name}: {e}")
+        else:
+            messages.warning(request, f"No se encontraron documentos en: {rel_dir}")
+            # Fallback a 'comun'
+            common_rel_dir = os.path.join("iuaf", "bienvenida", "comun")
+            for abs_path, download_name, mime in collect_program_docs(common_rel_dir):
+                try:
+                    with open(abs_path, "rb") as f:
+                        msg.attach(download_name, f.read(), mime)
+                        docs_attached += 1
+                except Exception as e:
+                    messages.warning(request, f"No se pudo adjuntar {download_name}: {e}")
+    else:
+        messages.warning(request, "El alumno no tiene programa/código de programa; no se adjuntaron documentos específicos.")
+
+    # --- Generar y adjuntar CARTA DE INSCRIPCIÓN (PDF) ---
+    try:
+        carta_ctx, _ = build_carta_ctx(alumno)
+        if not carta_ctx:
+            messages.warning(request, "No fue posible construir el contexto de la carta (sin plan/programa).")
+        else:
+            carta_ctx["pdf_mode"] = True  # ⟵ importante para el template
+            carta_html = render_to_string("reportes/carta_inscripcion.html", carta_ctx, request=request)
+            base_url = request.build_absolute_uri("/")  # para WeasyPrint
+
+            carta_pdf = html_to_pdf_bytes(carta_html, base_url=base_url)
+
+            safe_name = f"{alumno.apellido_p or ''}_{alumno.apellido_m or ''}_{alumno.nombre or ''}".strip().replace(" ", "_")
+            carta_filename = f"Carta_Inscripcion_{safe_name or alumno.pk}.pdf"
+
+            msg.attach(carta_filename, carta_pdf, "application/pdf")
+            docs_attached += 1
+    except Exception as e:
+        messages.warning(request, f"No se pudo generar la Carta de Inscripción en PDF: {e}")
+
+    # --- Envío ---
+    try:
+        sent_count = msg.send()
+        if sent_count > 0 and plan:
+            plan.bienvenida_enviada = True
+            plan.bienvenida_enviada_en = timezone.now()
+            plan.bienvenida_enviada_por = request.user
+            plan.save(update_fields=["bienvenida_enviada", "bienvenida_enviada_en", "bienvenida_enviada_por"])
+
+        if sent_count > 0:
+            ok_msg = f"Correo de bienvenida enviado a {to_email}."
+            if docs_attached:
+                ok_msg += f" Adjuntos: {docs_attached}."
+            messages.success(request, ok_msg)
+        else:
+            messages.error(request, "El backend de correo no reportó envíos.")
+    except Exception as e:
+        messages.error(request, f"No se pudo enviar el correo: {e}")
+
+    return redirect("alumnos_detalle", pk=alumno.pk)
+
+#############################################################################################################################################
+
+@login_required
+def expediente_maestria_view(request, alumno_id):
+    alumno = get_object_or_404(Alumno, pk=alumno_id)
+    plan = getattr(alumno, "informacionEscolar", None)
+
+    if not plan or not plan.programa_id:
+        messages.error(request, "El alumno no tiene plan/programa asignado.")
+        return redirect("alumnos_detalle", pk=alumno.pk)
+
+    # Requisitos activos del programa, incluyendo tipo (con orden/presentación/observaciones)
+    reqs = (
+        plan.requisitos_documentales()  # ya hace select_related("tipo")
+        .order_by("tipo__orden", "tipo__nombre")
+    )
+    # Documentos subidos por tipo
+    por_tipo = plan.documentos_por_tipo()
+
+    rows = []
+    consecutivo = 1
+    for req in reqs:
+        tipo = req.tipo
+        subidos = len(por_tipo.get(tipo.id, []))
+        entrego = subidos >= (req.minimo or 1)  # cumple mínimo
+
+        rows.append({
+            "num": consecutivo,
+            "descripcion": tipo.nombre,
+            "presentacion": tipo.presentacion or "",
+            "entrego_si": entrego,
+            "entrego_no": not entrego,
+            "observaciones": tipo.observaciones or "",
+        })
+        consecutivo += 1
+
+    ctx = {
+        "alumno": alumno,
+        "plan": plan,
+        "programa": plan.programa,
+        "rows": rows,
+        # Cabeceras opcionales para el reporte
+        "titulo": f"EXPEDIENTE DE INGRESO A {plan.programa.nombre} CON ESTUDIOS EN MÉXICO",
+        "subtitulo": f"Programa: {plan.programa.codigo} — {plan.programa.nombre}" if plan.programa else "",
+    }
+
+    # Si quieres PDF más adelante, aquí puedes checar ?format=pdf y renderizar con WeasyPrint
+    return render(request, "reportes/EXPEDIENTE DE INGRESO.html", ctx)
+################################################################################################
+from django.shortcuts import render, get_object_or_404, redirect
+from django.contrib import messages
+from django.utils import timezone
+
+@login_required
+def carta_inscripcion_view(request, alumno_id):
+    alumno = get_object_or_404(Alumno, pk=alumno_id)
+    plan = getattr(alumno, "informacionEscolar", None)
+
+    if not plan or not plan.programa_id:
+        messages.error(request, "El alumno no tiene plan/programa asignado.")
+        return redirect("alumnos_detalle", pk=alumno.pk)
+
+    programa = plan.programa
+
+    # Campos base (usan valores del plan; si faltan, caen a None/“—” en el template)
+    ctx = {
+        "alumno": alumno,
+        "plan": plan,
+        "programa": programa,
+        "institucion": {
+            "nombre": "Instituto Universitario de Alta Formación",
+            "rfc": "—",
+            "cct": "23PSU0064H",
+            "direccion": "Blvd. Kukulkán Km 3.5, Plaza Nautilus Int. 53, Cancún, Q.R.",
+            "ciudad": "México",
+            "telefono": "998 939 4481",
+            "email": "cadministrativa@iuaf.edu.mx",
+        },
+        "hoy": timezone.localdate(),  # fecha actual
+        # Datos de “grupo” y calendario
+        "grupo_codigo": plan.grupo or "",
+        "fecha_inicio": plan.inicio_programa,   # date o None
+        "fecha_fin": plan.fin_programa,         # date o None
+        "meses_programa": plan.meses_programa,  # int
+        # Cuotas (con beca ya considerada en precio_final si dejas tu lógica)
+        "inscripcion": plan.precio_inscripcion,
+        "reinscripcion": plan.precio_reinscripcion,
+        "colegiatura_mensual": plan.precio_final or plan.precio_colegiatura,
+        "meses_pago": plan.meses_programa,
+        "titulacion": programa.titulacion if programa else None,
+        "etiqueta_beca": (plan.financiamiento.beca if plan.financiamiento_id else None),
+        # Texto de horarios/observaciones (pon lo que tengas; aquí dejamos ejemplos)
+        "asistencia": "Viernes y Sábado",     # o saca de otro campo si ya lo tienes
+        "horario": "V: 17 a 21 hrs · S: 9 a 14 hrs",
+        "duracion_texto": f"{plan.meses_programa or '—'} MESES",
+    }
+
+    return render(request, "reportes/carta_inscripcion.html", ctx)

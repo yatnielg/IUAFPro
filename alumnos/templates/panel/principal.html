@@ -1,6 +1,8 @@
 {% extends "panel/grafico.html" %}  <!-- o el nombre de tu base -->
 
 {% block main_content %}
+
+
     {% if alertas_global %}
         {% if alertas_global.negocio %}
             {% include "ecommerce/panel/paneltem/wizard_crear_Negocio.html" %}
