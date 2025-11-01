@@ -243,48 +243,90 @@ def datos_desde_constancia_pdf(path_pdf: str):
 
 
 
-def datos_desde_gobmx_curp(curp_v2 = "GOHY840512HNENRT05"):
+def datos_desde_gobmx_curp(curp_v2="GOHY840512HNENRT05"):
     from selenium import webdriver
     from selenium.webdriver.common.by import By
     from selenium.webdriver.chrome.service import Service
     from selenium.webdriver.chrome.options import Options
     from selenium.webdriver.support.ui import WebDriverWait
     from selenium.webdriver.support import expected_conditions as EC
-    from webdriver_manager.chrome import ChromeDriverManager
     from selenium.common.exceptions import TimeoutException, NoSuchElementException
     from bs4 import BeautifulSoup
-    from datetime import datetime, timedelta
-    import time
+    import os, sys, shutil, time
 
-    CURP = curp_v2
+    CURP = (curp_v2 or "").strip().upper()
+    if not CURP:
+        return {}
 
     opts = Options()
-    # Si quieres ver el navegador activa/descomenta la siguiente línea:
-    # opts.add_argument("--headless=new")
-    opts.add_argument("--disable-gpu")
+    # headless en servidor; en local puedes comentar esta línea para ver el navegador
+    opts.add_argument("--headless=new")
     opts.add_argument("--no-sandbox")
-    # Menos huellas (no garantiza que pase todos los bloqueos)
+    opts.add_argument("--disable-dev-shm-usage")
+    opts.add_argument("--disable-gpu")
+    opts.add_argument("--window-size=1280,1200")
     opts.add_experimental_option("excludeSwitches", ["enable-automation"])
     opts.add_experimental_option("useAutomationExtension", False)
     opts.add_argument(
-        "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        "user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     )
 
-    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=opts)
-    wait = WebDriverWait(driver, 20)
+    # ----------- INICIALIZACIÓN CROSS-PLATFORM -----------
+    is_windows = sys.platform.startswith("win")
+    try:
+        if is_windows:
+            # En Windows usamos webdriver_manager (cómodo para dev)
+            from webdriver_manager.chrome import ChromeDriverManager
+            # No pongas binary_location: Chrome se detecta solo si está instalado.
+            service = Service(ChromeDriverManager().install())
+        else:
+            # En Linux/Docker usamos binarios del sistema (instálalos en la imagen)
+            CHROME_BIN = os.getenv("CHROME_BIN", "/usr/bin/chromium")
+            CHROMEDRIVER_BIN = os.getenv("CHROMEDRIVER_BIN", "/usr/bin/chromedriver")
+            if not os.path.exists(CHROME_BIN):
+                raise FileNotFoundError(f"No existe CHROME_BIN: {CHROME_BIN}")
+            if not os.path.exists(CHROMEDRIVER_BIN):
+                raise FileNotFoundError(f"No existe CHROMEDRIVER_BIN: {CHROMEDRIVER_BIN}")
+            opts.binary_location = CHROME_BIN
+            service = Service(CHROMEDRIVER_BIN)
+
+        driver = webdriver.Chrome(service=service, options=opts)
+    except Exception as e:
+        # Fallback en Windows: intentar con Edge si existe
+        if is_windows:
+            try:
+                from selenium.webdriver.edge.service import Service as EdgeService
+                from selenium.webdriver.edge.options import Options as EdgeOptions
+                from webdriver_manager.microsoft import EdgeChromiumDriverManager
+
+                eopts = EdgeOptions()
+                eopts.add_argument("--headless=new")
+                eopts.add_argument("--no-sandbox")
+                eopts.add_argument("--disable-dev-shm-usage")
+                eopts.add_argument("--disable-gpu")
+                eopts.add_argument("--window-size=1280,1200")
+                service = EdgeService(EdgeChromiumDriverManager().install())
+                driver = webdriver.Edge(service=service, options=eopts)
+            except Exception:
+                raise RuntimeError(
+                    "No pude iniciar Chrome/Chromedriver en Windows. "
+                    "Instala Google Chrome o usa Edge (tengo fallback), "
+                    "o bien instala manualmente el driver. Error original: %r" % e
+                )
+
+    wait = WebDriverWait(driver, 25)
 
     try:
         driver.get("https://www.gob.mx/curp/")
 
-        # ---- 1) Esperar que desaparezca overlay de seguridad (si existe) ----
+        # 1) Overlay/captcha
         try:
             wait.until(EC.invisibility_of_element_located((By.ID, "sec-overlay")))
         except TimeoutException:
-            # Si permanece, es muy probable que haya un challenge/captcha que bloquee la automatización
-            raise RuntimeError("Overlay de seguridad activo (captcha). No se puede automatizar sin intervención humana.")
+            raise RuntimeError("Overlay/captcha activo en gob.mx (no automatizable).")
 
-        # ---- 2) Buscar campo CURP (probamos varios selectores) ----
+        # 2) Input CURP
         possible_selectors = [
             (By.ID, "curpInput"),
             (By.CSS_SELECTOR, "input#curpInput"),
@@ -292,29 +334,24 @@ def datos_desde_gobmx_curp(curp_v2 = "GOHY840512HNENRT05"):
             (By.CSS_SELECTOR, "input[formcontrolname='curp']"),
             (By.CSS_SELECTOR, "input[type='text']"),
         ]
-
         curp_input = None
         for how, sel in possible_selectors:
             try:
-                curp_input = wait.until(EC.presence_of_element_located((how, sel)))
-                wait.until(EC.element_to_be_clickable((how, sel)))
+                curp_input = wait.until(EC.element_to_be_clickable((how, sel)))
                 break
             except TimeoutException:
                 continue
-
         if not curp_input:
-            raise NoSuchElementException("No se encontró el campo CURP en la página (posible cambio de DOM o captcha).")
+            raise NoSuchElementException("No se encontró el campo CURP (DOM cambió o captcha).")
 
-        # ---- 3) Ingresar CURP y enviar ----
         curp_input.clear()
         curp_input.send_keys(CURP)
 
-        # Intentamos varios botones posibles
+        # 3) Click en Buscar
         clicked = False
         for how, sel in [
             (By.ID, "btnBuscar"),
             (By.CSS_SELECTOR, "button#btnBuscar"),
-            (By.XPATH, "//button[contains(translate(., 'BUSCAR', 'buscar'), 'buscar')]"),
             (By.XPATH, "//button[contains(., 'Buscar')]"),
             (By.CSS_SELECTOR, "button[type='submit']"),
         ]:
@@ -324,55 +361,48 @@ def datos_desde_gobmx_curp(curp_v2 = "GOHY840512HNENRT05"):
                 clicked = True
                 break
             except Exception:
-                continue
-
+                pass
         if not clicked:
-            # a veces el sitio usa JS que escucha ENTER en el input
             curp_input.send_keys("\n")
 
-        # ---- 4) Esperar a que aparezcan los resultados ----
+        # 4) Esperar resultados
         try:
-            wait.until(EC.presence_of_element_located((By.XPATH, "//*[contains(., 'Datos del solicitante')]")))
+            wait.until(EC.presence_of_element_located(
+                (By.XPATH, "//*[contains(., 'Datos del solicitante')]")
+            ))
         except TimeoutException:
-            # quizás la página volvió distinto; dump del page_source te ayudará a depurar
-            raise RuntimeError("No aparecieron los resultados (posible bloqueo o cambio en la página). Revisa driver.page_source para depurar.")
+            raise RuntimeError("No aparecieron resultados; posible bloqueo/cambio de página.")
 
-        # Pequeña espera extra para que todo renderice
         time.sleep(1)
 
-        # ---- 5) Parsear resultado con BeautifulSoup (más robusto para extraer texto limpio) ----
+        # 5) Parse
         soup = BeautifulSoup(driver.page_source, "lxml")
-
-        # Buscamos el encabezado "Datos del solicitante" y extraemos la tabla asociada
-        h4 = soup.find("h4", string=lambda s: s and "Datos del solicitante" in s)
         datos = {}
-
+        h4 = soup.find("h4", string=lambda s: s and "Datos del solicitante" in s)
         if h4:
             panel_div = h4.find_parent("div", class_="panel")
             if panel_div:
-                rows = panel_div.select("table tr")
-                for row in rows:
+                for row in panel_div.select("table tr"):
                     tds = row.find_all("td")
                     if len(tds) == 2:
                         etiqueta = tds[0].get_text(strip=True).rstrip(":")
                         valor = tds[1].get_text(strip=True)
                         datos[etiqueta] = valor
 
-        # ---- 6) Si BS no encontró nada, fallback con Selenium directo (texto visible en DOM) ----
         if not datos:
             try:
-                panel_elem = driver.find_element(By.XPATH, "//h4[contains(., 'Datos del solicitante')]/ancestor::div[contains(@class,'panel')]")
-                rows_elems = panel_elem.find_elements(By.CSS_SELECTOR, "table tr")
-                for r in rows_elems:
+                panel_elem = driver.find_element(
+                    By.XPATH, "//h4[contains(., 'Datos del solicitante')]/ancestor::div[contains(@class,'panel')]"
+                )
+                for r in panel_elem.find_elements(By.CSS_SELECTOR, "table tr"):
                     tds = r.find_elements(By.TAG_NAME, "td")
                     if len(tds) == 2:
                         etiqueta = tds[0].text.strip().rstrip(":")
                         valor = tds[1].text.strip()
                         datos[etiqueta] = valor
             except Exception:
-                pass  # dejamos datos vacíos si no se puede
+                pass
 
-        # ---- 7) Imprimir solo los campos importantes (si existen) ----
         salida = {
             "CURP": datos.get("CURP") or datos.get("Curp"),
             "Nombre": datos.get("Nombre(s)"),
@@ -383,17 +413,7 @@ def datos_desde_gobmx_curp(curp_v2 = "GOHY840512HNENRT05"):
             "Nacionalidad": datos.get("Nacionalidad"),
             "EntidadNacimiento": datos.get("Entidad de nacimiento"),
         }
-
-        # Filtrar claves que sean None (opcional)
-        salida_limpia = {k: v for k, v in salida.items() if v}
-
-        for key, value in salida_limpia.items():
-            print(f"{key}: {value}")
-
-        return salida_limpia
-
-    except Exception as e:
-        print("Fallo:", repr(e))
+        return {k: v for k, v in salida.items() if v}
     finally:
         try:
             driver.quit()
