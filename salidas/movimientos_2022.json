@@ -1,5 +1,47 @@
 [
   {
+    "fecha": "2025-10-30",
+    "tipo": "Abono Interbancario",
+    "monto": 1650.0,
+    "signo": null,
+    "sucursal": "870",
+    "referencia_numerica": "301025",
+    "referencia_alfanumerica": null,
+    "concepto": null,
+    "autorizacion": "00432644",
+    "emisor_nombre": null,
+    "institucion_emisora": null,
+    "descripcion_raw": " |  | 30/10/2025 | Abono Interbancario\nSucursal: 870\nReferencia Numérica: 301025\nReferencia alfanumérica: ANA AYLIN VISOSO\nNo. de Autorización: 00432644\nNombre del Emisor: ANA AYLIN,VISOSO/ | 1,650.00 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | "
+  },
+  {
+    "fecha": "2025-10-30",
+    "tipo": "Abono Interbancario",
+    "monto": 5667.0,
+    "signo": null,
+    "sucursal": "859",
+    "referencia_numerica": "4569",
+    "referencia_alfanumerica": null,
+    "concepto": "Doctorado",
+    "autorizacion": "01486010",
+    "emisor_nombre": "LUIS HERIBERTO GONZALEZ ZARAT",
+    "institucion_emisora": "HSBC",
+    "descripcion_raw": " |  | 30/10/2025 | Abono Interbancario\nSucursal: 859\nReferencia Numérica: 4569\nConcepto del Pago: Doctorado\nNo. de Autorización: 01486010\nNombre del Emisor: LUIS HERIBERTO GONZALEZ ZARAT\nInstitución Emisora: HSBC | 5,667.00 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | "
+  },
+  {
+    "fecha": "2025-10-30",
+    "tipo": "Abono Interbancario",
+    "monto": 4550.0,
+    "signo": null,
+    "sucursal": "859",
+    "referencia_numerica": "7673108",
+    "referencia_alfanumerica": null,
+    "concepto": null,
+    "autorizacion": "01976756",
+    "emisor_nombre": "ELVIRA ZUGEILY SOTO CORELLA",
+    "institucion_emisora": "SANTANDER",
+    "descripcion_raw": " |  | 30/10/2025 | Abono Interbancario\nSucursal: 859\nReferencia Numérica: 7673108\nConcepto del Pago: 1 Y 2 MENSUALIDAD ZUGEILY SOTO CORELLA\nNo. de Autorización: 01976756\nNombre del Emisor: ELVIRA ZUGEILY SOTO CORELLA\nInstitución Emisora: SANTANDER | 4,550.00 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | "
+  },
+  {
     "fecha": "2025-10-29",
     "tipo": "Abono Interbancario",
     "monto": 3497.0,
@@ -2741,7 +2783,7 @@
     "autorizacion": "00285961",
     "emisor_nombre": null,
     "institucion_emisora": null,
-    "descripcion_raw": " |  | 13/08/2025 | Abono Interbancario\nSucursal: 519\nReferencia Numérica: 130825\nReferencia alfanumérica: ALVARO ALEJANDRO ZENIL RODRIGU\nNo. de Autorización: 00285961\nNombre del Emisor: ALVARO ALEJANDRO,ZENIL/RODRIGU | 5,200.00 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | "
+    "descripcion_raw": " |  | 13/08/2025 | Abono Interbancario\nSucursal: 519\nReferencia Numérica: 130825\nReferencia alfanumérica: ALVARO ALEJANDRO ZENIL RODRIGU\nNo. de Autorización: 00285961\nNombre del Emisor: samantha bravo | 5,200.00 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | "
   },
   {
     "fecha": "2025-08-13",

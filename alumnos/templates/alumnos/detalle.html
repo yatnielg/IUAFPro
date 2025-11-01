@@ -8,6 +8,19 @@
 
 
 
+
+{% comment %} {% if request.user.is_superuser %}
+  <a
+     href="{% url 'alumno_carta_pdf' alumno.numero_estudiante %}"
+     class="btn btn-success"> 
+    Guardar PDF
+  </a>
+
+{% endif %}
+ {% endcomment %}
+
+
+
 {% if not pdf_mode %}
 <div class="d-flex gap-2 justify-content-end mt-2">
 

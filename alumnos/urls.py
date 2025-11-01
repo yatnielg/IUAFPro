@@ -62,27 +62,14 @@ urlpatterns = [
     path("alumnos/api/financiamientos/", views.api_financiamientos_list, name="api_financiamientos_list"),
     path("alumnos/<int:numero_estudiante>/generar_cargos/",alumnos_views.generar_cargos_mensuales,name="generar_cargos_mensuales"),
     path("alumnos/cargos/pendientes/", alumnos_views.cargos_pendientes_todos, name="cargos_pendientes_todos"),
-
     path("alumnos/<int:pk>/cargos/nuevo/", views.cargo_crear, name="cargo_crear"),
     path("alumnos/<int:alumno_pk>/cargos/<int:cargo_id>/editar/", views.cargo_editar, name="cargo_editar"), 
-
-    path(
-        'alumnos/<int:alumno_id>/cargos/<int:cargo_id>/eliminar/',
-        views.cargo_eliminar,
-        name='cargo_eliminar'
-    ),
-
+    path('alumnos/<int:alumno_id>/cargos/<int:cargo_id>/eliminar/', views.cargo_eliminar, name='cargo_eliminar'),
     path('alumnos/<int:alumno_id>/saldos/<str:concepto_codigo>/', views.saldos_por_concepto_view, name='saldos_por_concepto'),
     path('alumnos/<int:alumno_id>/cargos-con-saldo/', views.cargos_con_saldo_view, name='cargos_con_saldo'),
     path("alumnos/<int:alumno_id>/enviar-bienvenida/", views.enviar_bienvenida_estatica, name="enviar_bienvenida_estatica"),
-
     path("alumnos/<int:alumno_id>/expediente/", views.expediente_maestria_view, name="expediente_maestria"),
-
     path("alumnos/<int:alumno_id>/carta/", views.carta_inscripcion_view, name="alumno_carta"),
     path("alumnos/<int:alumno_id>/carta/pdf/", views.carta_inscripcion_pdf_view, name="alumno_carta_pdf"),
-
-
-
-    #path("banco/movimientos/", views.MovimientoBancoListView.as_view(), name="movimientos_banco_lista"),
 
 ]

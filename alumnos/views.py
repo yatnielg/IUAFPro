@@ -2017,7 +2017,7 @@ class MovimientoBancoListView(ListView):
         if fmax:
             qs = qs.filter(fecha__lte=fmax)
 
-        return qs.order_by("id")
+        return qs.order_by("-id")
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -3964,40 +3964,40 @@ def enviar_bienvenida_estatica(request, alumno_id):
         _dbg("Sin program_code; no se adjuntan docs específicos.")
         messages.warning(request, "El alumno no tiene programa/código de programa; no se adjuntaron documentos específicos.")
 
-    # ========= NUEVO: NO GENERAR CARTA =========
-    # Solo intentar ADJUNTAR la carta si ya existe en static/iuaf/bienvenida/pdf/<numero>.pdf
+    # ========= Adjuntar CARTA desde STATIC_ROOT/staticfiles =========
+    def _safe_student_number(al):
+        sn = str(getattr(al, "numero_estudiante", "") or f"alumno_{al.pk}").strip()
+        return "".join(ch for ch in sn if ch.isalnum() or ch in ("-", "_"))
+
     stored_path = None  # para evitar duplicados al buscar PDFs adicionales
     try:
-        # Resolver raíz de escritura estática
-        if getattr(settings, "STATICFILES_DIRS", None):
-            static_write_root = settings.STATICFILES_DIRS[0]
-        else:
-            static_write_root = os.path.join(settings.BASE_DIR, "static")
-        pdf_dir = os.path.join(static_write_root, "iuaf", "bienvenida", "pdf")
-        os.makedirs(pdf_dir, exist_ok=True)
-        _dbg(f"pdf_dir={pdf_dir} (exists={os.path.isdir(pdf_dir)})")
+        static_write_root = _static_write_root()  # <- usa STATIC_ROOT si existe
+        pdf_dir = static_write_root / "iuaf" / "bienvenida" / "pdf"
+        pdf_dir.mkdir(parents=True, exist_ok=True)
+        _dbg(f"pdf_dir={pdf_dir} (exists={pdf_dir.exists()})")
 
-        student_number = str(getattr(alumno, "numero_estudiante", "") or f"alumno_{alumno.pk}")
+        student_number = _safe_student_number(alumno)
         stored_filename = f"{student_number}.pdf"
-        candidate_path = os.path.abspath(os.path.join(pdf_dir, stored_filename))
+        candidate_path = (pdf_dir / stored_filename).resolve()
         _dbg(f"Buscando carta ya creada: {candidate_path}")
+        _dbg(f"exists={candidate_path.exists()}; size={candidate_path.stat().st_size if candidate_path.exists() else '—'}")
 
-        if os.path.isfile(candidate_path):
+        if candidate_path.exists():
             try:
-                with open(candidate_path, "rb") as f:
-                    # Nombre “bonito” para el adjunto
-                    def clean(s): return " ".join((s or "").split())
-                    safe_name = "_".join(filter(None, [
-                        clean(getattr(alumno, "apellido_p", None)),
-                        clean(getattr(alumno, "apellido_m", None)),
-                        clean(getattr(alumno, "nombre", None)),
-                    ])).replace(" ", "_") or str(alumno.pk)
+                # Nombre “bonito” para el adjunto
+                def clean(s): return " ".join((s or "").split())
+                safe_name = "_".join(filter(None, [
+                    clean(getattr(alumno, "apellido_p", None)),
+                    clean(getattr(alumno, "apellido_m", None)),
+                    clean(getattr(alumno, "nombre", None)),
+                ])).replace(" ", "_") or str(alumno.pk)
 
-                    attach_name = f"Carta_Inscripcion_{safe_name}.pdf"
+                attach_name = f"Carta_Inscripcion_{safe_name}.pdf"
+                with open(candidate_path, "rb") as f:
                     msg.attach(attach_name, f.read(), "application/pdf")
-                    docs_attached += 1
-                    stored_path = candidate_path  # para evitar duplicados luego
-                    _dbg(f"Carta existente adjuntada como '{attach_name}'.")
+                docs_attached += 1
+                stored_path = str(candidate_path)  # para evitar duplicados luego
+                _dbg(f"Carta existente adjuntada como '{attach_name}'.")
             except Exception as e:
                 _dbg(f"No se pudo adjuntar carta existente: {e}\n{traceback.format_exc()}")
                 messages.warning(request, f"No se pudo adjuntar carta existente: {e}")
@@ -4010,15 +4010,12 @@ def enviar_bienvenida_estatica(request, alumno_id):
 
     # Adjuntar OTROS PDFs del alumno (que contengan el número) sin duplicar la carta
     try:
-        if getattr(settings, "STATICFILES_DIRS", None):
-            static_write_root = settings.STATICFILES_DIRS[0]
-        else:
-            static_write_root = os.path.join(settings.BASE_DIR, "static")
-        pdf_dir = os.path.join(static_write_root, "iuaf", "bienvenida", "pdf")
-        student_number = str(getattr(alumno, "numero_estudiante", "") or f"alumno_{alumno.pk}")
+        static_write_root = _static_write_root()
+        pdf_dir = static_write_root / "iuaf" / "bienvenida" / "pdf"
+        student_number = _safe_student_number(alumno)
 
         _dbg(f"Buscando PDFs adicionales en {pdf_dir} para student_number='{student_number}'")
-        if os.path.isdir(pdf_dir):
+        if pdf_dir.exists():
             names = os.listdir(pdf_dir)
             _dbg(f"PDFs en carpeta: {names}")
             for fname in names:
@@ -4026,9 +4023,9 @@ def enviar_bienvenida_estatica(request, alumno_id):
                     continue
                 if student_number not in fname:
                     continue
-                fpath = os.path.abspath(os.path.join(pdf_dir, fname))
+                fpath = (pdf_dir / fname).resolve()
                 # Evitar duplicar la carta ya adjuntada
-                if stored_path and os.path.normcase(fpath) == os.path.normcase(stored_path):
+                if stored_path and os.path.normcase(str(fpath)) == os.path.normcase(stored_path):
                     _dbg(f"Omitiendo (ya se adjuntó carta): {fname}")
                     continue
                 try:
@@ -4078,6 +4075,7 @@ def enviar_bienvenida_estatica(request, alumno_id):
 
     _dbg("== FIN enviar_bienvenida_estatica ==")
     return redirect("alumnos_detalle", pk=alumno.pk)
+
 
 
 
@@ -4188,20 +4186,126 @@ def carta_inscripcion_view(request, alumno_id):
     }
     return render(request, "reportes/carta_inscripcion.html", ctx)
 
+##########################################################################################
+from pathlib import Path
+import os, traceback, logging, re
+from django.contrib import messages
+from django.contrib.auth.decorators import login_required
+from django.http import Http404
+from django.shortcuts import get_object_or_404, redirect
+from django.template.loader import render_to_string
+from django.utils import timezone
+from django.conf import settings
+from django.contrib.staticfiles import finders
+from xhtml2pdf import pisa
+
+logger = logging.getLogger(__name__)
+
+# --- Helpers --------------------------------------------------------------
+
+from pathlib import Path
+from django.conf import settings
+import os
+
+def _static_write_root() -> Path:
+    """
+    Devuelve la carpeta donde ESCRIBIR/BUSCAR artefactos estáticos generados.
+    Prioriza STATIC_ROOT (p.ej. .../staticfiles). Si no hay, usa STATICFILES_DIRS[0].
+    Fallback: BASE_DIR/static.
+    """
+    # 1) STATIC_ROOT (salida de collectstatic)
+    root = getattr(settings, "STATIC_ROOT", None)
+    if root:
+        p = Path(root)
+        p.mkdir(parents=True, exist_ok=True)
+        return p
+
+    # 2) STATICFILES_DIRS[0] (fuente en desarrollo)
+    sfd = getattr(settings, "STATICFILES_DIRS", None)
+    if sfd and len(sfd) > 0:
+        p = Path(sfd[0])
+        p.mkdir(parents=True, exist_ok=True)
+        return p
+
+    # 3) Fallback
+    p = Path(settings.BASE_DIR) / "static"
+    p.mkdir(parents=True, exist_ok=True)
+    return p
+
+def _pisa_link_callback(uri, rel):
+    """
+    Convierte URIs de la plantilla (static/media/http) en rutas de archivo locales
+    para que xhtml2pdf (reportlab) pueda leer imágenes y CSS.
+    """
+    # MEDIA
+    media_url = getattr(settings, "MEDIA_URL", "")
+    media_root = getattr(settings, "MEDIA_ROOT", "")
+    if media_url and uri.startswith(media_url):
+        path = os.path.join(media_root, uri.replace(media_url, "").lstrip("/"))
+        return path
+
+    # STATIC: buscar con finders para respetar pipeline de staticfiles
+    static_url = getattr(settings, "STATIC_URL", "")
+    if static_url and uri.startswith(static_url):
+        relpath = uri.replace(static_url, "").lstrip("/")
+        found = finders.find(relpath)
+        if isinstance(found, (list, tuple)):
+            found = found[0]
+        # Si no lo encuentra, intentar construir relativo al root
+        if not found:
+            candidate = _static_write_root() / relpath
+            if candidate.exists():
+                return str(candidate)
+        return found or relpath
+
+    # URLs absolutas http(s): xhtml2pdf puede intentar descargarlas (no recomendado)
+    if uri.startswith("http://") or uri.startswith("https://"):
+        return uri
+
+    # Rutas absolutas del sistema
+    if os.path.isabs(uri) and os.path.exists(uri):
+        return uri
+
+    # Último recurso: devolver tal cual
+    return uri
+
+# (Opcional) Si en tu HTML llegan variables CSS tipo var(--line), puedes sanear:
+CSS_VAR_MAP = {
+    "--brand": "#6f42c1",
+    "--brand-2": "#8a63d2",
+    "--ink": "#0f172a",
+    "--muted": "#6b7280",
+    "--line": "#e5e7eb",
+    "--bg": "#f6f7fb",
+    "--panel": "#ffffff",
+    "--accent": "#16a34a",
+    "--accent-ink": "#064e3b",
+    "--ink-2": "#111827",
+}
+_VAR_RE = re.compile(r"var\(\s*(--[a-zA-Z0-9_-]+)\s*(?:,\s*([^)]+))?\)")
+
+def _replace_css_vars(html: str) -> str:
+    def _sub(m):
+        name = m.group(1)
+        fallback = (m.group(2) or "").strip()
+        val = CSS_VAR_MAP.get(name)
+        if val:
+            return val
+        return fallback or "#000000"
+    return _VAR_RE.sub(_sub, html)
+
+# --- Vista ---------------------------------------------------------------
 
 @login_required
 def carta_inscripcion_pdf_view(request, alumno_id):
+    print("[PDF/PISA] INICIO vista carta_inscripcion_pdf_view")
     alumno = get_object_or_404(Alumno, pk=alumno_id)
     plan = getattr(alumno, "informacionEscolar", None)
-
     if not plan or not plan.programa_id:
         messages.error(request, "El alumno no tiene plan/programa asignado.")
-        # Mantenerse en la página actual si es posible
-        ref = request.META.get("HTTP_REFERER")
-        return redirect(ref or "alumnos_detalle", pk=alumno.pk)
+        return redirect(request.META.get("HTTP_REFERER") or "alumnos_detalle", pk=alumno.pk)
 
     programa = plan.programa
-
     ctx = {
         "alumno": alumno,
         "plan": plan,
@@ -4232,46 +4336,54 @@ def carta_inscripcion_pdf_view(request, alumno_id):
         "pdf_mode": True,  # evita CSS/JS externos en el PDF
     }
 
-    # 1) Renderiza el HTML
-    html = render_to_string("reportes/carta_inscripcion.html", ctx, request=request)
+    # 1) Render HTML
+    try:
+        html = render_to_string("reportes/carta_inscripcion.html", ctx, request=request)
+        print("[PDF/PISA] HTML renderizado OK (len)", len(html))
+    except Exception as e:
+        logger.exception("[PDF/PISA] Error render_to_string")
+        messages.error(request, f"Error renderizando plantilla: {e}")
+        return redirect(request.META.get("HTTP_REFERER") or "alumnos_detalle", pk=alumno.pk)
 
-    # 2) Inyecta <base href="..."> para que /static/... y rutas relativas funcionen
-    base_url = request.build_absolute_uri("/")  # p.ej. http://127.0.0.1:8000/
-    if "<head>" in html:
-        html = html.replace("<head>", f'<head><base href="{base_url}">', 1)
-    else:
-        html = f'<base href="{base_url}">{html}'
+    # (Opcional) Sanea variables CSS si quedara alguna var(--xxx)
+    html = _replace_css_vars(html)
 
-    # 3) Prepara destino en "static/" (NO usar STATIC_ROOT)
-    if getattr(settings, "STATICFILES_DIRS", None):
-        static_write_root = settings.STATICFILES_DIRS[0]
-    else:
-        static_write_root = os.path.join(settings.BASE_DIR, "static")
+    # 2) Carpeta de salida dentro de STATIC (lo que pediste)
+    static_root = _static_write_root()
+    out_dir = static_root / "iuaf" / "bienvenida" / "pdf"
+    out_dir.mkdir(parents=True, exist_ok=True)
 
-    dest_dir = os.path.join(static_write_root, "iuaf", "bienvenida", "pdf")
-    os.makedirs(dest_dir, exist_ok=True)
+    # 2.a) Guardar HTML DEBUG en la misma carpeta
+    #debug_html = out_dir / f"DEBUG_{alumno.numero_estudiante}.html"
+    #try:
+    #    debug_html.write_text(html, encoding="utf-8")
+    #    print(f"[PDF/PISA] HTML debug: {debug_html}")
+    #except Exception as e:
+    #    print("[PDF/PISA][WARN] No pudo guardar HTML debug:", e)
 
-    filename = f"{alumno.numero_estudiante}.pdf"
-    filepath = os.path.join(dest_dir, filename)
+    # 3) Generar PDF con xhtml2pdf
+    out_path = out_dir / f"{alumno.numero_estudiante}.pdf"
+    print(f"[PDF/PISA] Escribirá en: {out_path}")
 
     try:
-        # 4) Genera PDF con Playwright (sin redirigir a ningún lado)
-        with sync_playwright() as p:
-            browser = p.chromium.launch()  # headless por defecto
-            page = browser.new_page()
-            page.set_content(html, wait_until="networkidle")
-            page.pdf(
-                path=filepath,
-                print_background=True,
-                format="Letter",
-                margin={"top": "0.55in", "right": "0.55in", "bottom": "0.55in", "left": "0.55in"},
+        with open(out_path, "wb") as f:
+            pisa_status = pisa.CreatePDF(
+                src=html,
+                dest=f,
+                link_callback=_pisa_link_callback,
+                encoding="utf-8",
             )
-            browser.close()
-
-        messages.success(request, f"PDF guardado como {filename}.")
+        if pisa_status.err:
+            print("[PDF/PISA][ERROR] pisa err=True")
+            messages.error(request, "No se pudo generar el PDF (pisa). Revisa HTML/CSS.")
+        else:
+            print("[PDF/PISA] PDF generado OK")
+            messages.success(request, f"PDF guardado como {out_path.name}.")
     except Exception as e:
+        tb = traceback.format_exc()
+        print("[PDF/PISA][ERROR] Excepción creando PDF:", e)
+        print("[PDF/PISA][TRACEBACK]\n", tb)
         messages.error(request, f"No se pudo generar el PDF: {e}")
 
-    # 5) Mantenerse en la misma página (o fallback al detalle del alumno)
-    ref = request.META.get("HTTP_REFERER")
-    return redirect(ref or "alumnos_detalle", pk=alumno.pk)
+    # 4) Regresar a la misma página
+    return redirect(request.META.get("HTTP_REFERER") or "alumnos_detalle", pk=alumno.pk)
