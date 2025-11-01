@@ -79,6 +79,8 @@ urlpatterns = [
     path("alumnos/<int:alumno_id>/expediente/", views.expediente_maestria_view, name="expediente_maestria"),
 
     path("alumnos/<int:alumno_id>/carta/", views.carta_inscripcion_view, name="alumno_carta"),
+    path("alumnos/<int:alumno_id>/carta/pdf/", views.carta_inscripcion_pdf_view, name="alumno_carta_pdf"),
+
 
 
     #path("banco/movimientos/", views.MovimientoBancoListView.as_view(), name="movimientos_banco_lista"),

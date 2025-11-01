@@ -7,9 +7,21 @@
   <title>Carta de Inscripción — {{ programa.nombre|default:"Programa" }}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
+  {# Solo WEB: Bootstrap y Google Fonts #}
   {% if not pdf_mode %}
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+  {% endif %}
+
+  {# Solo PDF: fuente local segura para xhtml2pdf #}
+  {% if pdf_mode %}
+  <style>
+    @font-face{
+      font-family:'DejaVuSans';
+      src:url("{% static 'fonts/DejaVuSans.ttf' %}");
+    }
+    html,body{ font-family:'DejaVuSans', Helvetica, Arial, sans-serif; }
+  </style>
   {% endif %}
 
   <style>
@@ -18,28 +30,61 @@
       --ink:#0f172a; --muted:#6b7280; --line:#e5e7eb; --bg:#f6f7fb;
       --panel:#ffffff; --accent:#16a34a; --accent-ink:#064e3b; --ink-2:#111827;
     }
-    html,body{ background:var(--bg); color:var(--ink); font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji","Segoe UI Emoji", sans-serif; }
-    .sheet{ width:8.5in; min-height:11in; margin:28px auto; background:var(--panel);
-      border:1px solid #ececf3; border-radius:16px; box-shadow:0 16px 44px rgba(2,6,23,.10); }
+
+    html,body{
+      background:var(--bg);
+      color:var(--ink);
+      font-family:{% if not pdf_mode %}"Inter",{% endif %} Helvetica, Arial, sans-serif;
+      line-height:1.35;
+    }
+
+    .sheet{
+      width:8.5in; min-height:11in; margin:28px auto; background:var(--panel);
+      border:1px solid #ececf3; border-radius:16px; box-shadow:0 16px 44px rgba(2,6,23,.10);
+    }
     .doc{ padding:.7in; }
 
+    /* ===== Encabezado (FLEX) ===== */
     .brandband{
       position:relative;
-      background:linear-gradient(90deg, var(--brand), var(--brand-2));
-      color:#fff; border-radius:14px; padding:16px 18px; display:grid;
-      grid-template-columns:100px 1fr auto; gap:16px; align-items:center; overflow:hidden;
+      {% if not pdf_mode %}
+        background:linear-gradient(90deg, var(--brand), var(--brand-2));
+      {% else %}
+        /* Gradientes dan problemas en xhtml2pdf: usamos un color sólido */
+        background:var(--brand);
+      {% endif %}
+      color:#fff; border-radius:14px; padding:16px 18px;
+      display:flex; flex-wrap:nowrap; align-items:center; gap:16px; overflow:hidden;
+      min-height:110px;
     }
+
+    {% if not pdf_mode %}
+    /* Pseudo-elemento SOLO en web (xhtml2pdf no soporta bien ::after) */
     .brandband:after{
-      content:""; position:absolute; inset:0; background: radial-gradient(1200px 300px at 70% -50%, rgba(255,255,255,.18), transparent 60%);
+      content:""; position:absolute; inset:0;
+      background:radial-gradient(1200px 300px at 70% -50%, rgba(255,255,255,.18), transparent 60%);
       pointer-events:none;
     }
+    {% endif %}
+
+    .brandband .col-logo{ flex:0 0 92px; }
     .brandband .logo{
       width:92px; height:92px; object-fit:contain; background:#fff; border-radius:12px; padding:10px;
-      border:1px solid rgba(255,255,255,.55);
+      border:1px solid rgba(255,255,255,.55); display:block;
     }
-    .brandband .name{ font-weight:900; letter-spacing:.2px; text-transform:uppercase; line-height:1.1; }
-    .brandband .meta{ font-size:.92rem; opacity:.98; }
-    .tag{ background:rgba(255,255,255,.14); border:1px solid rgba(255,255,255,.40); padding:8px 12px; border-radius:999px; font-weight:800; }
+    .brandband .col-text{ flex:1 1 auto; min-width:0; }
+    .brandband .name{
+      font-weight:900; letter-spacing:.2px; text-transform:uppercase;
+      line-height:1.15; margin:0 0 2px 0; display:block;
+    }
+    .brandband .meta{
+      font-size:.92rem; opacity:.98; line-height:1.35; white-space:normal; word-break:break-word; display:block;
+    }
+    .brandband .col-tag{ flex:0 0 auto; align-self:flex-start; }
+    .tag{
+      background:rgba(255,255,255,.14); border:1px solid rgba(255,255,255,.40);
+      padding:8px 12px; border-radius:999px; font-weight:800;
+    }
 
     .pill-date{ background:#def7e5; color:var(--accent-ink); border:1px solid #b2e7c0; padding:6px 10px; border-radius:10px; font-weight:800; }
     .h-title{ font-weight:900; text-transform:uppercase; letter-spacing:.06em; color:var(--brand); }
@@ -96,19 +141,26 @@
     .footer-block{ color:#6b7280; background:#f9fafb; border:1px solid #eef0f4; border-radius:12px; padding:10px 12px; }
 
     @media (max-width: 768px){
-      .brandband{ grid-template-columns:72px 1fr; }
+      .brandband{ gap:12px; }
+      .brandband .col-logo{ flex-basis:72px; }
+      .brandband .logo{ width:72px; height:72px; }
       .tag{ display:none; }
       .beca-grid{ grid-template-columns:1fr; }
       .firma-box{ grid-template-columns: 140px 1fr; }
     }
+
+    {% if not pdf_mode %}
+    /* SOLO WEB: este bloque hacía fallar xhtml2pdf */
     @media print{
-      -webkit-print-color-adjust: exact; print-color-adjust: exact;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
       @page{ size:Letter; margin:.55in; }
       html,body{ background:#fff; }
       .sheet{ box-shadow:none; border:none; margin:0; border-radius:0; }
       .doc{ padding:0; }
       a[href]:after{ content:""; }
     }
+    {% endif %}
   </style>
 </head>
 <body>
@@ -117,8 +169,10 @@
 
       <!-- Encabezado -->
       <header class="brandband">
-        <img class="logo" src="{% static 'iuaf/iuaf-logo3.png' %}" alt="Logo IUAF">
-        <div>
+        <div class="col-logo">
+          <img class="logo" src="{% static 'iuaf/iuaf-logo3.png' %}" alt="Logo IUAF">
+        </div>
+        <div class="col-text">
           <div class="name">{{ institucion.nombre|default:"Instituto Universitario de Alta Formación" }}</div>
           <div class="meta">
             <strong>R.F.C.</strong> {{ institucion.rfc|default:"—" }} &nbsp; · &nbsp;
@@ -127,7 +181,9 @@
             · Tel. {{ institucion.telefono|default:"—" }} · {{ institucion.email|default:"—" }}
           </div>
         </div>
-        <div class="tag">Carta de Inscripción</div>
+        <div class="col-tag">
+          <span class="tag">Carta de Inscripción</span>
+        </div>
       </header>
 
       <!-- Título + fecha -->
@@ -273,7 +329,7 @@
         </div>
       </section>
 
-      <!-- Imagen de bienvenida (al final del cuerpo principal) -->
+      <!-- Imagen de bienvenida -->
       <figure class="mt-3 mb-0">
         <img src="{% static 'iuaf/bienvenida/medi.jpg' %}" alt="Bienvenida IUAF" class="img-fluid hero-img">
       </figure>

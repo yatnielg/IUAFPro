@@ -3625,9 +3625,10 @@ def cargos_con_saldo_view(request, alumno_id):
     return render(request, 'alumnos/cargos_con_saldo.html', ctx)
 
 #############################################################################################################################################
-
 import os
 import mimetypes
+import traceback
+import logging
 from email.mime.image import MIMEImage
 from io import BytesIO
 
@@ -3642,15 +3643,17 @@ from django.core.mail import EmailMultiAlternatives
 
 from .models import Alumno  # ajusta si está en otra app
 
+logger = logging.getLogger(__name__)
+
+def _dbg(msg):
+    # Imprime a la consola y también al logger
+    print(f"[enviar_bienvenida_estatica] {msg}")
+    logger.info(msg)
 
 # =========================
 # Helper: recoger archivos estáticos de una carpeta
 # =========================
 def collect_program_docs(rel_dir: str):
-    """
-    Devuelve [(abs_path, filename, mimetype), ...] para todos los archivos
-    dentro de la carpeta estática 'rel_dir'. Funciona con FileSystemFinder y AppDirectoriesFinder.
-    """
     items, candidates = [], []
 
     for finder in finders.get_finders():
@@ -3677,15 +3680,16 @@ def collect_program_docs(rel_dir: str):
         if abs_path not in seen:
             unique.append((abs_path, fname, mime))
             seen.add(abs_path)
+    _dbg(f"collect_program_docs('{rel_dir}') → {len(unique)} archivo(s).")
     return unique
 
-
 # =========================
-# Helper: construir contexto para la carta (igual que la vista HTML)
+# Helper: construir contexto para la carta
 # =========================
 def build_carta_ctx(alumno):
     plan = getattr(alumno, "informacionEscolar", None)
     if not plan or not getattr(plan, "programa_id", None):
+        _dbg("build_carta_ctx: sin plan o programa_id.")
         return None, None
 
     programa = plan.programa
@@ -3703,35 +3707,31 @@ def build_carta_ctx(alumno):
             "email": "cadministrativa@iuaf.edu.mx",
         },
         "hoy": timezone.localdate(),
-        # Datos grupo / calendario
         "grupo_codigo": getattr(plan, "grupo", "") or "",
         "fecha_inicio": getattr(plan, "inicio_programa", None),
         "fecha_fin": getattr(plan, "fin_programa", None),
         "meses_programa": getattr(plan, "meses_programa", None),
-        # Cuotas
         "inscripcion": getattr(plan, "precio_inscripcion", None),
         "reinscripcion": getattr(plan, "precio_reinscripcion", None),
         "colegiatura_mensual": getattr(plan, "precio_final", None) or getattr(plan, "precio_colegiatura", None),
         "meses_pago": getattr(plan, "meses_programa", None),
         "titulacion": getattr(programa, "titulacion", None) if programa else None,
-        "etiqueta_beca": (plan.financiamiento.beca if getattr(plan, "financiamiento_id", None) else None),
-        # Texto libre
+        "etiqueta_beca": (getattr(plan, "financiamiento", None).beca if getattr(plan, "financiamiento_id", None) else None),
         "asistencia": "Viernes y Sábado",
         "horario": "V: 17 a 21 hrs · S: 9 a 14 hrs",
         "duracion_texto": f"{getattr(plan, 'meses_programa', '—')} MESES",
     }
+    _dbg("build_carta_ctx: contexto construido OK.")
     return ctx, plan
 
-
 # =========================
-# xhtml2pdf link_callback: resuelve STATIC/MEDIA a disco
+# PDF helpers
 # =========================
 def xhtml2pdf_link_callback(uri, rel):
     s_url, s_root = settings.STATIC_URL, getattr(settings, "STATIC_ROOT", "")
     m_url, m_root = settings.MEDIA_URL, getattr(settings, "MEDIA_ROOT", "")
 
     if uri.startswith(s_url):
-        # Busca primero con finders (soporta múltiples storages/apps)
         relpath = uri[len(s_url):]
         path = finders.find(relpath)
         if not path and s_root:
@@ -3741,22 +3741,19 @@ def xhtml2pdf_link_callback(uri, rel):
     if m_root and uri.startswith(m_url):
         return os.path.join(m_root, uri[len(m_url):])
 
-    # Cualquier otra URL: déjala tal cual (evita externas en modo PDF)
     return uri
 
-
-# =========================
-# HTML -> PDF (WeasyPrint si existe; si no, xhtml2pdf)
-# =========================
 def html_to_pdf_bytes(html: str, base_url: str) -> bytes:
-    # 1) WeasyPrint (recomendado)
     try:
         from weasyprint import HTML
-        return HTML(string=html, base_url=base_url).write_pdf()
-    except Exception:
-        pass
+        _dbg("html_to_pdf_bytes: intentando WeasyPrint…")
+        pdf = HTML(string=html, base_url=base_url).write_pdf()
+        _dbg(f"html_to_pdf_bytes: WeasyPrint OK → {len(pdf)} bytes.")
+        return pdf
+    except Exception as e:
+        _dbg(f"WeasyPrint falló: {e}\n{traceback.format_exc()}")
 
-    # 2) xhtml2pdf (fallback)
+    _dbg("html_to_pdf_bytes: intentando xhtml2pdf…")
     from xhtml2pdf import pisa
     pdf_out = BytesIO()
     status = pisa.CreatePDF(
@@ -3765,31 +3762,123 @@ def html_to_pdf_bytes(html: str, base_url: str) -> bytes:
         encoding="utf-8",
     )
     if status.err:
+        _dbg("xhtml2pdf: error al generar PDF.")
         raise RuntimeError("xhtml2pdf no pudo generar el PDF (revisa CSS/recursos).")
-    return pdf_out.getvalue()
+    data = pdf_out.getvalue()
+    _dbg(f"html_to_pdf_bytes: xhtml2pdf OK → {len(data)} bytes.")
+    return data
 
+###################################################
+from playwright.sync_api import sync_playwright
 
+def generar_carta_inscripcion_pdf(alumno, request) -> str | None:
+    """
+    Genera el PDF de la carta de inscripción en:
+        <STATIC_WRITE_ROOT>/iuaf/bienvenida/pdf/<numero_estudiante>.pdf
+    Devuelve la ruta absoluta creada si OK, o None si hubo error.
+    NO redirige ni responde; solo hace el trabajo.
+    """
+    plan = getattr(alumno, "informacionEscolar", None)
+    if not plan or not getattr(plan, "programa_id", None):
+        _dbg("generar_carta_inscripcion_pdf: alumno sin plan/programa.")
+        return None
+
+    programa = plan.programa
+
+    ctx = {
+        "alumno": alumno,
+        "plan": plan,
+        "programa": programa,
+        "institucion": {
+            "nombre": "Instituto Universitario de Alta Formación",
+            "rfc": "—",
+            "cct": "23PSU0064H",
+            "direccion": "Blvd. Kukulkán Km 3.5, Plaza Nautilus Int. 53, Cancún, Q.R.",
+            "ciudad": "México",
+            "telefono": "998 939 4481",
+            "email": "cadministrativa@iuaf.edu.mx",
+        },
+        "hoy": timezone.localdate(),
+        "grupo_codigo": getattr(plan, "grupo", "") or "",
+        "fecha_inicio": getattr(plan, "inicio_programa", None),
+        "fecha_fin": getattr(plan, "fin_programa", None),
+        "meses_programa": getattr(plan, "meses_programa", None),
+        "inscripcion": getattr(plan, "precio_inscripcion", None),
+        "reinscripcion": getattr(plan, "precio_reinscripcion", None),
+        "colegiatura_mensual": getattr(plan, "precio_final", None) or getattr(plan, "precio_colegiatura", None),
+        "meses_pago": getattr(plan, "meses_programa", None),
+        "titulacion": getattr(programa, "titulacion", None) if programa else None,
+        "etiqueta_beca": (plan.financiamiento.beca if getattr(plan, "financiamiento_id", None) else None),
+        "asistencia": "Viernes y Sábado",
+        "horario": "V: 17 a 21 hrs · S: 9 a 14 hrs",
+        "duracion_texto": f"{getattr(plan, 'meses_programa', '—')} MESES",
+        "pdf_mode": True,
+    }
+
+    # Render HTML
+    html = render_to_string("reportes/carta_inscripcion.html", ctx, request=request)
+
+    # Base href para que src="/static/..." funcione
+    base_url = request.build_absolute_uri("/")
+    if "<head>" in html:
+        html = html.replace("<head>", f'<head><base href="{base_url}">', 1)
+    else:
+        html = f'<base href="{base_url}">{html}'
+
+    # Carpeta destino
+    if getattr(settings, "STATICFILES_DIRS", None):
+        static_write_root = settings.STATICFILES_DIRS[0]
+    else:
+        static_write_root = os.path.join(settings.BASE_DIR, "static")
+
+    dest_dir = os.path.join(static_write_root, "iuaf", "bienvenida", "pdf")
+    os.makedirs(dest_dir, exist_ok=True)
+
+    student_number = str(getattr(alumno, "numero_estudiante", "") or f"alumno_{alumno.pk}")
+    filepath = os.path.abspath(os.path.join(dest_dir, f"{student_number}.pdf"))
+
+    # Si ya existe, no lo volvemos a crear (devuelve el existente)
+    if os.path.isfile(filepath):
+        _dbg(f"generar_carta_inscripcion_pdf: ya existe → {filepath}")
+        return filepath
+
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            page.set_content(html, wait_until="networkidle")
+            page.pdf(
+                path=filepath,
+                print_background=True,
+                format="Letter",
+                margin={"top": "0.55in", "right": "0.55in", "bottom": "0.55in", "left": "0.55in"},
+            )
+            browser.close()
+        _dbg(f"generar_carta_inscripcion_pdf: creado OK → {filepath}")
+        return filepath
+    except Exception as e:
+        _dbg(f"generar_carta_inscripcion_pdf: ERROR → {e}\n{traceback.format_exc()}")
+        return None
 # =========================
-# Vista: enviar bienvenida + adjuntos por programa + CARTA PDF
+# Vista principal
 # =========================
 @login_required
 def enviar_bienvenida_estatica(request, alumno_id):
-    """
-    Envía el correo de bienvenida con imágenes inline y adjunta:
-      - Archivos en static/iuaf/bienvenida/<CODIGO_PROGRAMA>/ (o /comun)
-      - La CARTA DE INSCRIPCIÓN (PDF) generada desde reportes/carta_inscripcion.html
-    Reenvío forzado: agregar ?force=1
-    """
+    _dbg(f"== INICIO enviar_bienvenida_estatica alumno_id={alumno_id} ==")
+
     alumno = get_object_or_404(Alumno, pk=alumno_id)
     plan = getattr(alumno, "informacionEscolar", None)
     force = request.GET.get("force") in ("1", "true", "True")
+    _dbg(f"force={force}, alumno.email={alumno.email}, alumno.email_institucional={alumno.email_institucional}")
 
     if plan and getattr(plan, "bienvenida_enviada", False) and not force:
+        _dbg("Bienvenida ya enviada previamente; abortando (sin force).")
         messages.info(request, "Este alumno ya tiene marcada la bienvenida como enviada. Usa ?force=1 para reenviar.")
         return redirect("alumnos_detalle", pk=alumno.pk)
 
     to_email = (alumno.email or alumno.email_institucional or "").strip()
     if not to_email:
+        _dbg("SIN correo destino.")
         messages.error(request, "El alumno no tiene correo.")
         return redirect("alumnos_detalle", pk=alumno.pk)
 
@@ -3800,91 +3889,176 @@ def enviar_bienvenida_estatica(request, alumno_id):
         "instagram_url": "https://www.instagram.com/iuafoficial/",
     }
 
-    # Email (texto/HTML)
     html_mail = render_to_string("emails/bienvenida_estatica.html", ctx_mail, request=request)
     text_mail = render_to_string("emails/bienvenida_estatica.txt", ctx_mail, request=request)
 
     msg = EmailMultiAlternatives(
         subject=subject,
         body=text_mail,
-        from_email=None,   # usa DEFAULT_FROM_EMAIL
+        from_email=None,
         to=[to_email],
     )
     msg.mixed_subtype = "related"
     msg.attach_alternative(html_mail, "text/html")
+    _dbg("EmailMultiAlternatives creado y HTML adjuntado.")
 
-    # --- Imágenes inline (CID) ---
+    # Imágenes inline
     logo_path = finders.find("iuaf/iuaf-logo3.png")
+    _dbg(f"logo_path={logo_path}")
     if logo_path:
-        with open(logo_path, "rb") as f:
-            img = MIMEImage(f.read(), _subtype="png")
-            img.add_header("Content-ID", "<logo-iuaf>")
-            img.add_header("Content-Disposition", "inline", filename="iuaf-logo3.png")
-            msg.attach(img)
+        try:
+            with open(logo_path, "rb") as f:
+                img = MIMEImage(f.read(), _subtype="png")
+                img.add_header("Content-ID", "<logo-iuaf>")
+                img.add_header("Content-Disposition", "inline", filename="iuaf-logo3.png")
+                msg.attach(img)
+            _dbg("Logo inline adjuntado.")
+        except Exception as e:
+            _dbg(f"Error adjuntando logo: {e}\n{traceback.format_exc()}")
 
     hero_path = finders.find("iuaf/imagencorreo.png")
+    _dbg(f"hero_path={hero_path}")
     if hero_path:
-        with open(hero_path, "rb") as f:
-            img = MIMEImage(f.read(), _subtype="png")
-            img.add_header("Content-ID", "<hero-iuaf>")
-            img.add_header("Content-Disposition", "inline", filename="imagencorreo.png")
-            msg.attach(img)
+        try:
+            with open(hero_path, "rb") as f:
+                img = MIMEImage(f.read(), _subtype="png")
+                img.add_header("Content-ID", "<hero-iuaf>")
+                img.add_header("Content-Disposition", "inline", filename="imagencorreo.png")
+                msg.attach(img)
+            _dbg("Hero inline adjuntado.")
+        except Exception as e:
+            _dbg(f"Error adjuntando hero: {e}\n{traceback.format_exc()}")
 
-    # --- Adjuntos por PROGRAMA ---
     docs_attached = 0
+
+    # Adjuntos por PROGRAMA
     program_code = ""
     if plan and getattr(plan, "programa", None) and getattr(plan.programa, "codigo", None):
         program_code = (plan.programa.codigo or "").strip()
+    _dbg(f"program_code='{program_code}'")
+
+    def attach_dir(rel_dir):
+        nonlocal docs_attached
+        files = collect_program_docs(rel_dir)
+        _dbg(f"Adjuntando {len(files)} archivo(s) de '{rel_dir}'…")
+        for abs_path, download_name, mime in files:
+            try:
+                size = os.path.getsize(abs_path)
+                _dbg(f"Adjuntando '{download_name}' ({size} bytes, {mime})")
+                with open(abs_path, "rb") as f:
+                    msg.attach(download_name, f.read(), mime)
+                    docs_attached += 1
+            except Exception as e:
+                _dbg(f"No se pudo adjuntar {download_name}: {e}\n{traceback.format_exc()}")
+                messages.warning(request, f"No se pudo adjuntar {download_name}: {e}")
 
     if program_code:
         rel_dir = os.path.join("iuaf", "bienvenida", program_code)
-        program_docs = collect_program_docs(rel_dir)
-
-        if program_docs:
-            for abs_path, download_name, mime in program_docs:
-                try:
-                    with open(abs_path, "rb") as f:
-                        msg.attach(download_name, f.read(), mime)
-                        docs_attached += 1
-                except Exception as e:
-                    messages.warning(request, f"No se pudo adjuntar {download_name}: {e}")
+        if collect_program_docs(rel_dir):
+            attach_dir(rel_dir)
         else:
+            _dbg(f"No hay docs en '{rel_dir}', usando 'comun'.")
             messages.warning(request, f"No se encontraron documentos en: {rel_dir}")
-            # Fallback a 'comun'
-            common_rel_dir = os.path.join("iuaf", "bienvenida", "comun")
-            for abs_path, download_name, mime in collect_program_docs(common_rel_dir):
-                try:
-                    with open(abs_path, "rb") as f:
-                        msg.attach(download_name, f.read(), mime)
-                        docs_attached += 1
-                except Exception as e:
-                    messages.warning(request, f"No se pudo adjuntar {download_name}: {e}")
+            attach_dir(os.path.join("iuaf", "bienvenida", "comun"))
     else:
+        _dbg("Sin program_code; no se adjuntan docs específicos.")
         messages.warning(request, "El alumno no tiene programa/código de programa; no se adjuntaron documentos específicos.")
 
-    # --- Generar y adjuntar CARTA DE INSCRIPCIÓN (PDF) ---
+    # ========= NUEVO: NO GENERAR CARTA =========
+    # Solo intentar ADJUNTAR la carta si ya existe en static/iuaf/bienvenida/pdf/<numero>.pdf
+    stored_path = None  # para evitar duplicados al buscar PDFs adicionales
     try:
-        carta_ctx, _ = build_carta_ctx(alumno)
-        if not carta_ctx:
-            messages.warning(request, "No fue posible construir el contexto de la carta (sin plan/programa).")
+        # Resolver raíz de escritura estática
+        if getattr(settings, "STATICFILES_DIRS", None):
+            static_write_root = settings.STATICFILES_DIRS[0]
         else:
-            carta_ctx["pdf_mode"] = True  # ⟵ importante para el template
-            carta_html = render_to_string("reportes/carta_inscripcion.html", carta_ctx, request=request)
-            base_url = request.build_absolute_uri("/")  # para WeasyPrint
+            static_write_root = os.path.join(settings.BASE_DIR, "static")
+        pdf_dir = os.path.join(static_write_root, "iuaf", "bienvenida", "pdf")
+        os.makedirs(pdf_dir, exist_ok=True)
+        _dbg(f"pdf_dir={pdf_dir} (exists={os.path.isdir(pdf_dir)})")
 
-            carta_pdf = html_to_pdf_bytes(carta_html, base_url=base_url)
+        student_number = str(getattr(alumno, "numero_estudiante", "") or f"alumno_{alumno.pk}")
+        stored_filename = f"{student_number}.pdf"
+        candidate_path = os.path.abspath(os.path.join(pdf_dir, stored_filename))
+        _dbg(f"Buscando carta ya creada: {candidate_path}")
 
-            safe_name = f"{alumno.apellido_p or ''}_{alumno.apellido_m or ''}_{alumno.nombre or ''}".strip().replace(" ", "_")
-            carta_filename = f"Carta_Inscripcion_{safe_name or alumno.pk}.pdf"
+        if os.path.isfile(candidate_path):
+            try:
+                with open(candidate_path, "rb") as f:
+                    # Nombre “bonito” para el adjunto
+                    def clean(s): return " ".join((s or "").split())
+                    safe_name = "_".join(filter(None, [
+                        clean(getattr(alumno, "apellido_p", None)),
+                        clean(getattr(alumno, "apellido_m", None)),
+                        clean(getattr(alumno, "nombre", None)),
+                    ])).replace(" ", "_") or str(alumno.pk)
 
-            msg.attach(carta_filename, carta_pdf, "application/pdf")
-            docs_attached += 1
+                    attach_name = f"Carta_Inscripcion_{safe_name}.pdf"
+                    msg.attach(attach_name, f.read(), "application/pdf")
+                    docs_attached += 1
+                    stored_path = candidate_path  # para evitar duplicados luego
+                    _dbg(f"Carta existente adjuntada como '{attach_name}'.")
+            except Exception as e:
+                _dbg(f"No se pudo adjuntar carta existente: {e}\n{traceback.format_exc()}")
+                messages.warning(request, f"No se pudo adjuntar carta existente: {e}")
+        else:
+            _dbg("No existe carta previa; se continuará sin generar ni adjuntar carta.")
+            messages.info(request, "No se adjuntó carta de inscripción porque no existe el PDF previo para este alumno.")
     except Exception as e:
-        messages.warning(request, f"No se pudo generar la Carta de Inscripción en PDF: {e}")
+        _dbg(f"ERROR comprobando/adjuntando carta existente: {e}\n{traceback.format_exc()}")
+        messages.warning(request, f"Error al verificar/adjuntar la carta existente: {e}")
 
-    # --- Envío ---
+    # Adjuntar OTROS PDFs del alumno (que contengan el número) sin duplicar la carta
     try:
+        if getattr(settings, "STATICFILES_DIRS", None):
+            static_write_root = settings.STATICFILES_DIRS[0]
+        else:
+            static_write_root = os.path.join(settings.BASE_DIR, "static")
+        pdf_dir = os.path.join(static_write_root, "iuaf", "bienvenida", "pdf")
+        student_number = str(getattr(alumno, "numero_estudiante", "") or f"alumno_{alumno.pk}")
+
+        _dbg(f"Buscando PDFs adicionales en {pdf_dir} para student_number='{student_number}'")
+        if os.path.isdir(pdf_dir):
+            names = os.listdir(pdf_dir)
+            _dbg(f"PDFs en carpeta: {names}")
+            for fname in names:
+                if not fname.lower().endswith(".pdf"):
+                    continue
+                if student_number not in fname:
+                    continue
+                fpath = os.path.abspath(os.path.join(pdf_dir, fname))
+                # Evitar duplicar la carta ya adjuntada
+                if stored_path and os.path.normcase(fpath) == os.path.normcase(stored_path):
+                    _dbg(f"Omitiendo (ya se adjuntó carta): {fname}")
+                    continue
+                try:
+                    size = os.path.getsize(fpath)
+                    _dbg(f"Adjuntando PDF adicional '{fname}' ({size} bytes).")
+                    with open(fpath, "rb") as f:
+                        msg.attach(fname, f.read(), "application/pdf")
+                        docs_attached += 1
+                except Exception as e:
+                    _dbg(f"No se pudo adjuntar PDF adicional '{fname}': {e}\n{traceback.format_exc()}")
+                    messages.warning(request, f"No se pudo adjuntar PDF adicional '{fname}': {e}")
+        else:
+            _dbg("No existe la carpeta de PDFs adicionales.")
+            messages.info(request, "No existe la carpeta static/iuaf/bienvenida/pdf para buscar PDFs adicionales.")
+    except Exception as e:
+        _dbg(f"ERROR buscando/adjuntando PDFs adicionales: {e}\n{traceback.format_exc()}")
+        messages.warning(request, f"Error al buscar/adjuntar PDFs adicionales del alumno: {e}")
+
+    # Resumen antes de enviar
+    try:
+        attach_count = len(getattr(msg, "attachments", []))
+    except Exception:
+        attach_count = "desconocido"
+    _dbg(f"Total adjuntos contados por msg.attachments: {attach_count} (docs_attached contador: {docs_attached})")
+
+    # Envío
+    try:
+        _dbg("Enviando correo…")
         sent_count = msg.send()
+        _dbg(f"send() retornó {sent_count}")
         if sent_count > 0 and plan:
             plan.bienvenida_enviada = True
             plan.bienvenida_enviada_en = timezone.now()
@@ -3899,9 +4073,13 @@ def enviar_bienvenida_estatica(request, alumno_id):
         else:
             messages.error(request, "El backend de correo no reportó envíos.")
     except Exception as e:
+        _dbg(f"ERROR en envío de correo: {e}\n{traceback.format_exc()}")
         messages.error(request, f"No se pudo enviar el correo: {e}")
 
+    _dbg("== FIN enviar_bienvenida_estatica ==")
     return redirect("alumnos_detalle", pk=alumno.pk)
+
+
 
 #############################################################################################################################################
 
@@ -3952,9 +4130,21 @@ def expediente_maestria_view(request, alumno_id):
     # Si quieres PDF más adelante, aquí puedes checar ?format=pdf y renderizar con WeasyPrint
     return render(request, "reportes/EXPEDIENTE DE INGRESO.html", ctx)
 ################################################################################################
-from django.shortcuts import render, get_object_or_404, redirect
+# alumnos/views.py
+import os
+
+from django.conf import settings
 from django.contrib import messages
+from django.contrib.auth.decorators import login_required
+from django.http import HttpResponseRedirect
+from django.shortcuts import get_object_or_404, redirect, render
+from django.template.loader import render_to_string
 from django.utils import timezone
+
+from playwright.sync_api import sync_playwright
+
+from .models import Alumno
+
 
 @login_required
 def carta_inscripcion_view(request, alumno_id):
@@ -3967,7 +4157,6 @@ def carta_inscripcion_view(request, alumno_id):
 
     programa = plan.programa
 
-    # Campos base (usan valores del plan; si faltan, caen a None/“—” en el template)
     ctx = {
         "alumno": alumno,
         "plan": plan,
@@ -3981,23 +4170,108 @@ def carta_inscripcion_view(request, alumno_id):
             "telefono": "998 939 4481",
             "email": "cadministrativa@iuaf.edu.mx",
         },
-        "hoy": timezone.localdate(),  # fecha actual
-        # Datos de “grupo” y calendario
+        "hoy": timezone.localdate(),
         "grupo_codigo": plan.grupo or "",
-        "fecha_inicio": plan.inicio_programa,   # date o None
-        "fecha_fin": plan.fin_programa,         # date o None
-        "meses_programa": plan.meses_programa,  # int
-        # Cuotas (con beca ya considerada en precio_final si dejas tu lógica)
+        "fecha_inicio": plan.inicio_programa,
+        "fecha_fin": plan.fin_programa,
+        "meses_programa": plan.meses_programa,
         "inscripcion": plan.precio_inscripcion,
         "reinscripcion": plan.precio_reinscripcion,
         "colegiatura_mensual": plan.precio_final or plan.precio_colegiatura,
         "meses_pago": plan.meses_programa,
         "titulacion": programa.titulacion if programa else None,
         "etiqueta_beca": (plan.financiamiento.beca if plan.financiamiento_id else None),
-        # Texto de horarios/observaciones (pon lo que tengas; aquí dejamos ejemplos)
-        "asistencia": "Viernes y Sábado",     # o saca de otro campo si ya lo tienes
+        "asistencia": "",
+        "horario": "",
+        "duracion_texto": f"{plan.meses_programa or '—'} MESES",
+        "pdf_mode": False,
+    }
+    return render(request, "reportes/carta_inscripcion.html", ctx)
+
+
+@login_required
+def carta_inscripcion_pdf_view(request, alumno_id):
+    alumno = get_object_or_404(Alumno, pk=alumno_id)
+    plan = getattr(alumno, "informacionEscolar", None)
+
+    if not plan or not plan.programa_id:
+        messages.error(request, "El alumno no tiene plan/programa asignado.")
+        # Mantenerse en la página actual si es posible
+        ref = request.META.get("HTTP_REFERER")
+        return redirect(ref or "alumnos_detalle", pk=alumno.pk)
+
+    programa = plan.programa
+
+    ctx = {
+        "alumno": alumno,
+        "plan": plan,
+        "programa": programa,
+        "institucion": {
+            "nombre": "Instituto Universitario de Alta Formación",
+            "rfc": "—",
+            "cct": "23PSU0064H",
+            "direccion": "Blvd. Kukulkán Km 3.5, Plaza Nautilus Int. 53, Cancún, Q.R.",
+            "ciudad": "México",
+            "telefono": "998 939 4481",
+            "email": "cadministrativa@iuaf.edu.mx",
+        },
+        "hoy": timezone.localdate(),
+        "grupo_codigo": plan.grupo or "",
+        "fecha_inicio": plan.inicio_programa,
+        "fecha_fin": plan.fin_programa,
+        "meses_programa": plan.meses_programa,
+        "inscripcion": plan.precio_inscripcion,
+        "reinscripcion": plan.precio_reinscripcion,
+        "colegiatura_mensual": plan.precio_final or plan.precio_colegiatura,
+        "meses_pago": plan.meses_programa,
+        "titulacion": programa.titulacion if programa else None,
+        "etiqueta_beca": (plan.financiamiento.beca if plan.financiamiento_id else None),
+        "asistencia": "Viernes y Sábado",
         "horario": "V: 17 a 21 hrs · S: 9 a 14 hrs",
         "duracion_texto": f"{plan.meses_programa or '—'} MESES",
+        "pdf_mode": True,  # evita CSS/JS externos en el PDF
     }
 
-    return render(request, "reportes/carta_inscripcion.html", ctx)
+    # 1) Renderiza el HTML
+    html = render_to_string("reportes/carta_inscripcion.html", ctx, request=request)
+
+    # 2) Inyecta <base href="..."> para que /static/... y rutas relativas funcionen
+    base_url = request.build_absolute_uri("/")  # p.ej. http://127.0.0.1:8000/
+    if "<head>" in html:
+        html = html.replace("<head>", f'<head><base href="{base_url}">', 1)
+    else:
+        html = f'<base href="{base_url}">{html}'
+
+    # 3) Prepara destino en "static/" (NO usar STATIC_ROOT)
+    if getattr(settings, "STATICFILES_DIRS", None):
+        static_write_root = settings.STATICFILES_DIRS[0]
+    else:
+        static_write_root = os.path.join(settings.BASE_DIR, "static")
+
+    dest_dir = os.path.join(static_write_root, "iuaf", "bienvenida", "pdf")
+    os.makedirs(dest_dir, exist_ok=True)
+
+    filename = f"{alumno.numero_estudiante}.pdf"
+    filepath = os.path.join(dest_dir, filename)
+
+    try:
+        # 4) Genera PDF con Playwright (sin redirigir a ningún lado)
+        with sync_playwright() as p:
+            browser = p.chromium.launch()  # headless por defecto
+            page = browser.new_page()
+            page.set_content(html, wait_until="networkidle")
+            page.pdf(
+                path=filepath,
+                print_background=True,
+                format="Letter",
+                margin={"top": "0.55in", "right": "0.55in", "bottom": "0.55in", "left": "0.55in"},
+            )
+            browser.close()
+
+        messages.success(request, f"PDF guardado como {filename}.")
+    except Exception as e:
+        messages.error(request, f"No se pudo generar el PDF: {e}")
+
+    # 5) Mantenerse en la misma página (o fallback al detalle del alumno)
+    ref = request.META.get("HTTP_REFERER")
+    return redirect(ref or "alumnos_detalle", pk=alumno.pk)

@@ -8,48 +8,25 @@
 
 
 
-{% if alumno.informacionEscolar and alumno.informacionEscolar.programa_id %}
-  <a href="{% url 'alumno_carta' alumno.pk %}"
-     class="btn btn-primary btn-sm" target="_blank" rel="noopener">
-    📝 Carta de inscripción
+{% if not pdf_mode %}
+<div class="d-flex gap-2 justify-content-end mt-2">
+
+  <!-- Botón oculto pero presente en el DOM -->
+  <a id="btn-guardar-pdf"
+     href="{% url 'alumno_carta_pdf' alumno.numero_estudiante %}"
+     class="btn btn-success btn-sm"
+     style="display:none;">
+    Guardar PDF
   </a>
+
+  <!-- Botón visible de imprimir -->
+{% comment %}   <button type="button" class="btn btn-outline-secondary btn-sm" onclick="window.print()">Imprimir / PDF</button> {% endcomment %}
+</div>
 {% endif %}
 
 
 
 
-
-
-
-{% comment %}  {% endcomment %}
- {% if alumno and alumno.pk %}
-  {% with plan=alumno.informacionEscolar %}
-    {% if plan and plan.programa_id %}
-      <a
-        href="{% url 'expediente_maestria' alumno.pk %}"
-        class="btn btn-primary btn-sm"
-        target="_blank" rel="noopener"
-        title="Ver expediente de ingreso">
-        <i class="material-icons align-middle">assignment</i>
-        Expediente de ingreso
-      </a>
-      {# Opcional: versión PDF si luego habilitas ?format=pdf en la vista #}
-      {# <a href="{% url 'expediente_maestria' alumno.pk %}?format=pdf" class="btn btn-outline-secondary btn-sm ms-2" target="_blank" rel="noopener">
-           <i class="material-icons align-middle">picture_as_pdf</i> PDF
-         </a> #}
-    {% endif %}
-  {% endwith %}
-{% endif %}
-
- {% comment %}  {% endcomment %}
-
-
-
-
-
-{% comment %}  {% endcomment %}
-
-{% if request.user.is_superuser %}
 {% if alumno and alumno.pk %}
   {% with plan=alumno.informacionEscolar %}
     {% if plan and not plan.bienvenida_enviada %}
@@ -69,7 +46,7 @@
         </span>
         <!-- Botón para reenviar manualmente -->
         {% if request.user.is_superuser %}
-        <a href="{% url 'enviar_bienvenida_estatica' alumno.pk %}?force=1"
+        <a id="btnReenviarBienvenida" href="{% url 'enviar_bienvenida_estatica' alumno.pk %}?force=1"
            class="btn btn-outline-secondary btn-sm ms-2">
           Reenviar
         </a>
@@ -81,33 +58,131 @@
   {% endwith %}
 {% endif %}
 
-{% endif %}
-<script>
-(function(){
-  const btn=document.getElementById('btnEnviarBienvenida');
-  if(!btn) return;
 
-  function getCookie(name){
-    const m=document.cookie.match('(^|;)\\s*'+name+'\\s*=\\s*([^;]+)'); return m?m.pop():'';
+
+{% comment %} {% if alumno.informacionEscolar and alumno.informacionEscolar.programa_id %}
+  <a href="{% url 'alumno_carta' alumno.pk %}"
+     class="btn btn-primary btn-sm" target="_blank" rel="noopener">
+    📝 Carta de inscripción
+  </a>
+{% endif %} {% endcomment %}
+
+
+
+
+{% comment %}  {% endcomment %}
+{% comment %}  {% if alumno and alumno.pk %}
+  {% with plan=alumno.informacionEscolar %}
+    {% if plan and plan.programa_id %}
+      <a
+        href="{% url 'expediente_maestria' alumno.pk %}"
+        class="btn btn-primary btn-sm"
+        target="_blank" rel="noopener"
+        title="Ver expediente de ingreso">
+        <i class="material-icons align-middle">assignment</i>
+        Expediente de ingreso
+      </a> {% endcomment %}
+      {# Opcional: versión PDF si luego habilitas ?format=pdf en la vista #}
+{% comment %}       {# <a href="{% url 'expediente_maestria' alumno.pk %}?format=pdf" class="btn btn-outline-secondary btn-sm ms-2" target="_blank" rel="noopener">
+           <i class="material-icons align-middle">picture_as_pdf</i> PDF
+         </a> #}
+    {% endif %}
+  {% endwith %}
+{% endif %}
+ {% endcomment %}
+ {% comment %}  {% endcomment %}
+
+
+
+
+
+{% comment %}  {% endcomment %}
+
+
+
+<script>
+(function () {
+  const btnEnviar = document.getElementById('btnEnviarBienvenida');
+  const linkReenviar = document.getElementById('btnReenviarBienvenida');
+  const linkPDF = document.getElementById('btn-guardar-pdf');
+
+  function getCookie(name) {
+    const m = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+    return m ? m.pop() : '';
   }
-  btn.addEventListener('click', async ()=>{
-    const ok = confirm('¿Enviar correo de bienvenida con adjuntos?');
-    if(!ok) return;
+
+  async function ensurePdfSaved() {
+    // Si no existe el enlace (p.ej., en modo PDF), no bloquea el flujo.
+    if (!linkPDF) return;
+    const resp = await fetch(linkPDF.href, {
+      method: 'GET',
+      credentials: 'same-origin'
+    });
+    if (!resp.ok) {
+      throw new Error('No se pudo generar/guardar el PDF (HTTP ' + resp.status + ').');
+    }
+    // Nota: no descargamos el archivo, solo disparamos el endpoint para que el servidor lo genere/registre.
+    // Si quisieras forzar descarga en segundo plano, aquí podrías leer el blob.
+  }
+
+  async function doSendWelcome(btn) {
+    const ok = confirm('¿Estás seguro de que deseas enviar la bienvenida al alumno?');
+    if (!ok) return;
+
     btn.disabled = true;
-    try{
+    try {
+      await ensurePdfSaved();
+
       const resp = await fetch(btn.dataset.url, {
-        method:'POST',
-        headers:{'X-CSRFToken':getCookie('csrftoken')},
-        credentials:'same-origin'
+        method: 'POST',
+        headers: { 'X-CSRFToken': getCookie('csrftoken') },
+        credentials: 'same-origin'
       });
-      // Django redirige con messages
-      if (resp.redirected) location.href = resp.url; else location.reload();
-    }catch(e){
-      alert('Error enviando correo: '+e.message);
-    }finally{
+
+      if (resp.redirected) {
+        location.href = resp.url;
+      } else {
+        location.reload();
+      }
+    } catch (e) {
+      alert('Error: ' + e.message);
+    } finally {
       btn.disabled = false;
     }
-  });
+  }
+
+  async function doResendWelcome(a) {
+    const ok = confirm('¿Estás seguro de que deseas reenviar la bienvenida al alumno?');
+    if (!ok) return;
+
+    // Visualmente “deshabilitado”
+    a.classList.add('disabled');
+    a.setAttribute('aria-disabled', 'true');
+
+    try {
+      await ensurePdfSaved();
+      // Luego ejecuta la acción original del enlace (navegar)
+      location.href = a.href;
+    } catch (e) {
+      alert('Error: ' + e.message);
+      a.classList.remove('disabled');
+      a.removeAttribute('aria-disabled');
+    }
+  }
+
+  if (btnEnviar) {
+    btnEnviar.addEventListener('click', function (ev) {
+      ev.preventDefault(); // intercepta el flujo original
+      doSendWelcome(btnEnviar);
+    });
+  }
+
+  if (linkReenviar) {
+    linkReenviar.addEventListener('click', function (ev) {
+      ev.preventDefault(); // intercepta el flujo original
+      doResendWelcome(linkReenviar);
+    });
+  }
 })();
 </script>
 
