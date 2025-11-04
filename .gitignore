@@ -1,0 +1,16 @@
+# Entornos locales
+.env
+.env.*
+
+# Entornos locales
+.env
+.env.*
+
+# Entornos
+.env
+.env.*
+# Python
+__pycache__/
+*.pyc
+.env.local
+

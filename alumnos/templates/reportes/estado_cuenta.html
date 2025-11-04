@@ -1,0 +1,218 @@
+{% load static %}
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <title>Estado de Cuenta - IUAF</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+
+  <style>
+    :root{
+      --brand:#6f42c1; --brand-2:#8a63d2;
+      --ink:#0f172a; --muted:#6b7280; --line:#e5e7eb; --bg:#f6f7fb;
+      --panel:#ffffff;
+    }
+
+    body{
+      background:var(--bg);
+      color:var(--ink);
+      font-family:system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    }
+
+    /* ===== Hoja ===== */
+    .sheet{
+      width:8.5in;
+      margin:24px auto;
+      background:var(--panel);
+      border:1px solid #ececf3;
+      border-radius:14px;
+      box-shadow:0 10px 28px rgba(2,6,23,.08);
+      padding:.32in;
+    }
+
+    /* ===== Banda superior ===== */
+    .brandband{
+      background:linear-gradient(90deg, var(--brand), var(--brand-2));
+      color:#fff;
+      border-radius:12px;
+      padding:10px 12px;
+      display:grid;
+      grid-template-columns:84px 1fr auto;
+      gap:10px;
+      align-items:center;
+      margin-bottom:.18in;
+    }
+    .brandband .logo{
+      width:78px; height:78px;
+      object-fit:contain;
+      background:#fff;
+      border-radius:12px;
+      padding:8px;
+      border:1px solid rgba(255,255,255,.6);
+    }
+    .brandband .name{
+      font-weight:900; letter-spacing:.2px; text-transform:uppercase;
+      line-height:1.1; font-size:1.02rem; margin-bottom:2px;
+    }
+    .brandband .meta{ font-size:.84rem; opacity:.95; line-height:1.25; }
+    .tag{
+      background:rgba(255,255,255,.12);
+      border:1px solid rgba(255,255,255,.35);
+      padding:5px 9px; border-radius:999px; font-weight:700; font-size:.85rem; white-space:nowrap;
+    }
+
+    /* ===== Totales ===== */
+    .totales-box{
+      display:flex; justify-content:space-between; flex-wrap:wrap;
+      margin-top:.4rem; gap:.4rem; page-break-inside:avoid;
+    }
+    .totales-box .chip{
+      background:#fff; border:1px solid var(--line); border-radius:12px;
+      padding:6px 10px; box-shadow:0 2px 8px rgba(2,6,23,.04);
+      flex:1; min-width:135px; text-align:center;
+    }
+    .chip .lbl{ font-size:.66rem; text-transform:uppercase; letter-spacing:.12em; color:var(--muted); }
+    .chip .val{ font-weight:900; font-size:.98rem; color:var(--brand); }
+
+    /* ===== Datos del alumno + QR ===== */
+    .info-card{
+      border:1px solid var(--line); border-radius:12px; background:#fff;
+      box-shadow:0 1px 8px rgba(2,6,23,.05);
+      margin-top:.55rem; padding:.6rem .75rem; font-size:.86rem; line-height:1.25;
+      page-break-inside:avoid;
+    }
+    .info-grid{
+      display:grid;
+      grid-template-columns: 1fr 120px;   /* datos | QR */
+      gap:12px; align-items:start;
+    }
+    .info-card strong{ color:var(--brand); }
+    .qr-box{
+      display:flex; flex-direction:column; align-items:center; gap:6px;
+    }
+    .qr-img{
+      width:120px; height:120px; object-fit:contain; background:#fff;
+      border:1px solid var(--line); border-radius:10px; padding:6px;
+    }
+    .qr-cap{ font-size:.7rem; color:var(--muted); text-align:center; }
+
+    /* ===== Tabla de pagos ===== */
+    .table-wrap {
+      margin-top:.6rem; border:1px solid var(--line); border-radius:12px;
+      overflow:hidden; box-shadow:0 2px 8px rgba(15,23,42,0.05);
+      page-break-inside:auto;
+    }
+    table.estado-table { width:100%; border-collapse:collapse; font-size:.78rem; }
+    table.estado-table thead th{
+      background:var(--brand); color:#fff; padding:6px 5px; font-weight:700;
+      text-align:center; border-bottom:3px solid var(--brand-2); letter-spacing:.02em;
+      vertical-align:middle; white-space:nowrap;
+    }
+    table.estado-table tbody td{
+      padding:6px 5px; border-bottom:1px solid #eee; text-align:center; vertical-align:middle; color:#374151;
+    }
+    table.estado-table tbody tr:nth-child(even){ background:#faf9ff; }
+    table.estado-table tbody tr:hover{ background:#f3f0ff; }
+    table.estado-table td:first-child{ text-align:right; color:var(--brand); font-weight:700; white-space:nowrap; }
+    table.estado-table td:last-child{ text-align:left; }
+
+    /* ===== Pie ===== */
+    .foot{ margin-top:.55rem; font-size:.76rem; color:var(--muted); text-align:center; }
+
+    /* ===== Impresión ===== */
+    @media print {
+      @page { size: Letter; margin: 0; }
+      html, body { background:#fff; }
+      .sheet { margin:0; box-shadow:none; border:none; }
+      table.estado-table thead th{
+        -webkit-print-color-adjust: exact; print-color-adjust: exact;
+        background: var(--brand) !important; color: white !important;
+      }
+    }
+
+    .page-break { page-break-inside:avoid; }
+  </style>
+</head>
+<body>
+  <div class="sheet">
+    <!-- ===== Encabezado ===== -->
+    <div class="brandband page-break">
+      <img class="logo" src="{% static 'iuaf/iuaf-logo3.png' %}" alt="Logo IUAF">
+      <div>
+        <div class="name">{{ institucion.nombre }}</div>
+        <div class="meta">
+          <strong>R.F.C.</strong> {{ institucion.rfc }} ·
+          <strong>CCT</strong> {{ institucion.cct }}<br>
+          {{ institucion.direccion }}, {{ institucion.ciudad }} ·
+          Tel. {{ institucion.telefono }} · {{ institucion.email }}
+        </div>
+      </div>
+      <div class="tag">ESTADO DE CUENTA</div>
+    </div>
+
+    <!-- ===== Totales ===== -->
+    <div class="totales-box page-break">
+      <div class="chip"><div class="lbl">Total Programa</div><div class="val">$ {{ precio_total }}</div></div>
+      <div class="chip"><div class="lbl">Total Pagado</div><div class="val">$ {{ total_pagado }}</div></div>
+      <div class="chip"><div class="lbl text-danger">Adeudo</div><div class="val text-danger">$ {{ deuda }}</div></div>
+      <div class="chip"><div class="lbl">Núm. de Colegiaturas</div><div class="val">{{ numero_colegiatura }}</div></div>
+    </div>
+
+    <!-- ===== Datos del alumno + QR ===== -->
+    <div class="info-card page-break">
+      <div class="info-grid">
+        <div>
+          <div><strong>Matrícula:</strong> {{ alumno.matricula }}</div>
+          <div><strong>Nombre:</strong> {{ alumno.nombre }}</div>
+          <div><strong>Grupo:</strong> {{ alumno.grupo }}</div>
+          <div><strong>Programa:</strong> {{ alumno.programa }}</div>
+          <div><strong>Fecha 1er Pago:</strong> {{ alumno.fecha_1er_pago }}</div>
+          <div><strong>CURP:</strong> {{ alumno.curp }} &nbsp;&nbsp;
+            <strong>No. Alumno:</strong> {{ alumno.no_alumno }}</div>
+        </div>
+
+        <!-- QR a la derecha -->
+        <div class="qr-box">
+          <img class="qr-img" src="{% static 'iuaf/codigoqr.png' %}" alt="Código QR">
+          <div class="qr-cap">Escanéame</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== Tabla de pagos ===== -->
+    <div class="table-wrap page-break">
+      <table class="estado-table">
+        <thead>
+          <tr>
+            <th>Monto Pagado</th>
+            <th>Grado</th>
+            <th>Forma de Pago</th>
+            <th>Fecha de Pago</th>
+            <th>Concepto</th>
+            <th>Detalle</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in pagos %}
+          <tr>
+            <td>$ {{ p.monto|floatformat:2 }}</td>
+            <td>{{ p.grado }}</td>
+            <td>{{ p.forma_pago }}</td>
+            <td>{{ p.fecha_pago }}</td>
+            <td>{{ p.concepto }}</td>
+            <td>{{ p.detalle }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="6" class="text-center text-muted">Sin pagos registrados.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+{% comment %} 
+    <div class="foot page-break">
+      Documento informativo — No válido como comprobante fiscal
+    </div> {% endcomment %}
+  </div>
+</body>
+</html>

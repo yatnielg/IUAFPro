@@ -1,0 +1,165 @@
+{% extends "panel/grafico.html" %}
+{% load static %}
+
+{% block main_content %}
+
+<style>
+  .order-img { width: 34px !important; height: 34px !important; object-fit: cover; border-radius: 5px; margin-right: 2px; background: #f7f8fa; transition: transform 0.2s; cursor: pointer; }
+  .order-img:hover { transform: scale(2.5) translateX(5px); z-index: 2; box-shadow: 0 4px 16px rgba(0,0,0,0.18); }
+
+  html, body { height: 100% !important; overflow-y: auto !important; overflow-x: hidden !important; }
+  .main-panel, .content, .card-body { overflow-y: visible !important; }
+
+  .dataTables_wrapper { overflow-x: auto; overflow-y: visible; }
+  .table-responsive { width: 100%; overflow-x: auto !important; overflow-y: visible !important; -webkit-overflow-scrolling: touch; }
+
+  .doc-chip { display:inline-block; margin: 0 .35rem .35rem 0; }
+  .doc-chip-missing { opacity: .6; pointer-events: none; }
+</style>
+
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
+<script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+
+<div class="content">
+  <div class="toolbar d-flex justify-content-between align-items-center mb-2">
+    <h1 class="h4 mb-0">Documentos de estudiantes</h1>
+
+    <form method="get" class="d-flex" style="gap:.5rem">
+      <input name="q" class="form-control form-control-sm"
+             placeholder="Buscar por No., nombre, apellidos, email o CURP…"
+             value="{{ q|default:'' }}" style="min-width:260px">
+      {% if q %}
+        <a class="btn btn-outline-secondary btn-sm" href="{% url 'documentos_alumnos_lista' %}">Limpiar</a>
+      {% endif %}
+      <button class="btn btn-outline-primary btn-sm">Buscar</button>
+    </form>
+  </div>
+
+  <div class="container-fluid">
+    <div class="row"><div class="col-md-12">
+
+      <div class="card">
+        <div class="card-header card-header-primary card-header-icon">
+          <div class="card-icon"><i class="material-icons">assignment</i></div>
+          <h4 class="card-title">Listado de documentos</h4>
+        </div>
+
+        <div class="card-body">
+          <div class="material-datatables table-responsive">
+            <table id="documentos-table" class="table table-striped table-no-bordered table-hover" cellspacing="0" width="100%">
+              <thead>
+                <tr>
+                  <th>No. Estudiante</th>
+                  <th>Nombre</th>
+                  <th>CURP</th>
+                  <th>Subidos / Requeridos</th>
+                  <th>Última actualización</th>
+                  <th>Documentos</th>
+                  <th class="disabled-sorting text-right">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for it in items %}
+                {% with a=it.alumno %}
+                <tr>
+                  <!-- No. Estudiante -->
+                  <td>
+                    <a href="{% url 'alumnos_detalle' a.pk %}" class="btn btn-link text-info btn-just-icon like" title="Ver ficha">
+                      {{ a.numero_estudiante }}
+                    </a>
+                  </td>
+
+                  <!-- Nombre -->
+                  <td>{{ a.nombre }} {{ a.apellido_p }} {{ a.apellido_m }}</td>
+
+                  <!-- CURP -->
+                  <td>{% if a.curp %}{{ a.curp }}{% else %}<span class="text-muted">—</span>{% endif %}</td>
+
+                  <!-- Subidos / Requeridos -->
+                  <td>
+                    <span class="badge badge-pill badge-success">{{ it.total_subidos }}</span>
+                    /
+                    <span class="badge badge-pill badge-secondary">{{ it.total_requeridos }}</span>
+                    {% if it.faltantes and it.total_requeridos %}
+                      <small class="text-muted ml-1">({{ it.faltantes|length }} faltan)</small>
+                    {% endif %}
+                  </td>
+
+                  <!-- Última actualización -->
+                  <td>
+                    {% if it.ultima_actualizacion %}
+                      {{ it.ultima_actualizacion|date:"d/m/Y H:i" }}
+                    {% else %}<span class="text-muted">—</span>{% endif %}
+                  </td>
+
+                  <!-- Documentos -->
+                  <td style="min-width:380px; white-space:normal">
+                    {# Subidos #}
+                    {% for d in it.documentos %}
+                      <a class="btn btn-sm btn-outline-primary doc-chip"
+                         href="{{ d.archivo.url }}" target="_blank" rel="noopener"
+                         title="{{ d.tipo.nombre }}">
+                        {{ d.tipo.nombre|truncatechars:24 }}
+                      </a>
+                    {% empty %}
+                      <span class="text-muted">Sin documentos</span>
+                    {% endfor %}
+
+                    {# Faltantes (gris) #}
+                    {% if it.faltantes %}
+                      <div class="mt-1">
+                        {% for t in it.faltantes %}
+                          <span class="btn btn-sm btn-outline-secondary doc-chip doc-chip-missing" title="Faltante">
+                            {{ t.nombre|truncatechars:24 }}
+                          </span>
+                        {% endfor %}
+                      </div>
+                    {% endif %}
+                  </td>
+
+                  <!-- Acciones -->
+                  <td class="text-right" style="min-width:120px">
+                    <a href="{% url 'alumnos_detalle' a.pk %}" class="btn btn-link text-info btn-just-icon like" title="Ver ficha">
+                      <i class="material-icons">visibility</i>
+                    </a>
+
+                    {% with p=request.user.profile %}
+                      {% if request.user.is_superuser or p and p.puede_editar_todo %}
+                        <a href="{% url 'alumnos_documentos_editar' a.pk %}" class="btn btn-link text-secondary btn-just-icon edit" title="Subir/actualizar">
+                          <i class="material-icons">upload_file</i>
+                        </a>
+                      {% endif %}
+                    {% endwith %}
+                  </td>
+                </tr>
+                {% endwith %}
+                {% empty %}
+                <tr>
+                  <td colspan="7" class="text-center text-muted py-4">Sin resultados</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div> <!-- /table-responsive -->
+        </div> <!-- /card-body -->
+      </div>
+
+    </div></div>
+  </div>
+</div>
+
+<script>
+  $(document).ready(function() {
+    $('#documentos-table').DataTable({
+      language: { url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/es-ES.json' },
+      order: [[4, 'desc'], [0, 'desc']], // por última actualización, luego No. Estudiante
+      pageLength: 10,
+      autoWidth: false,
+      scrollX: true,
+      scrollCollapse: true
+    });
+  });
+</script>
+
+{% endblock %}

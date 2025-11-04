@@ -1,0 +1,50 @@
+{# templates/alumnos/saldos_por_concepto.html #}
+{% extends "panel/grafico.html" %}
+{% block main_content %}
+
+<h4>Saldo por concepto: {{ data.concepto }}</h4>
+<p>
+  Total cargos: <strong>$ {{ data.totales.cargos }}</strong> •
+  Aplicado: <strong>$ {{ data.totales.aplicado }}</strong> •
+  Pendiente: <strong>$ {{ data.totales.pendiente }}</strong>
+</p>
+
+<div class="table-responsive">
+  <table class="table table-hover">
+    <thead>
+      <tr>
+        <th>Fecha cargo</th>
+        <th>Monto original</th>
+        <th>Aplicado</th>
+        <th>Pendiente</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in data.cargos_pendientes %}
+        <tr>
+          <td>{{ c.fecha_cargo|date:"d/m/Y" }}</td>
+          <td>$ {{ c.monto_original }}</td>
+          <td>$ {{ c.monto_aplicado }}</td>
+          <td class="text-danger font-weight-bold">$ {{ c.monto_restante }}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="4" class="text-center text-muted">No hay cargos con saldo pendiente en este concepto.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if data.pagos_sobrantes and data.pagos_sobrantes|length %}
+  <hr>
+  <p><strong>Pagos que sobraron en este concepto:</strong></p>
+  <ul class="small">
+    {% for p in data.pagos_sobrantes %}
+      <li>
+        {{ p.fecha|date:"d/m/Y" }} – Folio {{ p.folio|default:"—" }}:
+        Sobrante $ {{ p.monto_sobrante }} ({{ p.concepto_txt|default:"s/ concepto" }} — {{ p.pago_detalle|default:"s/ detalle" }})
+      </li>
+    {% endfor %}
+  </ul>
+{% endif %}
+
+{% endblock %}

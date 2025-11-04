@@ -1,0 +1,233 @@
+{% load permisos %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Estudiantes</title>
+  <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
+  <style>
+    .order-img{width:34px;height:34px;object-fit:cover;border-radius:5px;margin-right:2px;background:#f7f8fa;transition:transform .2s;cursor:pointer}
+    .order-img:hover{transform:scale(2.5) translateX(5px);z-index:2;box-shadow:0 4px 16px rgba(0,0,0,.18)}
+    .table-responsive{width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
+
+    /* Toolbar en columna: botón arriba, filtros abajo */
+    .toolbar{ display:flex; flex-direction:column; align-items:flex-start; gap:.5rem; margin-bottom:.5rem; }
+    .filters-row{ display:flex; flex-wrap:wrap; gap:.5rem; width:100%; }
+
+    #filter-admin, #filter-acad, #filter-programa, #filter-sede, #filter-activo {
+      min-width:220px; max-width:280px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="content">
+
+  <div class="toolbar">
+    {% if request.user.is_superuser %}
+      <a href="{% url 'alumnos_crear' %}" class="btn btn-primary btn-sm">
+        <i class="material-icons" style="vertical-align:middle">add</i>
+        Agregar Nuevo Estudiante
+      </a>
+    {% elif p and p.puede_editar_todo %}
+      <a href="{% url 'alumnos_crear' %}" class="btn btn-primary btn-sm">
+        <i class="material-icons" style="vertical-align:middle">add</i>
+        Agregar Nuevo Estudiante
+      </a>
+    {% endif %}
+
+    <div class="filters-row">
+      <select id="filter-programa" class="selectpicker" data-style="select-with-transition" multiple title="Programa" data-size="5"></select>
+      <select id="filter-admin"    class="selectpicker" data-style="select-with-transition" multiple title="Estatus Administrativo" data-size="5"></select>
+      <select id="filter-acad"     class="selectpicker" data-style="select-with-transition" multiple title="Estatus Académico" data-size="5"></select>
+      <select id="filter-sede"     class="selectpicker" data-style="select-with-transition" multiple title="Sede" data-size="5"></select>
+      <!-- NUEVO filtro por Activo -->
+      <select id="filter-activo"   class="selectpicker" data-style="select-with-transition" multiple title="Activo" data-size="5">
+        <option>Activo</option>
+        <option>Inactivo</option>
+      </select>
+      <button id="clear-filters" type="button" class="btn btn-sm btn-outline-warning">Limpiar</button>
+    </div>
+  </div>
+
+  <div class="container-fluid">
+    <div class="row"><div class="col-md-12">
+      <div class="card">
+        <div class="card-header card-header-primary card-header-icon">
+          <div class="card-icon"><i class="material-icons">assignment</i></div>
+          <h4 class="card-title">Información acerca de estudiantes</h4>
+        </div>
+
+        <div class="card-body">
+          <div class="material-datatables table-responsive">
+            <table id="datatables" class="table table-striped table-no-bordered table-hover" cellspacing="0" width="100%" style="width:100%">
+              <thead>
+                <tr>
+                  <th>No</th>
+                  <th>Nombre Completo</th>
+                  <th>CURP</th>
+                  <th>Programa</th>
+                  <th>Estatus Administrativo</th>
+                  <th>Estatus Académico</th>
+                  <th>Sedes</th>
+                  <th>Activo</th>
+                  {% if request.user.is_superuser or p and p.puede_editar_todo or p and p.puede_ver_todo %}
+                    <th class="disabled-sorting text-right">Acciones</th>
+                  {% endif %}
+                </tr>
+              </thead>
+
+              <tbody>
+                {% for a in alumnos %}
+                <tr>
+                  <td>
+                    <a href="{% url 'alumnos_detalle' a.pk %}" class="btn btn-link text-info btn-just-icon like" title="Ver detalle">
+                      {{ a.numero_estudiante }}
+                    </a>
+                  </td>
+
+                  <td>{{ a.nombre }} {{ a.apellido_p }} {{ a.apellido_m }}</td>
+                  <td>{{ a.curp|default:"—" }}</td>
+
+                  <td title="{{ a.informacionEscolar.programa.nombre|default_if_none:''|escape }}">
+                    {% if a.informacionEscolar.programa %}
+                      {{ a.informacionEscolar.programa.codigo }}
+                    {% else %}
+                      <span class="text-muted">—</span>
+                    {% endif %}
+                  </td>
+
+                  <td>
+                    {% if a.informacionEscolar.estatus_administrativo %}
+                      <span class="badge bg-secondary text-white">{{ a.informacionEscolar.estatus_administrativo }}</span>
+                    {% else %}
+                      <span class="text-muted">—</span>
+                    {% endif %}
+                  </td>
+
+                  <td>
+                    {% if a.informacionEscolar.estatus_academico %}
+                      <span class="badge bg-info text-white">{{ a.informacionEscolar.estatus_academico }}</span>
+                    {% else %}
+                      <span class="text-muted">—</span>
+                    {% endif %}
+                  </td>
+
+                  <td>
+                    {% if a.informacionEscolar.sede %}
+                      {{ a.informacionEscolar.sede.nombre }}
+                    {% else %}
+                      <span class="text-muted">—</span>
+                    {% endif %}
+                  </td>
+
+                  <td>
+                    {% if a.activo %}
+                      <span class="badge badge-success">Activo</span>
+                    {% else %}
+                      <span class="badge badge-secondary">Inactivo</span>
+                    {% endif %}
+                  </td>
+
+                  {% if request.user.is_superuser or p and p.puede_editar_todo or p and p.puede_ver_todo %}
+                  <td class="text-right">
+                    {% if request.user.is_superuser or p and p.puede_ver_todo %}
+                      <a href="{% url 'alumnos_detalle' a.pk %}" class="btn btn-link text-info btn-just-icon like" title="Ver">
+                        <i class="material-icons">visibility</i>
+                      </a>
+                    {% endif %}
+
+                    {% if request.user.is_superuser or p and p.puede_editar_todo %}
+                      {% can_edit_alumno request.user a as puede_editar %}
+                      {% if puede_editar %}
+                        <a href="{% url 'alumnos_editar' a.pk %}" class="btn btn-link text-secondary btn-just-icon edit" title="Editar">
+                          <i class="material-icons">edit</i>
+                        </a>
+                      {% endif %}
+                    {% endif %}
+                  </td>
+                  {% endif %}
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </div></div>
+  </div>
+
+</div>
+
+<script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+<script>
+  $(function () {
+    const table = $('#datatables').DataTable({
+      language: {
+        url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/es-ES.json',
+        emptyTable: 'Sin resultados'
+      },
+      order: []
+    });
+
+    // Índices de columnas (los filtros apuntan a 3-7 ahora)
+    const PROG_COL_IDX   = 3;
+    const ADMIN_COL_IDX  = 4;
+    const ACAD_COL_IDX   = 5;
+    const SEDE_COL_IDX   = 6;
+    const ACTIVO_COL_IDX = 7; // NUEVO
+
+    const $selProg   = $('#filter-programa');
+    const $selAdmin  = $('#filter-admin');
+    const $selAcad   = $('#filter-acad');
+    const $selSede   = $('#filter-sede');
+    const $selActivo = $('#filter-activo'); // NUEVO
+
+    function populateUnique(colIdx, $select) {
+      const set = new Set();
+      table.column(colIdx).nodes().each(function (td) {
+        const txt = $(td).text().trim();
+        if (txt && txt !== '—') set.add(txt);
+      });
+      $select.empty();
+      Array.from(set).sort().forEach(v => $select.append(new Option(v, v)));
+    }
+    populateUnique(PROG_COL_IDX,  $selProg);
+    populateUnique(ADMIN_COL_IDX, $selAdmin);
+    populateUnique(ACAD_COL_IDX,  $selAcad);
+    populateUnique(SEDE_COL_IDX,  $selSede);
+    // Para "Activo" ya pusimos opciones fijas (Activo/Inactivo), no hace falta poblar
+
+    const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    function applyFilter($select, colIdx) {
+      const selected = $select.val();
+      if (selected && selected.length) {
+        const pattern = '^(' + selected.map(esc).join('|') + ')$';
+        table.column(colIdx).search(pattern, true, false);
+      } else {
+        table.column(colIdx).search('', true, false);
+      }
+    }
+
+    $selProg.on('change',   function(){ applyFilter($selProg,   PROG_COL_IDX);   table.draw(); });
+    $selAdmin.on('change',  function(){ applyFilter($selAdmin,  ADMIN_COL_IDX);  table.draw(); });
+    $selAcad.on('change',   function(){ applyFilter($selAcad,   ACAD_COL_IDX);   table.draw(); });
+    $selSede.on('change',   function(){ applyFilter($selSede,   SEDE_COL_IDX);   table.draw(); });
+    $selActivo.on('change', function(){ applyFilter($selActivo, ACTIVO_COL_IDX); table.draw(); });
+
+    $('#clear-filters').on('click', function () {
+      $selProg.val([]); $selAdmin.val([]); $selAcad.val([]); $selSede.val([]); $selActivo.val([]);
+      applyFilter($selProg,   PROG_COL_IDX);
+      applyFilter($selAdmin,  ADMIN_COL_IDX);
+      applyFilter($selAcad,   ACAD_COL_IDX);
+      applyFilter($selSede,   SEDE_COL_IDX);
+      applyFilter($selActivo, ACTIVO_COL_IDX);
+      table.draw();
+    });
+  });
+</script>
+
+</body>
+</html>

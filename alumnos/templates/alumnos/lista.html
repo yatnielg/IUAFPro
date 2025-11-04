@@ -1,0 +1,118 @@
+{% extends "panel/grafico.html" %}
+{% block main_content %}
+
+{# Mensajes flash #}
+{% if messages %}
+  {% for message in messages %}
+    <div class="alert alert-{{ message.tags }} mb-3" role="alert">{{ message }}</div>
+  {% endfor %}
+{% endif %}
+
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <h1 class="h4 m-0">
+    <i class="material-icons" style="vertical-align:middle">groups</i>
+    Información acerca de estudiantes
+  </h1>
+  <a class="btn btn-primary btn-sm" href="{% url 'alumnos_crear' %}">
+    <i class="material-icons" style="vertical-align:middle">person_add</i>
+    + Agregar nuevo estudiante
+  </a>
+</div>
+
+<div class="card">
+  <div class="card-body">
+    <form method="get" class="row g-2 mb-3">
+      <div class="col-sm-8 col-md-6">
+        <input name="q"
+               class="form-control"
+               placeholder="Buscar por No. estudiante, nombre, apellidos, email o CURP…"
+               value="{{ q|default:'' }}">
+      </div>
+      <div class="col-auto">
+        <button class="btn btn-outline-primary">Buscar</button>
+      </div>
+      {% if q %}
+      <div class="col-auto">
+        <a class="btn btn-outline-secondary" href="{% url 'alumnos_lista' %}">Limpiar</a>
+      </div>
+      {% endif %}
+    </form>
+
+    <div class="table-responsive">
+      <table class="table table-hover align-middle">
+        <thead>
+          <tr>
+            <th>No. Estudiante</th>
+            <th>Nombre completo</th>
+            <th>CURP</th>
+            <th>Programa</th>
+            <th>Estatus Administrativo</th>
+            <th>Estatus Académico</th>
+            <th class="text-end">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for a in alumnos %}
+            <tr>
+              <td>
+                <a href="{% url 'alumnos_detalle' a.pk %}" class="text-decoration-none">
+                  {{ a.numero_estudiante }}
+                </a>
+              </td>
+              <td>{{ a.nombre }} {{ a.apellido_p }} {{ a.apellido_m }}</td>
+              <td>{{ a.curp|default:"—" }}</td>
+              <td>
+                {% if a.informacionEscolar %}{{ a.informacionEscolar }}{% else %}<span class="text-muted">—</span>{% endif %}
+              </td>
+              <td>
+                {% if a.informacionEscolar.estatus_administrativo %}
+                  <span class="badge text-bg-secondary">{{ a.informacionEscolar.estatus_administrativo }}</span>
+                {% else %}<span class="text-muted">—</span>{% endif %}
+              </td>
+              <td>
+                {% if a.informacionEscolar.estatus_academico %}
+                  <span class="badge text-bg-info">{{ a.informacionEscolar.estatus_academico }}</span>
+                {% else %}<span class="text-muted">—</span>{% endif %}
+              </td>
+              <td class="text-end">
+                <a class="btn btn-sm btn-outline-primary" href="{% url 'alumnos_detalle' a.pk %}">
+                  Ver
+                </a>
+                <a class="btn btn-sm btn-outline-secondary" href="{% url 'alumnos_editar' a.pk %}">
+                  Editar
+                </a>
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="7" class="text-center text-muted py-4">Sin resultados</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {# -- Si planeas paginar: #}
+   
+    <nav aria-label="Paginación" class="mt-3">
+      <ul class="pagination justify-content-center">
+        {% if alumnos.has_previous %}
+          <li class="page-item"><a class="page-link" href="?q={{ q }}&page={{ alumnos.previous_page_number }}">Anterior</a></li>
+        {% else %}
+          <li class="page-item disabled"><span class="page-link">Anterior</span></li>
+        {% endif %}
+        <li class="page-item disabled">
+          <span class="page-link">Página {{ alumnos.number }} de {{ alumnos.paginator.num_pages }}</span>
+        </li>
+        {% if alumnos.has_next %}
+          <li class="page-item"><a class="page-link" href="?q={{ q }}&page={{ alumnos.next_page_number }}">Siguiente</a></li>
+        {% else %}
+          <li class="page-item disabled"><span class="page-link">Siguiente</span></li>
+        {% endif %}
+      </ul>
+    </nav>
+   
+  </div>
+</div>
+
+{% endblock %}

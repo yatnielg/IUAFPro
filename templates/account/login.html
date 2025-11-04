@@ -1,0 +1,136 @@
+{% extends "panel/grafico.html" %}
+{% load i18n static %}
+
+{% block title %}Ingresar — IUAFPro{% endblock %}
+
+{% block main_content %}
+
+
+
+
+
+
+  <div class="row mt-5">
+    <div class="col-lg-4 col-md-6 col-sm-8 ml-auto mr-auto mt-5">
+
+
+      <div class="card card-login card-hidden" style="max-width:520px;margin:0 auto;">
+
+
+{% comment %} <div class="mb-5">
+  <img
+    src="{% static 'iuaf/iuaf-logo.png' %}"  {# <-- tu imagen #}
+    alt="IUAFPro"
+    class="img-fluid rounded shadow w-25"
+    style="max-height: 380px; object-fit: cover; object-position: center;"
+  >
+
+
+
+</div> {% endcomment %}
+
+
+
+
+        <div class="card-header card-header-primary text-center">
+          <h4 class="card-title m-0">{% trans "Iniciar sesión" %}</h4>
+          <p class="card-category m-0">{% trans "Introduce tus credenciales para continuar." %}</p>
+
+<div class="social-line">
+  <a href="javascript:;" class="btn btn-just-icon btn-link text-white" aria-label="Facebook">
+    <i class="fa fa-facebook-square"></i>
+  </a>
+  <a href="javascript:;" class="btn btn-just-icon btn-link text-white" aria-label="Twitter">
+    <i class="fa fa-twitter"></i>
+  </a>
+  <a href="javascript:;" class="btn btn-just-icon btn-link text-white" aria-label="Google">
+    <i class="fa fa-google-plus"></i>
+  </a>
+</div>
+
+
+        </div>
+
+        <div class="card-body">
+          {% if form.non_field_errors %}
+            <div class="alert alert-danger mb-3" role="alert">{{ form.non_field_errors }}</div>
+          {% endif %}
+
+          <form method="post" action="{% url 'account_login' %}" class="form">
+            {% csrf_token %}
+
+            <!-- Email / usuario -->
+            <span class="md-form-group d-block mb-3">
+              <label for="id_login" class="form-label d-none">{% trans "Correo electrónico" %}</label>
+              <div class="input-group">
+                <div class="input-group-prepend">
+                  <span class="input-group-text"><i class="material-icons">email</i></span>
+                </div>
+                {{ form.login }}
+              </div>
+            </span>
+
+            <!-- Password -->
+            <span class="md-form-group d-block mb-2">
+              <label for="id_password" class="form-label d-none">{% trans "Contraseña" %}</label>
+              <div class="input-group">
+                <div class="input-group-prepend">
+                  <span class="input-group-text"><i class="material-icons">lock_outline</i></span>
+                </div>
+                {{ form.password }}
+                <div class="input-group-append">
+                  <button type="button" class="input-group-text" id="toggle-pass" title="{% trans 'Mostrar/ocultar' %}">
+                    <i class="material-icons">visibility</i>
+                  </button>
+                </div>
+              </div>
+            </span>
+
+            <!-- Recordarme + Olvidé -->
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <div class="m-0 ml-4">
+                {{ form.remember }}
+                <label class="form-check-label" for="id_remember">{% trans "Recordarme" %}</label>
+              </div>
+              <a href="{% url 'account_reset_password' %}" class="small">{% trans "¿Olvidaste tu contraseña?" %}</a>
+            </div>
+
+            <button class="btn btn-primary btn-block" type="submit">{% trans "Iniciar sesión" %}</button>
+          </form>
+        </div>
+
+        <div class="card-footer text-center">
+          <small class="text-muted">
+            <a href="{% url 'account_signup' %}">{% trans "Crear cuenta" %}</a>
+            &nbsp;·&nbsp;
+            <a href="{% url 'principal' %}">{% trans "Ir al inicio" %}</a>
+          </small>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Ajustes de clases + animaciones -->
+  <script>
+    document.querySelectorAll("#id_login,#id_password").forEach(el => {
+      el.classList.add("form-control");
+    });
+    const chk = document.getElementById("id_remember");
+    if (chk) chk.classList.add("form-check-input");
+
+    setTimeout(function () {
+      var card = document.querySelector('.card.card-login');
+      if (card) card.classList.remove('card-hidden');
+    }, 700);
+
+    const btn = document.getElementById('toggle-pass');
+    const pass = document.getElementById('id_password');
+    if (btn && pass) {
+      btn.addEventListener('click', function(){
+        const isText = pass.type === 'text';
+        pass.type = isText ? 'password' : 'text';
+        this.querySelector('.material-icons').textContent = isText ? 'visibility' : 'visibility_off';
+      });
+    }
+  </script>
+{% endblock %}

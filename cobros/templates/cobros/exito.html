@@ -1,0 +1,7 @@
+<!-- templates/cobros/exito.html -->
+<h2>¡Gracias! Pago recibido/en proceso</h2>
+<p>Referencia sesión: {{ session_id }}</p>
+{% if amount %}<p>Monto: $ {{ amount }} {{ currency }}</p>{% endif %}
+<p>Modo: {{ mode }}</p>
+<p>Estado reportado por Stripe: {{ status|default:"—" }}</p>
+<p>En breve verás el reflejo en tu estado de cuenta.</p>

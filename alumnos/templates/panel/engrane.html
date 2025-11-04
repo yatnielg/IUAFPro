@@ -1,0 +1,265 @@
+{% comment %} para movil  {% endcomment %}
+ {% comment %} <link rel="manifest" href="/static/manifest.json"> {% endcomment %}
+{% comment %}  <link rel="manifest" href="{% url 'manifest' %}"> {% endcomment %}
+{% comment %}   <meta name="theme-color" content="#211338ff">
+  <link rel="icon" href="/static/icons/icon-192.png">  
+  <style>
+    /* Banner de alerta visual */
+    #alert-banner {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      background: #e84118;
+      color: white;
+      padding: 20px;
+      text-align: center;
+      font-size: 1.2em;
+      z-index: 9999;
+    }
+  </style>
+
+
+  <h3 class="font-weight-bold">Notificaciones:</h3>
+  <div id="notifications"></div>
+  <div id="alert-banner">¡Nuevo pedido recibido!</div> {% endcomment %}
+  <!-- Sonido de notificación -->
+ {% comment %}  <audio id="notif-audio" src="/static/sonidos/sonido.mp3" preload="auto"></audio> {% endcomment %}
+  {% comment %} <button class="btn btn-info" id="activar-sonido" >Activar sonido</button> {% endcomment %}
+{% comment %} <script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const protocol = location.protocol === 'https:' ? 'wss' : 'ws';
+    // <<< CORREGIDO aquí para incluir el nombre de tienda >>>
+    const nombreTienda = "{{ nombre_tienda|default:'Mi_Tienda' }}";
+    const wsUrl = `${protocol}://${location.host}/ws/superadmin/${nombreTienda}/`;
+
+    const log = document.getElementById('notifications');
+    const audio = document.getElementById('notif-audio');
+    const activarBtn = document.getElementById('activar-sonido');
+    const banner = document.getElementById('alert-banner');
+    let sonidoHabilitado = true;
+    const notificationSpan = document.querySelector('.notification');
+    let alertasGlobalCount = parseInt(notificationSpan.textContent, 10) || 0;
+    let chatCount = 0;
+
+    function actualizarNotificacion() {
+      notificationSpan.textContent = alertasGlobalCount + chatCount;
+    }
+
+    activarBtn.addEventListener('click', () => {
+      sonidoHabilitado = true;
+      audio.play().then(() => {
+        audio.pause();
+        audio.currentTime = 0;
+        activarBtn.disabled = true;
+        activarBtn.textContent = "Sonido activado";
+      });
+      if (Notification.permission !== "granted") {
+        Notification.requestPermission();
+      }
+    });
+
+    function alertaPedido(mensaje) {
+      if (sonidoHabilitado) audio.play();
+      if (Notification.permission === "granted") {
+        new Notification("¡Nuevo pedido!", { body: mensaje || "Hay un nuevo pedido." });
+      }
+      if ("vibrate" in navigator) navigator.vibrate([200, 100, 200]);
+      document.title = "🔔 ¡Nuevo pedido!";
+      banner.style.display = "block";
+      setTimeout(() => {
+        banner.style.display = "none";
+        document.title = "Notificaciones SuperAdmin";
+      }, 4000);
+    }
+
+    const ws = new WebSocket(wsUrl);
+
+    ws.addEventListener('message', (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        const div = document.createElement('div');
+        div.textContent = data.message;
+        log.appendChild(div);
+        alertaPedido(data.message);
+
+        const chatAlerts = document.getElementById('chat-alerts');
+        if (chatAlerts) {
+          const chatItem = document.createElement('a');
+          chatItem.className = "dropdown-item";
+          chatItem.href = "#";
+          chatItem.textContent = `Chat: ${data.message}`;
+          chatAlerts.appendChild(chatItem);
+        }
+
+        chatCount++;
+        actualizarNotificacion();
+      } catch (err) {
+        console.error('Mensaje no JSON', e.data);
+      }
+    });
+  });
+</script> {% endcomment %}
+
+
+
+{% comment %} fin movil {% endcomment %}
+
+{% comment %} {% include "support/widget_soporte.html" %} {% endcomment %}
+
+{% comment %} {% include "support/widget_tienda.html" %} {% endcomment %}
+{% include "panel/whatsApp_support_widget.html" %}
+
+
+<div class="fixed-plugin">
+    <div class="dropdown show-dropdown">
+      <a href="#" data-toggle="dropdown">
+        <i class="fa fa-cog fa-2x"> </i>
+      </a>
+      <ul class="dropdown-menu">
+        <li class="header-title">Filtros de barra</li>
+        <li class="adjustments-line">
+          <a href="javascript:void(0)" class="switch-trigger active-color">
+            <div class="badge-colors ml-auto mr-auto">
+              <span class="badge filter badge-purple active" data-color="purple"></span>
+              <span class="badge filter badge-azure" data-color="azure"></span>
+              <span class="badge filter badge-green" data-color="green"></span>
+              <span class="badge filter badge-warning" data-color="orange"></span>
+              <span class="badge filter badge-danger" data-color="danger"></span>
+              <span class="badge filter badge-rose" data-color="rose"></span>
+            </div>
+            <div class="clearfix"></div>
+          </a>
+        </li>
+        <li class="header-title">Fondo de la barra lateral</li>
+        <li class="adjustments-line">
+          <a href="javascript:void(0)" class="switch-trigger background-color">
+            <div class="ml-auto mr-auto">
+              <span class="badge filter badge-lighter" data-background-color="lighter"></span>
+              <span class="badge filter badge-default active" data-background-color="default"></span>
+              <span class="badge filter badge-darker" data-background-color="darker"></span>
+            </div>
+            <div class="clearfix"></div>
+          </a>
+        </li>
+        <li class="adjustments-line">
+          <a href="javascript:void(0)" class="switch-trigger">
+            <p>Sidebar Mini</p>
+            <label class="ml-auto">
+              <div class="togglebutton switch-sidebar-mini">
+                <label>
+                  <input type="checkbox">
+                  <span class="toggle"></span>
+                </label>
+              </div>
+            </label>
+            <div class="clearfix"></div>
+          </a>
+        </li>
+        <li class="adjustments-line">
+          <a href="javascript:void(0)" class="switch-trigger">
+            <p>Imágenes de la barra lateral</p>
+            <label class="switch-mini ml-auto">
+              <div class="togglebutton switch-sidebar-image">
+                <label>
+                  <input type="checkbox" checked="">
+                  <span class="toggle"></span>
+                </label>
+              </div>
+            </label>
+            <div class="clearfix"></div>
+          </a>
+        </li>
+        <li class="header-title">APP</li>
+     {% comment %}    <li class="active">
+          <a class="img-holder switch-trigger" href="javascript:void(0)">
+            <img src="https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=800&q=80&h=600" alt="">
+          </a>
+        </li> {% endcomment %}
+      {% comment %}   <li>
+          <a class="img-holder switch-trigger" href="javascript:void(0)">
+            <img src="https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=800&q=80&h=600" alt="">
+          </a>
+        </li>
+        <li>
+          <a class="img-holder switch-trigger" href="javascript:void(0)">
+            <img src="https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=800&q=80&h=600" alt="">
+          </a>
+        </li>
+        <li>
+          <a class="img-holder switch-trigger" href="javascript:void(0)">
+            <img src="https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=800&q=80&h=600" alt="">
+          </a>
+        </li> {% endcomment %}
+        <li class="button-container">
+          {% comment %} <a href="#" target="_blank" class="btn btn-rose btn-block btn-fill disabled" >Corte de operaciones</a> {% endcomment %}
+ {% comment %}          <a href="#" target="_blank" class="btn btn-secondary btn-block disabled">
+            Informe de cierre
+          </a> {% endcomment %}
+        {% comment %}   <a href="#" target="_blank" class="btn btn-info btn-block disabled">
+            Resumen contable
+          </a> {% endcomment %}
+
+        {% comment %}     <a href="{% url 'superadmin_notifications' %}" target="_blank" class="btn btn-info btn-block">
+             Instalar App
+          </a> {% endcomment %}
+          
+
+        
+
+
+
+      
+
+        </li>
+
+
+
+
+
+
+      </ul>
+    </div>
+  </div>
+
+<script>
+  let deferredPrompt;
+const btnInstalar = document.getElementById('btn-instalar');
+
+// Escucha el evento que indica que la app es instalable
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault(); // Evita el prompt automático
+  deferredPrompt = e;
+  btnInstalar.style.display = 'inline-block'; // Muestra el botón
+});
+
+// Cuando el usuario hace click en el botón...
+btnInstalar.addEventListener('click', () => {
+  btnInstalar.style.display = 'none';
+  if (deferredPrompt) {
+    deferredPrompt.prompt(); // Muestra el prompt de instalación
+    // Espera la respuesta del usuario
+    deferredPrompt.userChoice.then((choiceResult) => {
+      // Puedes hacer algo según el resultado...
+      if (choiceResult.outcome === 'accepted') {
+        console.log('App instalada');
+      } else {
+        console.log('App no instalada');
+      }
+      deferredPrompt = null;
+    });
+  }
+});
+</script>
+
+  <script>
+    // Registrar el service worker
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/static/sw.js')
+        .then(reg => console.log("Service Worker registrado", reg))
+        .catch(err => console.error("Error Service Worker", err));
+    }
+  </script>
+
+

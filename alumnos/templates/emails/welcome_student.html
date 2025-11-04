@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="es">
+  <body style="font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial;">
+    <div style="max-width:600px;margin:0 auto;padding:24px">
+      <h2>¡Bienvenido(a) a IUAF, {{ alumno.nombre }}!</h2>
+      <p>Hola {{ alumno.nombre }} {{ alumno.apellido_p }} {{ alumno.apellido_m }},</p>
+      <p>Tu registro como estudiante ha sido creado exitosamente.</p>
+
+      {% if programa %}
+      <p><strong>Programa:</strong> {{ programa }}</p>
+      {% endif %}
+      {% if sede %}
+      <p><strong>Sede:</strong> {{ sede }}</p>
+      {% endif %}
+
+      <p>Desde ahora puedes acceder al portal: <a href="https://admin.campusiuaf.com" target="_blank">admin.campusiuaf.com</a>.</p>
+
+      <hr style="border:none;border-top:1px solid #eee;margin:24px 0" />
+      <p style="font-size:13px;color:#666">
+        Si recibiste este mensaje por error, ignóralo. <br/>
+        IUAF — Atención al estudiante
+      </p>
+    </div>
+  </body>
+</html>

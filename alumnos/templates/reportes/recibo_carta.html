@@ -1,0 +1,207 @@
+{% load static %}
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <title>Recibo de Pago - IUAF (Carta)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+
+  <style>
+    :root{
+      --brand:#6f42c1; --brand-2:#8a63d2;
+      --ink:#0f172a; --muted:#6b7280; --line:#e5e7eb; --bg:#f6f7fb;
+      --ok:#15803d; --late:#b91c1c; --panel:#ffffff; --note:#faf7ff;
+    }
+
+    html,body{ background:var(--bg); color:var(--ink); }
+    .sheet{ width:8.5in; min-height:11in; margin:24px auto; background:var(--panel);
+      border:1px solid #ececf3; border-radius:14px; box-shadow:0 12px 36px rgba(2,6,23,.08); }
+    .doc{ padding:.6in; }
+
+    /* ===== Brand band ===== */
+    .brandband{
+      background:linear-gradient(90deg, var(--brand), var(--brand-2));
+      color:#fff; border-radius:12px; padding:14px 16px; display:grid;
+      grid-template-columns:96px 1fr auto; gap:14px; align-items:center;
+    }
+    .brandband .logo{
+      width:88px; height:88px; object-fit:contain; background:#fff; border-radius:12px; padding:10px;
+      border:1px solid rgba(255,255,255,.6);
+    }
+    .brandband .name{ font-weight:900; letter-spacing:.2px; text-transform:uppercase; line-height:1.15; }
+    .brandband .meta{ font-size:.9rem; opacity:.95; }
+    .tag{ background:rgba(255,255,255,.12); border:1px solid rgba(255,255,255,.35); padding:6px 10px; border-radius:999px; font-weight:700; }
+
+    /* ===== Chips row ===== */
+    .chip{ background:#fff; border:1px solid var(--line); border-radius:14px; padding:10px 14px; box-shadow:0 2px 10px rgba(2,6,23,.04); }
+    .chip .lbl{ font-size:.7rem; text-transform:uppercase; letter-spacing:.12em; color:var(--muted); }
+    .chip .val{ font-weight:800; }
+    .mono{ font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-feature-settings:"tnum" 1,"lnum" 1; }
+
+    /* ===== Title ===== */
+    .title-wrap{ margin:16px 0 10px; position:relative; }
+    .title-wrap::before,.title-wrap::after{ content:""; position:absolute; left:0; right:0; height:1px; background:linear-gradient(90deg,transparent,var(--line),transparent); }
+    .title-wrap::before{ top:-4px; } .title-wrap::after{ bottom:-4px; }
+    .title{ text-align:center; color:var(--brand); letter-spacing:.28em; font-weight:900; font-size:.95rem; }
+
+    /* ===== Data cards ===== */
+    .card-plain{ border:1px solid var(--line); border-radius:14px; background:#fff; box-shadow:0 2px 12px rgba(2,6,23,.04); }
+    .dl{ width:100%; border-collapse:collapse; }
+    .dl tr + tr td{ border-top:1px dashed var(--line); }
+    .dl td{ padding:10px 12px; vertical-align:top; }
+    .dl .k{ width:45%; color:var(--muted); font-weight:600; }
+    .dl .v{ text-align:right; font-weight:700; }
+
+    /* ===== Amount box ===== */
+    .amount-box{ border:1px solid rgba(111,66,193,.28); border-radius:14px; background:linear-gradient(180deg,#fbfaff,#f8f5ff); box-shadow:0 4px 18px rgba(111,66,193,.10); }
+    .amount-head{ text-transform:uppercase; font-size:.78rem; color:#6d5bd0; letter-spacing:.12em; }
+    .amount-num{ font-size:1.9rem; font-weight:900; color:var(--brand); line-height:1.1; }
+    .amount-sub{ font-size:.92rem; font-weight:600; color:#4b5563; }
+    .amount-box hr{ border-top:1px dashed rgba(111,66,193,.35); margin:.65rem 0; }
+    .status-flag{ display:inline-block; padding:6px 12px; border-radius:999px; font-weight:800; font-size:.85rem; border:1px solid; box-shadow:0 2px 6px rgba(0,0,0,.05); }
+    .status-flag.ontime{ background:#eaf9ef; border-color:#c6f1d2; color:var(--ok); }
+    .status-flag.late{ background:#ffe9e9; border-color:#ffd2d2; color:var(--late); }
+    .watermark{ background:var(--note); border:1px dashed rgba(111,66,193,.35); border-radius:12px; padding:10px 12px; font-size:.9rem; color:#4b5563; }
+
+    /* ===== Signature ===== */
+    .firma-wrap{ margin-top:26px; text-align:center; }
+    .firma-wrap img{ height:110px; object-fit:contain; }
+    .foot{ color:var(--muted); font-size:.9rem; margin-top:6px; }
+
+    /* ===== Print ===== */
+    @media print{
+      -webkit-print-color-adjust: exact; print-color-adjust: exact;
+      @page{ size:Letter; margin:.55in; }
+      html,body{ background:#fff; }
+      .sheet{ width:auto; min-height:auto; margin:0; border:none; border-radius:0; box-shadow:none; }
+      .doc{ padding:0; }
+      a[href]:after{ content:""; }
+
+      /* Apilar datos en PDF (monto debajo) */
+      .stack-print > [class*="col-"]{ flex:0 0 100% !important; max-width:100% !important; }
+      .stack-print{ row-gap:.6rem !important; }
+    }
+
+/* Chip de contacto: texto más pequeño y con quiebre seguro */
+.chip.contact .val{
+  font-size: .85rem;      /* más pequeño */
+  line-height: 1.2;
+  overflow-wrap: anywhere; /* permite romper en cualquier punto */
+  word-break: break-word;  /* por si el navegador ignora lo anterior */
+}
+@media print{
+  .chip.contact .val{ font-size: .8rem; } /* aún más chico en PDF si hace falta */
+}
+
+
+.firma-wrap {
+  margin-top: 60px; /* Ajusta el valor según necesites */
+  text-align: center;
+}
+
+
+
+  </style>
+</head>
+<body>
+  <div class="sheet">
+    <div class="doc">
+
+      <!-- ===== Banda de marca ===== -->
+      <div class="brandband">
+        <img class="logo" src="{% static 'iuaf/iuaf-logo3.png' %}" alt="Logo IUAF">
+        <div>
+          <div class="name">{{ institucion.nombre }}</div>
+          <div class="meta">
+            <strong>R.F.C.</strong> {{ institucion.rfc }} &nbsp; · &nbsp;
+            <strong>CCT</strong>  23PSU0064H {% comment %} {{ institucion.cct }} {% endcomment %}<br>
+            {{ institucion.direccion }}, {{ institucion.ciudad }} · Tel. {{ institucion.telefono }} · {{ institucion.email }}
+          </div>
+        </div>
+        <div class="tag">RECIBO DE PAGO</div>
+      </div>
+
+      <!-- ===== Chips: Folio / Lugar / Emisión ===== -->
+      <div class="row g-3 mt-3">
+        <div class="col-12 col-lg-3">
+          <div class="chip h-100">
+            <div class="lbl">Folio</div>
+            <div class="val mono fs-4">{{ pago.folio|default:pago.pk }}</div>
+          </div>
+        </div>
+        <div class="col-12 col-lg-9">
+          <div class="chip h-100">
+            <div class="d-flex justify-content-between">
+              <div>
+                <div class="lbl">Lugar</div>
+                <div class="val"> México {% comment %} {{ lugar_emision }} {% endcomment %}</div>
+              </div>
+              <div class="text-end">
+                <div class="lbl">Fecha de emisión</div>
+                <div class="val">{{ fecha_emision }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+{% comment %}         <div class="col-12 col-lg-4">
+          <div class="chip contact  h-100">
+            <div class="lbl">Contacto</div>
+            <div class="val">{{ institucion.email }} · {{ institucion.telefono }}</div>
+          </div>
+        </div>
+      </div> {% endcomment %}
+
+      <!-- ===== Título ===== -->
+      <div class="title-wrap"><div class="title">R&nbsp;E&nbsp;C&nbsp;I&nbsp;B&nbsp;O&nbsp;&nbsp;&nbsp;D&nbsp;E&nbsp;&nbsp;&nbsp;P&nbsp;A&nbsp;G&nbsp;O</div></div>
+
+      <!-- ===== Datos + Monto ===== -->
+      <div class="row g-3 stack-print">
+        <!-- Datos del alumno/pago -->
+        <div class="col-12 col-lg-7">
+          <div class="card-plain p-2">
+            <table class="dl">
+              <tr><td class="k">Recibimos de</td><td class="v">{{ alumno.nombre_completo|default:pago.nombre|default:"—" }}</td></tr>
+              <tr><td class="k">CURP</td><td class="v mono">{{ alumno.curp|default:"—" }}</td></tr>
+              <tr><td class="k">Programa</td><td class="v text-uppercase">{{ pago.programa|default:"—" }}</td></tr>
+              <tr><td class="k">Concepto de pago</td><td class="v">{{ pago.concepto|default:"—" }}</td></tr>
+              <tr><td class="k">Forma de pago</td><td class="v">{{ pago.forma_pago|default:"—" }}</td></tr>
+              <tr><td class="k">Fecha de pago</td><td class="v">{{ pago.fecha_pago|default:"—" }}</td></tr>
+            </table>
+          </div>
+        </div>
+
+        <!-- Monto / estado -->
+        <div class="col-12 col-lg-5">
+          <div class="amount-box p-3">
+            <div class="amount-head">La cantidad de</div>
+            <div class="amount-num">$ {{ pago.cantidad }} MXN</div>
+            <div class="amount-sub">SON {{ pago.cantidad_letra }}</div>
+            <hr>
+            <div class="d-flex justify-content-center">
+              {% if pago.oportuno %}
+                <span class="status-flag ontime">PAGO OPORTUNO</span>
+              {% else %}
+                <span class="status-flag late">PAGO EXTEMPORÁNEO</span>
+              {% endif %}
+            </div>
+            <div class="watermark mt-3 small">
+              Para cualquier aclaración es indispensable contar con su recibo de pago y ficha de depósito.
+              La facturación sustituye la validez de este recibo.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== Firma ===== -->
+      <div class="firma-wrap">
+        <img src="{% static 'iuaf/firma.png' %}" alt="Nombre y Firma">
+        <div class="foot">Emitido por Administración · {{ institucion.nombre }}</div>
+      </div>
+
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

@@ -1,0 +1,268 @@
+{% extends "panel/grafico.html" %}
+{% load static %}
+
+{% block main_content %}
+
+<style>
+  /* ====== Estilos de imagen (opcional) ====== */
+  .order-img {
+    width: 34px !important;
+    height: 34px !important;
+    object-fit: cover;
+    border-radius: 5px;
+    margin-right: 2px;
+    background: #f7f8fa;
+    transition: transform 0.2s;
+    cursor: pointer;
+  }
+  .order-img:hover {
+    transform: scale(2.5) translateX(5px);
+    z-index: 2;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+  }
+
+  /* ====== FIX Scroll Mouse ====== */
+  html, body { height: 100% !important; overflow-y: auto !important; overflow-x: hidden !important; }
+  .main-panel, .content, .card-body { overflow-y: visible !important; }
+
+  .dataTables_wrapper { overflow-x: auto; overflow-y: visible; }
+  .table-responsive { width: 100%; overflow-x: auto !important; overflow-y: visible !important; -webkit-overflow-scrolling: touch; }
+</style>
+
+<!-- ====== DataTables CSS/JS ====== -->
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
+<script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+
+<div class="content">
+
+{% comment %} 
+{% if messages %}
+  <div class="container my-2">
+    {% for message in messages %}
+      <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+    {% endfor %}
+  </div>
+{% endif %} {% endcomment %}
+
+
+
+
+  <div class="toolbar d-flex align-items-center justify-content-between">
+    <h1 class="h4 m-0 text-white">
+      <i class="material-icons" style="vertical-align:middle">account_balance</i>
+      Movimientos bancarios
+    </h1>
+
+    <div class="d-flex align-items-center">
+      <form method="post" action="{% url 'movimientos_banco_update' %}" id="run-update-form" class="mr-2">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-success btn-sm" id="run-update-btn">
+          <i class="material-icons" style="vertical-align:middle">sync</i>
+          Actualizar desde Google
+        </button>
+      </form>
+
+       <!-- Abonos pendientes -->
+    <a href="{% url 'movimientos_abonos_pendientes' %}"
+       class="btn btn-warning btn-sm mr-3"
+       title="Ver abonos pendientes">
+      <i class="material-icons" style="vertical-align:middle">playlist_add_check</i>
+      Abonos pendientes
+    </a>
+
+
+
+
+      <div class="text-right">
+        <span class="badge badge-success">Abonos: $ {{ total_abonos|floatformat:2 }}</span>
+        <span class="badge badge-danger">Cargos: $ {{ total_cargos|floatformat:2 }}</span>
+        <span class="badge badge-secondary">Registros: {{ total_registros }}</span>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="container-fluid mt-3">
+    <div class="row">
+      <div class="col-md-12">
+
+        <div class="card">
+          <div class="card-header card-header-primary card-header-icon">
+            <div class="card-icon"><i class="material-icons">assignment</i></div>
+            <h4 class="card-title">Listado de movimientos</h4>
+          </div>
+
+          <div class="card-body">
+            <!-- Filtros simples -->
+            <form method="get" class="form-inline mb-3">
+              <div class="form-group mr-2">
+                <label class="mr-1">Desde</label>
+                <input type="date" name="desde" value="{{ request.GET.desde }}" class="form-control form-control-sm">
+              </div>
+              <div class="form-group mr-2">
+                <label class="mr-1">Hasta</label>
+                <input type="date" name="hasta" value="{{ request.GET.hasta }}" class="form-control form-control-sm">
+              </div>
+              <div class="form-group mr-2">
+                <label class="mr-1">Tipo</label>
+                <input type="text" name="tipo" value="{{ request.GET.tipo }}" class="form-control form-control-sm" placeholder="Transferencia, SPEI...">
+              </div>
+              <div class="form-group mr-2">
+                <label class="mr-1">Signo</label>
+                <select name="signo" data-style="select-with-transition" class="selectpicker form-control-sm">
+                  <option value="">Todos</option>
+                  <option value="1" {% if request.GET.signo == "1" %}selected{% endif %}>Abono</option>
+                  <option value="-1" {% if request.GET.signo == "-1" %}selected{% endif %}>Cargo</option>
+                </select>
+              </div>
+              <button class="btn btn-primary btn-sm" type="submit">
+                <i class="material-icons" style="vertical-align:middle">search</i> Filtrar
+              </button>
+              {% if request.GET %}
+              <a class="btn --bs-primary-border-subtle btn-sm ml-2" href="{% url 'movimientos_banco_lista' %}">Limpiar</a>
+              {% endif %}
+            </form>
+
+            <div class="material-datatables table-responsive">
+              <table id="movimientos-table" class="table table-striped table-no-bordered table-hover" cellspacing="0" width="100%">
+                <thead>
+                  <tr>
+                    <th>Fecha</th>
+                    <th>Tipo</th>
+                    <th>Monto</th>
+                    <th>Signo</th>
+                    <th>Sucursal</th>
+                    <th>Ref. numérica</th>
+                    <th>Autorización</th>
+                    <th>Emisor</th>
+                    <th>Nombre detectado</th>
+                    <th>nombre_detectado_save</th>
+                    <th>Institución emisora</th>
+                    <th>Concepto</th>
+                    <th>Ref. alfanumérica</th>
+                    
+                    <th class="disabled-sorting text-right">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for m in movimientos %}
+                  <tr>
+                    <td>{% if m.fecha %}{{ m.fecha|date:"d/m/Y" }}{% else %}—{% endif %}</td>
+                    <td>{{ m.tipo|default:"—" }}</td>
+                    <td>{% if m.monto != None %}$ {{ m.monto }}{% else %}—{% endif %}</td>
+                    <td>
+                      {% if m.signo == 1 %}
+                        <span class="badge badge-success">Abono</span>
+                      {% elif m.signo == -1 %}
+                        <span class="badge badge-danger">Cargo</span>
+                      {% else %}
+                        <span class="badge badge-secondary">—</span>
+                      {% endif %}
+                    </td>
+                    <td>{{ m.sucursal|default:"—" }}</td>
+                    <td>{{ m.referencia_numerica|default:"—" }}</td>
+                    <td>{{ m.autorizacion|default:"—" }}</td>
+                    <td>{{ m.emisor_nombre|default:"—" }}</td>
+                    <td>
+                      {% if m.nombre_detectado %}
+                        {{ m.nombre_detectado|truncatechars:30 }}
+                      {% else %}—{% endif %}
+                    </td>
+
+                    <td title="{{ m.nombre_detectado_save }}">
+                      {% if m.nombre_detectado_save %}
+                        {{ m.nombre_detectado_save|truncatechars:30 }}
+                      {% else %}—{% endif %}
+                    </td>
+                    <td>{{ m.institucion_emisora|default:"—" }}</td>
+                    <td>{{ m.concepto|default:"—" }}</td>
+                    <td>
+                      {% if m.referencia_alfanumerica %}
+                        {{ m.referencia_alfanumerica|truncatechars:40 }}
+                      {% else %}—{% endif %}
+                    </td>
+
+                
+    <td class="text-right">
+
+  {# Ver o editar en admin #}
+  <a href="{% url 'admin:alumnos_movimientobanco_change' m.pk %}"
+     class="btn btn-link text-info btn-just-icon like"
+     title="Ver/Editar (admin)">
+    <i class="material-icons">visibility</i>
+  </a>
+
+ {# Mostrar botones según grupo y estado #}
+{% if not m.conciliado and puede_conciliar %}
+    <a href="{% url 'conciliar_movimiento' m.pk %}"
+       class="btn btn-sm btn-primary"
+       title="Conciliar este movimiento">
+      Conciliar
+    </a>
+  {% elif m.conciliado and puede_deshacer %}
+    <form method="post"
+          action="{% url 'mov_deshacer_conciliacion' m.pk %}"
+          class="d-inline"
+          onsubmit="return confirm('¿Seguro que deseas deshacer la conciliación y eliminar/invalidar los pagos generados?');">
+      {% csrf_token %}
+      <button class="btn btn-sm btn-warning" title="Deshacer conciliación">
+        🔄 Deshacer
+      </button>
+    </form>
+  {% endif %}
+</td>
+
+
+
+
+
+
+                  </tr>
+                  {% empty %}
+                  <tr>
+                    <td colspan="12" class="text-center text-muted py-4">Sin resultados</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div> <!-- /table-responsive -->
+          </div> <!-- /card-body -->
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  $(document).ready(function() {
+    $('#movimientos-table').DataTable({
+      language: { url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/es-ES.json' },
+     // order: [[0, 'desc'], [2, 'desc']], // fecha desc, luego monto desc
+      order: [],
+      pageLength: 10,
+      autoWidth: false,
+      scrollX: true,
+      scrollCollapse: true
+    });
+  });
+</script>
+
+
+
+<script>
+  // Deshabilita el botón mientras corre el POST para evitar dobles clics
+  (function(){
+    var form = document.getElementById('run-update-form');
+    var btn  = document.getElementById('run-update-btn');
+    if(form && btn){
+      form.addEventListener('submit', function(){
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Actualizando...';
+      });
+    }
+  })();
+</script>
+
+{% endblock %}

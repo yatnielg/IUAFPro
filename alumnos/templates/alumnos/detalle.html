@@ -1,0 +1,1547 @@
+{% extends "panel/grafico.html" %}
+{% load i18n %}
+
+{% block title %}Alumno {{ alumno.numero_estudiante }} — CampusIUAF{% endblock %}
+
+{% block main_content %}
+
+
+
+
+
+{% comment %} {% if request.user.is_superuser %}
+  <a
+     href="{% url 'alumno_carta_pdf' alumno.numero_estudiante %}"
+     class="btn btn-success"> 
+    Guardar PDF
+  </a>
+
+{% endif %}
+ {% endcomment %}
+
+
+
+{% if not pdf_mode %}
+<div class="d-flex gap-2 justify-content-end mt-2">
+
+  <!-- Botón oculto pero presente en el DOM -->
+  <a id="btn-guardar-pdf"
+     href="{% url 'alumno_carta_pdf' alumno.numero_estudiante %}"
+     class="btn btn-success btn-sm"
+     style="display:none;">
+    Guardar PDF
+  </a>
+
+  <!-- Botón visible de imprimir -->
+{% comment %}   <button type="button" class="btn btn-outline-secondary btn-sm" onclick="window.print()">Imprimir / PDF</button> {% endcomment %}
+</div>
+{% endif %}
+
+
+{% if pago_total_mayor_a_cero %}
+
+{% if alumno and alumno.pk %}
+  {% with plan=alumno.informacionEscolar %}
+    {% if plan and not plan.bienvenida_enviada %}
+      <button
+        id="btnEnviarBienvenida"
+        class="btn btn-outline-info btn-sm"
+        data-url="{% url 'enviar_bienvenida_estatica' alumno.pk %}">
+        <i class="material-icons align-middle">outgoing_mail</i>
+        Enviar bienvenida
+      </button>
+    {% else %}
+      {# Opcional: mostrar estado o botón de reenviar #}
+      {% if plan and plan.bienvenida_enviada %}
+        <span class="text-success small">
+          Bienvenida enviada {{ plan.bienvenida_enviada_en|date:"d/m/Y H:i" }}
+        {% comment %}   {% if plan.bienvenida_enviada_por %} por {{ plan.bienvenida_enviada_por.get_full_name|default:plan.bienvenida_enviada_por.username }}{% endif %} {% endcomment %}
+        </span>
+        <!-- Botón para reenviar manualmente -->
+        {% if request.user.is_superuser %}
+        <a id="btnReenviarBienvenida" href="{% url 'enviar_bienvenida_estatica' alumno.pk %}?force=1"
+           class="btn btn-outline-secondary btn-sm ms-2">
+          Reenviar
+        </a>
+        {% endif %}
+
+
+      {% endif %}
+    {% endif %}
+  {% endwith %}
+{% endif %}
+
+{% endif %}
+
+{% comment %} {% if alumno.informacionEscolar and alumno.informacionEscolar.programa_id %}
+  <a href="{% url 'alumno_carta' alumno.pk %}"
+     class="btn btn-primary btn-sm" target="_blank" rel="noopener">
+    📝 Carta de inscripción
+  </a>
+{% endif %} {% endcomment %}
+
+
+
+
+{% comment %}  {% endcomment %}
+{% comment %}  {% if alumno and alumno.pk %}
+  {% with plan=alumno.informacionEscolar %}
+    {% if plan and plan.programa_id %}
+      <a
+        href="{% url 'expediente_maestria' alumno.pk %}"
+        class="btn btn-primary btn-sm"
+        target="_blank" rel="noopener"
+        title="Ver expediente de ingreso">
+        <i class="material-icons align-middle">assignment</i>
+        Expediente de ingreso
+      </a> {% endcomment %}
+      {# Opcional: versión PDF si luego habilitas ?format=pdf en la vista #}
+{% comment %}       {# <a href="{% url 'expediente_maestria' alumno.pk %}?format=pdf" class="btn btn-outline-secondary btn-sm ms-2" target="_blank" rel="noopener">
+           <i class="material-icons align-middle">picture_as_pdf</i> PDF
+         </a> #}
+    {% endif %}
+  {% endwith %}
+{% endif %}
+ {% endcomment %}
+ {% comment %}  {% endcomment %}
+
+
+
+
+
+{% comment %}  {% endcomment %}
+
+
+
+<script>
+(function () {
+  const btnEnviar = document.getElementById('btnEnviarBienvenida');
+  const linkReenviar = document.getElementById('btnReenviarBienvenida');
+  const linkPDF = document.getElementById('btn-guardar-pdf');
+
+  function getCookie(name) {
+    const m = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+    return m ? m.pop() : '';
+  }
+
+  async function ensurePdfSaved() {
+    // Si no existe el enlace (p.ej., en modo PDF), no bloquea el flujo.
+    if (!linkPDF) return;
+    const resp = await fetch(linkPDF.href, {
+      method: 'GET',
+      credentials: 'same-origin'
+    });
+    if (!resp.ok) {
+      throw new Error('No se pudo generar/guardar el PDF (HTTP ' + resp.status + ').');
+    }
+    // Nota: no descargamos el archivo, solo disparamos el endpoint para que el servidor lo genere/registre.
+    // Si quisieras forzar descarga en segundo plano, aquí podrías leer el blob.
+  }
+
+  async function doSendWelcome(btn) {
+    const ok = confirm('¿Estás seguro de que deseas enviar la bienvenida al alumno?');
+    if (!ok) return;
+
+    btn.disabled = true;
+    try {
+      await ensurePdfSaved();
+
+      const resp = await fetch(btn.dataset.url, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': getCookie('csrftoken') },
+        credentials: 'same-origin'
+      });
+
+      if (resp.redirected) {
+        location.href = resp.url;
+      } else {
+        location.reload();
+      }
+    } catch (e) {
+      alert('Error: ' + e.message);
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  async function doResendWelcome(a) {
+    const ok = confirm('¿Estás seguro de que deseas reenviar la bienvenida al alumno?');
+    if (!ok) return;
+
+    // Visualmente “deshabilitado”
+    a.classList.add('disabled');
+    a.setAttribute('aria-disabled', 'true');
+
+    try {
+      await ensurePdfSaved();
+      // Luego ejecuta la acción original del enlace (navegar)
+      location.href = a.href;
+    } catch (e) {
+      alert('Error: ' + e.message);
+      a.classList.remove('disabled');
+      a.removeAttribute('aria-disabled');
+    }
+  }
+
+  if (btnEnviar) {
+    btnEnviar.addEventListener('click', function (ev) {
+      ev.preventDefault(); // intercepta el flujo original
+      doSendWelcome(btnEnviar);
+    });
+  }
+
+  if (linkReenviar) {
+    linkReenviar.addEventListener('click', function (ev) {
+      ev.preventDefault(); // intercepta el flujo original
+      doResendWelcome(linkReenviar);
+    });
+  }
+})();
+</script>
+
+
+
+{% comment %}  {% endcomment %}
+
+
+
+
+
+
+
+<!-- DataTables (solo para la tabla de pagos) -->
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
+<script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+
+<style>
+  .section-title {
+    font-size: .95rem; letter-spacing:.06em; text-transform:uppercase;
+    color: #9aa0a6; margin: 1.25rem 0 .5rem; display:flex; align-items:center; gap:.5rem;
+  }
+  .section-title .material-icons { font-size: 1.1rem; }
+  .table-responsive { overflow-x:auto; }
+  .card-header-actions {
+    margin-left:auto; display:flex; gap:.5rem; align-items:center;
+  }
+  .doc-count-badge{
+    display:inline-flex; align-items:center; gap:.35rem;
+    background:rgba(0,0,0,.06); color:#5f6368; border-radius:999px;
+    padding:.25rem .6rem; font-size:.85rem;
+  }
+  .doc-count-badge .material-icons{ font-size:1rem; }
+  .mt-0 { margin-top:0!important; }
+  .card-compact .card-header{ padding-top:.6rem; padding-bottom:.6rem; }
+  .tag-missing { opacity:.6 }
+
+
+
+
+
+
+
+
+
+/* ---- Resumen de saldos (tab "Todos") ---- */
+.saldo-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0,1fr));
+  gap: .75rem;
+  margin-bottom: .75rem;
+}
+
+.saldo-tile {
+  background: linear-gradient(180deg, #ffffff, #fafbfc);
+  border: 1px solid rgba(0,0,0,.06);
+  border-radius: 12px;
+  padding: .9rem 1rem;
+  box-shadow: 0 1px 2px rgba(0,0,0,.04);
+}
+
+.saldo-tile .label {
+  font-size: .8rem;
+  color: #6b7280;
+  letter-spacing: .02em;
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+}
+
+.saldo-tile .value {
+  margin-top: .25rem;
+  font-weight: 700;
+  font-size: 1.15rem;
+  line-height: 1.2;
+}
+
+.saldo-tile.total { border-color: rgba(16,185,129,.25); }
+.saldo-tile.aplicado { border-color: rgba(59,130,246,.25); }
+.saldo-tile.restante { border-color: rgba(239,68,68,.25); }
+
+.saldo-tile.total   .value { color: #10b981; }   /* verde */
+.saldo-tile.aplicado .value { color: #3b82f6; }  /* azul */
+.saldo-tile.restante .value { color: #ef4444; }  /* rojo */
+
+@media (max-width: 992px) {
+  .saldo-summary { grid-template-columns: 1fr; }
+}
+
+
+
+
+</style>
+
+<div class="d-flex justify-content-between align-items-center">
+  <h1 class="h4 m-0 text-white">
+    <i class="material-icons align-middle mr-1">person</i>
+    Alumno {{ alumno.numero_estudiante }}
+  </h1>
+
+  <div class="btn-group">
+    <a class="btn btn-outline-secondary" href="{% url 'estudiantes' %}">
+      <i class="material-icons align-middle">arrow_back</i> Volver
+    </a>
+
+    {% if request.user.is_superuser or request.user.profile and request.user.profile.puede_editar_todo %}
+    <a class="btn btn-primary" href="{% url 'alumnos_editar' alumno.pk %}">
+      <i class="material-icons align-middle">edit</i> Editar
+    </a>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header card-header-primary card-header-icon d-flex align-items-center">
+    <div class="card-icon" title="Admisiones {{ alumno.created_by }}"><i class="material-icons">badge</i></div>
+    <div>
+      <h4 class="card-title m-0">Ficha del alumno</h4>
+      <p class="card-category m-0">Resumen general</p>
+    </div>
+
+    <div class="card-header-actions mt-0 ml-auto d-flex align-items-center">
+      {% if docs_total %}
+        <span class="doc-count-badge" title="Documentos cargados">
+          <i class="material-icons">attach_file</i>
+          {{ docs_total }} Documento{{ docs_total|pluralize:"s" }}
+        </span>
+        {% if docs_last_update %}
+          <span class="doc-count-badge" title="Última actualización">
+            <i class="material-icons">update</i>
+            {{ docs_last_update|date:"d/m/Y H:i" }}
+          </span>
+        {% endif %}
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card-body">
+    <div class="row">
+      <!-- Columna izquierda -->
+      <div class="col-md-6">
+        <div class="section-title"><i class="material-icons">account_circle</i> Datos personales</div>
+        <div class="row">
+          <div class="col-sm-6 mb-3">
+            <div class="text-muted small">Número de estudiante</div>
+            <div class="font-weight-bold">{{ alumno.numero_estudiante }}</div>
+          </div>
+          <div class="col-sm-6 mb-3">
+            <div class="text-muted small">CURP</div>
+            <div>{{ alumno.curp|default:"—" }}</div>
+          </div>
+
+          <div class="col-sm-6 mb-3">
+            <div class="text-muted small">Nombre(s)</div>
+            <div class="font-weight-bold">{{ alumno.nombre }}</div>
+          </div>
+          <div class="col-sm-3 mb-3">
+            <div class="text-muted small">Ap. paterno</div>
+            <div>{{ alumno.apellido_p|default:"—" }}</div>
+          </div>
+          <div class="col-sm-3 mb-3">
+            <div class="text-muted small">Ap. materno</div>
+            <div>{{ alumno.apellido_m|default:"—" }}</div>
+          </div>
+
+          <div class="col-sm-4 mb-3">
+            <div class="text-muted small">Sexo</div>
+            <div>{{ alumno.sexo|default:"—" }}</div>
+          </div>
+          <div class="col-sm-4 mb-3">
+            <div class="text-muted small">Fecha de nacimiento</div>
+            <div>{% if alumno.fecha_nacimiento %}{{ alumno.fecha_nacimiento|date:"d/m/Y" }}{% else %}—{% endif %}</div>
+          </div>
+          <div class="col-sm-4 mb-3">
+            <div class="text-muted small">Fecha de alta</div>
+            <div>
+              {% if alumno.informacionEscolar and alumno.informacionEscolar.fecha_alta %}
+                {{ alumno.informacionEscolar.fecha_alta|date:"d/m/Y H:i" }}
+              {% else %}—{% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Columna derecha -->
+      <div class="col-md-6">
+        <div class="section-title"><i class="material-icons">contact_mail</i> Contacto & estado</div>
+        <div class="row">
+          <div class="col-sm-6 mb-3">
+            <div class="text-muted small">Email personal</div>
+            <div>
+              {% if alumno.email %}
+                <a href="mailto:{{ alumno.email }}">{{ alumno.email }}</a>
+              {% else %}—{% endif %}
+            </div>
+          </div>
+          <div class="col-sm-6 mb-3">
+            <div class="text-muted small">Email institucional</div>
+            <div>
+              {% if alumno.email_institucional %}
+                <a href="mailto:{{ alumno.email_institucional }}">{{ alumno.email_institucional }}</a>
+              {% else %}—{% endif %}
+            </div>
+          </div>
+
+          <div class="col-sm-6 mb-3">
+            <div class="text-muted small">Teléfono</div>
+            <div>{{ alumno.telefono|default:"—" }}</div>
+          </div>
+
+          <div class="col-sm-4 mb-3">
+            <div class="text-muted small">Estatus (general)</div>
+            <span class="badge badge-secondary">{{ alumno.estatus|default:"—" }}</span>
+          </div>
+          <div class="col-sm-4 mb-3">
+            <div class="text-muted small">Académico</div>
+            <span class="badge badge-info">
+              {% if alumno.informacionEscolar %}{{ alumno.informacionEscolar.estatus_academico|default:"—" }}{% else %}—{% endif %}
+            </span>
+          </div>
+          <div class="col-sm-4 mb-3">
+            <div class="text-muted small">Administrativo</div>
+            <span class="badge badge-warning text-dark">
+              {% if alumno.informacionEscolar %}{{ alumno.informacionEscolar.estatus_administrativo|default:"—" }}{% else %}—{% endif %}
+            </span>
+          </div>
+
+          <div class="col-sm-12 mb-2">
+            <div class="text-muted small">Usuario vinculado</div>
+            <div>
+              {% if alumno.user %}
+                <i class="material-icons align-middle mr-1">person</i>
+                {{ alumno.user.username }}
+                {% if alumno.user.get_full_name %} ({{ alumno.user.get_full_name }}){% endif %}
+              {% else %}
+                <span class="text-muted">Sin usuario</span>
+                — <a href="{% url 'alumnos_crear_usuario' alumno.pk %}" class="text-primary">Crear usuario</a>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div> <!-- /row -->
+
+    <hr class="my-3">
+
+    <div class="row">
+      <div class="col-md-6">
+        <div class="section-title"><i class="material-icons">school</i> Programa / Ubicación</div>
+        <div class="row">
+          <div class="col-sm-12 mb-3">
+            <div class="text-muted small">Programa</div>
+            <div>
+              {% if alumno.informacionEscolar and alumno.informacionEscolar.programa %}
+                {{ alumno.informacionEscolar.programa.codigo }} — {{ alumno.informacionEscolar.programa.nombre }}
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </div>
+          </div>
+          <div class="col-sm-4 mb-3">
+            <div class="text-muted small">País</div>
+            <div>{{ alumno.pais.nombre|default:"—" }}</div>
+          </div>
+       {% comment %}    <div class="col-sm-4 mb-3">
+            <div class="text-muted small">Estado / Provincia</div>
+            <div>{% if alumno.estado %}{{ alumno.estado.nombre }}{% else %}<span class="text-muted">—</span>{% endif %}</div>
+          </div> {% endcomment %}
+          <div class="col-sm-4 mb-3">
+            <div class="text-muted small">Sede</div>
+            <div>
+              {% if alumno.informacionEscolar and alumno.informacionEscolar.sede %}
+                {{ alumno.informacionEscolar.sede }}
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-md-6">
+        <div class="section-title"><i class="material-icons">payments</i> Plan financiero</div>
+        <div class="row">
+          <div class="col-sm-12 mb-2">
+            <div class="text-muted small">Financiamiento</div>
+            <div>
+              {% if alumno.informacionEscolar and alumno.informacionEscolar.financiamiento %}
+                {{ alumno.informacionEscolar.financiamiento.beca }}
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </div>
+          </div>
+
+          <div class="col-sm-4 mb-2">
+            <div class="text-muted small">Inscripción</div>
+            <div>
+              {% if alumno.informacionEscolar %}
+                $ {{ alumno.informacionEscolar.precio_inscripcion|default:"0.00" }}
+              {% else %}—{% endif %}
+            </div>
+          </div>
+
+
+          <div class="col-sm-4 mb-2">
+  <div class="text-muted small">Precio de reinscripción</div>
+  <div>
+    {% if alumno.informacionEscolar %}
+      $ {{ alumno.informacionEscolar.precio_reinscripcion|default:"0.00" }}
+    {% else %}—{% endif %}
+  </div>
+</div>
+
+          <div class="col-sm-4 mb-2">
+            <div class="text-muted small">Reinscripciones (#)</div>
+            <div>
+              {% if alumno.informacionEscolar %}
+                {{ alumno.informacionEscolar.numero_reinscripciones|default:"0" }}
+              {% else %}—{% endif %}
+            </div>
+          </div>
+
+          <div class="col-sm-4 mb-2">
+            <div class="text-muted small">Colegiatura</div>
+            <div>
+              {% if alumno.informacionEscolar %}
+                $ {{ alumno.informacionEscolar.precio_colegiatura|default:"0.00" }}
+              {% else %}—{% endif %}
+            </div>
+          </div>
+
+          <div class="col-sm-4 mb-2">
+            <div class="text-muted small">Descuento</div>
+            <div>
+              {% if alumno.informacionEscolar %}
+                $ {{ alumno.informacionEscolar.monto_descuento|default:"0.00" }}
+              {% else %}—{% endif %}
+            </div>
+          </div>
+
+          <div class="col-sm-4 mb-2">
+            <div class="text-muted small">Precio final</div>
+            <div>
+              {% if alumno.informacionEscolar %}
+                $ {{ alumno.informacionEscolar.precio_final|default:"0.00" }}
+              {% else %}—{% endif %}
+            </div>
+          </div>
+
+          <div class="col-sm-4 mb-2">
+            <div class="text-muted small">Meses del programa</div>
+            <div>
+              {% if alumno.informacionEscolar %}
+                {{ alumno.informacionEscolar.meses_programa|default:"—" }}
+              {% else %}—{% endif %}
+            </div>
+          </div>
+
+          <div class="col-sm-6 mb-2">
+            <div class="text-muted small">Precio de equivalencia</div>
+            <div>
+              {% if alumno.informacionEscolar %}
+                {% with pe=alumno.informacionEscolar.precio_equivalencia %}
+                  {% if pe and pe|stringformat:"s" != "-1.00" %}
+                    $ {{ pe }}
+                  {% else %}
+                    <span class="text-muted">No aplica</span>
+                  {% endif %}
+                {% endwith %}
+              {% else %}—{% endif %}
+            </div>
+          </div>
+
+          <div class="col-sm-6 mb-2">
+            <div class="text-muted small">Precio de titulación</div>
+            <div>
+              {% if alumno.informacionEscolar %}
+                $ {{ alumno.informacionEscolar.precio_titulacion|default:"0.00" }}
+              {% else %}—{% endif %}
+            </div>
+          </div>
+
+          <div class="col-sm-6 mb-2">
+            <div class="text-muted small">Inicio del programa</div>
+            <div>
+              {% if alumno.informacionEscolar and alumno.informacionEscolar.inicio_programa %}
+                {{ alumno.informacionEscolar.inicio_programa|date:"d/m/Y" }}
+              {% else %}—{% endif %}
+            </div>
+          </div>
+
+<div class="col-sm-6 mb-2">
+  <div class="text-muted small">Fin del programa</div>
+  <div>
+    {% if alumno.informacionEscolar and alumno.informacionEscolar.fin_programa %}
+      <span class="{% if fin_programa_is_future %}text-success font-weight-bold{% endif %}">
+        {{ alumno.informacionEscolar.fin_programa|date:"d/m/Y" }}
+      </span>
+    {% else %}—{% endif %}
+  </div>
+</div>
+
+          <div class="col-sm-12 mb-2">
+            <div class="text-muted small">¿Requiere datos de facturación?</div>
+            <div>
+              {% if alumno.informacionEscolar %}
+                {% if alumno.informacionEscolar.requiere_datos_de_facturacion %}
+                  <span class="badge badge-danger">Sí</span>
+                {% else %}
+                  <span class="badge badge-success">No</span>
+                {% endif %}
+              {% else %}—{% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div> <!-- /row detalles -->
+  </div>
+</div>
+
+{% if can_view_pagos %}
+<!-- ===================== PAGOS DEL ALUMNO ===================== -->
+<div class="card mt-4">
+  <div class="card-header card-header-primary card-header-icon">
+    <div class="card-icon"><i class="material-icons">receipt_long</i></div>
+    <h4 class="card-title">Pagos del alumno (DIARIO)</h4>
+    <p class="card-category">
+      Total registros: <strong>{{ pagos|length }}</strong>
+      &nbsp;•&nbsp; Suma de montos: <strong>$ {{ pagos_total }} </strong>
+    </p>
+  </div>
+
+  <div class="card-body">
+
+
+   <div class="d-flex justify-content-between mb-2">
+  <div class="small text-muted">
+    Los pagos se importan desde el Excel “DIARIO”. Si alguno falta, verifica la importación.
+  </div>
+
+  <div class="d-flex gap-2">
+    {% if request.user.is_superuser %}
+      <a class="btn btn-outline-primary btn-sm"
+         href="/admin/alumnos/pagodiario/?alumno__id__exact={{ alumno.id }}" target="_blank">
+        Ver en Admin
+      </a>
+    {% endif %}
+
+    {# 👉 Botón que abre el Estado de cuenta para este alumno #}
+<a class="btn btn-primary btn-sm d-inline-flex align-items-center descargar-estado-cuenta"
+   href="{% url 'estado_cuenta' alumno.numero_estudiante %}"
+   data-url="{% url 'estado_cuenta' alumno.numero_estudiante %}"
+   target="_blank" rel="noopener"
+   title="Generar PDF del estado de cuenta">
+  <i class="material-icons align-middle me-1">picture_as_pdf</i>
+  Estado de cuenta
+</a>
+
+  </div>
+</div>
+
+
+
+    <div class="table-responsive">
+      <table id="tabla-pagos" class="table table-striped table-hover" width="100%">
+        <thead>
+          <tr>
+            <th>Fecha</th>
+            <th>Folio</th>
+            <th>Monto</th>
+            <th>Concepto</th>
+            <th>Detalle</th>
+            <th>Programa</th>
+            <th>Forma</th>
+            <th>Sede</th>
+            <th>CURP</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in pagos %}
+          <tr>
+            <td title="{% if p.creado_en %}{{ p.creado_en|date:"d/m/Y" }}{% else %}—{% endif %}" data-order="{{ p.fecha|date:'Y-m-d' }}">{% if p.fecha %}{{ p.fecha|date:"d/m/Y" }}{% else %}—{% endif %}</td>
+            <td>{{ p.folio|default:"—" }}</td>
+            <td>{% if p.monto != None %}$ {{ p.monto }}{% else %}—{% endif %}</td>
+            <td>{{ p.concepto|default:"—" }}</td>
+            <td>{{ p.pago_detalle|default:"—" }}</td>
+            <td>{{ p.programa|default:"—" }}</td>
+            <td>{{ p.forma_pago|default:"—" }}</td>
+            <td>{{ p.sede|default:"—" }}</td>
+            <td>{{ p.curp|default:"—" }}</td>
+
+            <td class="text-right">
+  <a href="/admin/alumnos/pagodiario/{{ p.pk }}/change/" class="btn btn-link text-info btn-just-icon like" title="Ver/Editar (admin)">
+    <i class="material-icons">visibility</i>
+  </a>
+  
+ {% comment %} <a href="{% url 'pago_recibo_pdf' p.pk %}" class="btn btn-outline-success btn-sm" target="_blank" title="Generar recibo (PDF)">
+    <i class="material-icons align-middle">picture_as_pdf</i> Recibo
+  </a>  {% endcomment %}
+ 
+
+<a href="{% url 'recibo_carta' p.pk %}"
+   data-url="{% url 'recibo_carta' p.pk %}"
+   data-folio="{{ p.folio|default:p.pk }}"
+   class="btn btn-outline-success btn-sm descargar-recibo d-inline-flex align-items-center"
+   title="Generar recibo (PDF)">
+  <i class="material-icons align-middle mr-1 me-1">picture_as_pdf</i>
+  Recibo
+</a>
+
+
+
+
+</td>
+
+
+
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="10" class="text-center text-muted py-4">Este alumno no tiene pagos registrados.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- ===================== CARGOS PENDIENTES ===================== -->
+{% if can_view_pagos %}
+<div class="card mt-4">
+  <div class="card-header card-header-primary card-header-icon d-flex align-items-center">
+    <div class="card-icon"><i class="material-icons">shopping_cart</i></div>
+    <div>
+      <h4 class="card-title m-0">Cargos del alumno</h4>
+      <p class="card-category m-0">
+        Pendientes (exigibles): <strong>{{ cargos_pendientes|length }}</strong>
+        {% if cargos_todos %}&nbsp;•&nbsp; Pendientes (total): <strong>{{ cargos_todos|length }}</strong>{% endif %}
+      </p>
+
+
+      
+
+    </div>
+
+    <div class="ml-auto">
+      {% if hay_cargos_vinculados %}
+      {% else %}
+      <button
+        id="btnGenerarCargos"
+        class="btn btn-outline-primary btn-sm d-inline-flex align-items-center"
+        data-url="{% url 'generar_cargos_mensuales' alumno.numero_estudiante %}"
+        title="Generar cargos mensuales (día 6 por {{ alumno.informacionEscolar.meses_programa|default:'0' }} meses)"
+      >
+        <i class="material-icons align-middle mr-1">playlist_add</i>
+        Generar cargos mensuales
+      </button>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card-body">
+
+    <!-- Nav tabs -->
+    <ul class="nav nav-tabs" role="tablist">
+      <li class="nav-item">
+        <a class="nav-link active" id="tab-exigibles" data-toggle="tab" href="#pane-exigibles" role="tab">
+          Vencidos / En fecha
+        </a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" id="tab-todos" data-toggle="tab" href="#pane-todos" role="tab">
+          Todos (pendientes)
+        </a>
+      </li>
+    </ul>
+
+    <!-- Tab panes -->
+    <div class="tab-content pt-3">
+      <!-- === Pestaña 1: Exigibles (lo que ya tenías) === -->
+      <div class="tab-pane fade show active" id="pane-exigibles" role="tabpanel" aria-labelledby="tab-exigibles">
+        <div class="table-responsive">
+          <table class="table table-hover">
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Concepto</th>
+                <th class="text-right">Monto</th>
+                <th>Vence</th>
+                <th>Estado</th>
+                <th class="text-right">Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for c in cargos %}
+              <tr>
+                <td>{{ c.fecha_cargo|date:"d/m/Y" }}</td>
+                <td>{{ c.concepto.nombre }}</td>
+                <td class="text-right">$ {{ c.monto }}</td>
+                <td>
+                  {% if c.fecha_vencimiento %}
+                    <span class="{% if c.is_overdue %}text-danger font-weight-bold{% endif %}">
+                      {{ c.fecha_vencimiento|date:"d/m/Y" }}
+                    </span>
+                  {% else %}
+                    <span class="{% if c.is_overdue %}text-danger font-weight-bold{% endif %}">
+                      {{ c.fecha_cargo|date:"d/m/Y" }}
+                    </span>
+                  {% endif %}
+                  {% if c.is_overdue %}
+                    <span class="badge badge-danger ml-1">Vencido</span>
+                  {% else %}
+                    <span class="badge badge-warning text-dark ml-1">En fecha</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if c.pagado %}
+                    <span class="badge badge-success">Pagado</span>
+                  {% else %}
+                    <span class="badge badge-warning text-dark">Pendiente</span>
+                  {% endif %}
+                </td>
+
+                
+{% comment %}                 {% if request.user.is_superuser %}
+                  <td class="text-right">
+                    {% if not c.pagado %}
+                      <a class="btn btn-primary btn-sm" href="{% url 'clip_crear_pago_cargo' c.id %}">
+                        Pagar con tarjeta (Clip)
+                      </a>
+                    {% endif %}
+                  </td>
+
+
+
+                {% else %}
+                  <td></td>
+                {% endif %} {% endcomment %}
+
+
+
+<td class="text-right">
+  <div class="btn-group">
+    {# Botón existente WhatsApp #}
+    {% if alumno.telefono %}
+      <button type="button"
+              class="btn btn-success btn-sm btn-whatsapp-cargo d-inline-flex align-items-center"
+              title="Enviar recordatorio por WhatsApp"
+              data-tel="{{ alumno.telefono|cut:' '|cut:'-'|cut:'('|cut:')' }}"
+              data-nombre="{{ alumno.nombre }} {{ alumno.apellido_p }} {{ alumno.apellido_m }}"
+              data-fecha="{% if c.fecha_vencimiento %}{{ c.fecha_vencimiento|date:'d/m/Y' }}{% else %}{{ c.fecha_cargo|date:'d/m/Y' }}{% endif %}"
+              data-monto="{{ c.monto }}"
+              data-overdue="{{ c.is_overdue|yesno:'1,0' }}"
+              data-due-today="{% if c.is_overdue %}0{% else %}1{% endif %}">
+        <span class="material-icons align-middle" style="font-size:18px;line-height:1;">chat</span>
+        &nbsp;WhatsApp
+      </button>
+
+      {% if request.user.is_superuser %}
+      {# 👉 NUEVO: WhatsApp2 (genera link Stripe y arma el mensaje) #}
+      <button type="button"
+              class="btn btn-outline-success btn-sm btn-whatsapp2-cargo d-inline-flex align-items-center"
+              title="Enviar link de pago (Stripe) por WhatsApp"
+              data-endpoint="{% url 'cobros:link_pago_cargo' c.id %}"
+              data-tel="{{ alumno.telefono|cut:' '|cut:'-'|cut:'('|cut:')' }}"
+              data-nombre="{{ alumno.nombre }} {{ alumno.apellido_p }} {{ alumno.apellido_m }}">
+        <span class="material-icons align-middle" style="font-size:18px;line-height:1;">send</span>
+        &nbsp;WhatsApp2
+      </button>
+      {% endif %}
+    {% else %}
+      <button type="button" class="btn btn-secondary btn-sm" disabled title="Sin teléfono">
+        <span class="material-icons align-middle" style="font-size:18px;line-height:1;">chat</span>
+        &nbsp;WhatsApp
+      </button>
+    {% endif %}
+  </div>
+</td>
+
+
+
+
+
+
+
+
+              </tr>
+              {% empty %}
+              <tr><td colspan="6" class="text-center text-muted">Sin cargos exigibles.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- === Pestaña 2: Todos los pendientes (incluye Por pagar) === -->
+      <div class="tab-pane fade" id="pane-todos" role="tabpanel" aria-labelledby="tab-todos">
+        <div class="table-responsive">
+
+        <div class="d-flex justify-content-end mb-2">
+          <a class="btn btn-outline-primary btn-sm"
+            href="{% url 'cargo_crear' alumno.pk %}?next={{ request.get_full_path|urlencode }}#pane-todos">
+            <i class="material-icons align-middle">add</i>
+            Añadir cargo
+          </a>
+        </div>
+
+
+{# === Resumen de Totales (solo si viene en el contexto) === #}
+{% if totales %}
+  <div class="saldo-summary">
+    <div class="saldo-tile total">
+      <div class="label">
+        <i class="material-icons" style="font-size:18px;">summarize</i>
+        Total cargos
+      </div>
+      <div class="value">$ {{ totales.original }}</div>
+    </div>
+    <div class="saldo-tile aplicado">
+      <div class="label">
+        <i class="material-icons" style="font-size:18px;">done_all</i>
+        Pagos aplicados
+      </div>
+      <div class="value">$ {{ totales.aplicado }}</div>
+    </div>
+    <div class="saldo-tile restante">
+      <div class="label">
+        <i class="material-icons" style="font-size:18px;">account_balance_wallet</i>
+        Pendiente
+      </div>
+      <div class="value">$ {{ totales.restante }}</div>
+    </div>
+  </div>
+{% endif %}
+
+
+
+
+
+
+          <table class="table table-hover">
+  <thead>
+    <tr>
+      <th>Fecha</th>
+      <th>Vence</th>  {# 👈 NUEVA COLUMNA #}
+      <th>Concepto</th>
+      <th class="text-right">Monto</th>
+      <th class="text-right">Aplicado</th>
+      <th class="text-right">Pendiente</th>
+      <th class="text-right">Acciones</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for r in rows %}
+      <tr>
+        <td>{{ r.fecha_cargo|date:"d/m/Y" }}</td>
+
+   <td>
+  {% with fv=r.fecha_vencimiento|default:r.fecha_cargo %}
+    {# Fecha visible, en rojo si está vencido #}
+    <span class="{% if r.is_overdue %}text-danger font-weight-bold{% endif %}">
+      {{ fv|date:"d/m/Y" }}
+    </span>
+
+    {# Estado solo si hay saldo pendiente #}
+    {% if r.monto_restante > 0 %}
+      {% if r.is_overdue %}
+        <span class="badge badge-danger ml-1">Vencido</span>
+      {% elif r.is_in_date_window %}
+        <span class="badge badge-warning text-dark ml-1">En fecha</span>
+      {% else %}
+        <span class="badge badge-info ml-1">Por pagar</span>
+      {% endif %}
+    {% endif %}
+
+
+  {% endwith %}
+</td>
+
+        <td>
+          {{ r.concepto_codigo|default:"—" }}
+          {% if r.concepto_nombre %}<small class="text-muted"> — {{ r.concepto_nombre }}</small>{% endif %}
+        </td>
+
+        <td class="text-right">$ {{ r.monto_original }}</td>
+        <td class="text-right">$ {{ r.monto_aplicado }}</td>
+        <td class="text-right {% if r.monto_restante > 0 %}text-danger font-weight-bold{% endif %}">$ {{ r.monto_restante }}</td>
+
+
+ <td class="text-right">
+      <div class="btn-group">
+        <a class="btn btn-outline-primary btn-sm"
+           href="{% url 'cargo_editar' alumno.pk r.cargo_id %}?next={{ request.get_full_path|urlencode }}#pane-todos">
+          <i class="material-icons align-middle" style="font-size:18px;line-height:1;">edit</i>
+          Editar
+        </a>
+
+   {% if not c.pagado %}
+      <button type="button"
+              class="btn btn-outline-danger btn-sm btn-eliminar-cargo"
+              data-url="{% url 'cargo_eliminar' alumno.pk r.cargo_id %}?next={{ request.get_full_path|urlencode }}#pane-todos"
+              title="Eliminar cargo">
+        <i class="material-icons align-middle" style="font-size:18px;line-height:1;">delete_outline</i>
+        Eliminar
+      </button>
+    {% else %}
+      <button type="button" class="btn btn-outline-secondary btn-sm" disabled
+              title="No se puede eliminar un cargo pagado">
+        <i class="material-icons align-middle" style="font-size:18px;line-height:1;">delete_outline</i>
+        Eliminar
+      </button>
+    {% endif %}
+
+
+
+        {% if alumno.telefono %}
+    {% comment %}       <button type="button"
+                  class="btn btn-success btn-sm btn-whatsapp-cargo d-inline-flex align-items-center"
+                  title="Enviar recordatorio por WhatsApp"
+                  data-tel="{{ alumno.telefono|cut:' '|cut:'-'|cut:'('|cut:')' }}"
+                  data-nombre="{{ alumno.nombre }} {{ alumno.apellido_p }} {{ alumno.apellido_m }}"
+                  data-fecha="{% if c.fecha_vencimiento %}{{ c.fecha_vencimiento|date:'d/m/Y' }}{% else %}{{ c.fecha_cargo|date:'d/m/Y' }}{% endif %}"
+                  data-monto="{{ c.monto }}"
+                  data-overdue="{{ c.is_overdue|yesno:'1,0' }}"
+                  data-due-today="{{ c.is_due_today|yesno:'1,0' }}">
+            <span class="material-icons align-middle" style="font-size:18px;line-height:1;">chat</span>
+            &nbsp;WhatsApp
+          </button> {% endcomment %}
+        {% else %}
+          <button type="button" class="btn btn-secondary btn-sm" disabled title="Sin teléfono">
+            <span class="material-icons align-middle" style="font-size:18px;line-height:1;">chat</span>
+            &nbsp;WhatsApp
+          </button>
+        {% endif %}
+      </div>
+    </td>
+
+
+
+
+
+      </tr>
+    {% empty %}
+      <tr><td colspan="6" class="text-center text-muted">Sin cargos para este alumno.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+        </div>
+      </div>
+    </div> <!-- /tab-content -->
+
+  </div>
+</div>
+{% endif %}
+
+
+
+
+
+
+{% if can_view_documentos %}
+<!-- ===================== DOCUMENTOS DINÁMICOS (solo lectura) ===================== -->
+<div class="card mt-4">
+  <div class="card-header card-header-primary card-header-icon d-flex align-items-center">
+    <div class="card-icon"><i class="material-icons">folder_open</i></div>
+    <div>
+      <h4 class="card-title m-0">Documentos del alumno (solo lectura)</h4>
+      <p class="card-category m-0">
+        {% if alumno.informacionEscolar and alumno.informacionEscolar.programa %}
+          Requisitos para el programa: <strong>{{ alumno.informacionEscolar.programa.codigo }}</strong>
+          {% if docs_total %}&nbsp;•&nbsp; Cargados: <strong>{{ docs_total }}</strong>{% endif %}
+          {% if docs_last_update %}&nbsp;•&nbsp; Última actualización: <strong>{{ docs_last_update|date:"d/m/Y H:i" }}</strong>{% endif %}
+        {% else %}
+          El alumno no tiene un programa asignado.
+        {% endif %}
+      </p>
+    </div>
+
+    <div class="card-header-actions ml-auto mt-0">
+      {% if alumno and alumno.pk %}
+        <a class="btn btn-outline-primary" href="{% url 'alumnos_documentos_pdf' alumno.pk %}" target="_blank" rel="noopener">
+          Unificar en PDF
+        </a>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card-body">
+    {% if not alumno.informacionEscolar or not alumno.informacionEscolar.programa %}
+      <div class="text-muted">No hay requisitos porque el alumno no tiene programa.</div>
+    {% else %}
+      <div class="table-responsive">
+        <table class="table table-hover">
+          <thead>
+            <tr>
+              <th style="width:34%">Documento (tipo)</th>
+              <th style="width:46%">Archivo</th>
+              <th style="width:8%">Válido</th>
+              <th style="width:12%">Verificado</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for d in docs %}
+            <tr>
+              <td>
+                {{ d.tipo.nombre }}
+                {% if not d.valido %}<span class="badge badge-warning text-dark ml-1">Por validar</span>{% endif %}
+              </td>
+              <td>
+                {% if d.archivo %}
+                  <a class="btn btn-link p-0" href="{{ d.archivo.url }}" target="_blank" rel="noopener">
+                    <i class="material-icons align-middle">open_in_new</i> Abrir
+                  </a>
+                {% else %}
+                  <span class="text-muted">—</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if d.valido %}
+                  <span class="badge badge-success">Sí</span>
+                {% else %}
+                  <span class="badge badge-secondary">No</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if d.verificado_por %}
+                  {{ d.verificado_por }}<br>
+                  {% if d.verificado_en %}<small class="text-muted">{{ d.verificado_en|date:"d/m/Y H:i" }}</small>{% endif %}
+                {% else %}
+                  <span class="text-muted">—</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="4" class="text-muted">Aún no hay documentos cargados.</td>
+            </tr>
+            {% endfor %}
+
+            {% if faltantes %}
+              <tr>
+                <td colspan="4">
+                  <div class="mt-2">
+                    <strong>Faltantes:</strong>
+                    {% for t in faltantes %}
+                      <span class="badge badge-light tag-missing">{{ t.nombre }}</span>
+                    {% endfor %}
+                  </div>
+                </td>
+              </tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="text-right">
+        {% if request.user.is_superuser or request.user.profile and request.user.profile.puede_editar_todo %}
+        <a class="btn btn-outline-info" href="{% url 'alumnos_documentos_editar' alumno.pk %}">
+          <i class="material-icons align-middle">upload_file</i> Subir/actualizar documentos
+        </a>
+        {% endif %}
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+<script>
+  $(function(){
+    var $tabla = $('#tabla-pagos');
+    if ($tabla.length) {
+      $tabla.DataTable({
+        language: { url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/es-ES.json' },
+        order: [[0, 'desc']],   // 👈 más reciente primero
+        pageLength: 10,
+        autoWidth: false,
+        scrollX: true
+      });
+    }
+  });
+</script>
+
+
+
+<script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js" defer></script>
+
+
+<script>
+document.addEventListener('click', async (e) => {
+  const btn = e.target.closest('.descargar-recibo');
+  if (!btn) return;
+  e.preventDefault();
+
+  try {
+    const url = btn.getAttribute('data-url') || btn.getAttribute('href');
+    const resp = await fetch(url, { credentials: 'same-origin' });
+    if (!resp.ok) throw new Error('No se pudo cargar el recibo');
+    const html = await resp.text();
+
+    const cont = document.createElement('div');
+    cont.style.position = 'fixed';
+    cont.style.left = '-99999px';
+    cont.style.top = '0';
+    cont.style.width = '850px';
+    cont.innerHTML = html;
+    document.body.appendChild(cont);
+
+    const style = document.createElement('style');
+    style.textContent = `
+      @page { size: Letter; margin: 0 !important; }
+      html, body { background:#fff !important; margin:0 !important; padding:0 !important; }
+      .sheet { width:8.5in !important; min-height:auto !important; margin:0 !important; box-shadow:none !important; border:none !important; }
+      .doc { padding:0.5in !important; }
+    `;
+    (cont.querySelector('head') || cont).appendChild(style);
+
+    const el = cont.querySelector('.sheet') || cont;
+
+    let folio = el.querySelector('.amount-box .amount-num')?.textContent?.trim() || 'recibo';
+    folio = folio.replace(/[^\w\-]+/g, '');
+
+    await html2pdf().from(el).set({
+      margin: 0,
+      jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' },
+      pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
+      html2canvas: { scale: 2, useCORS: true, allowTaint: true, scrollY: 0 }
+    }).save(`recibo_${folio}.pdf`);
+
+    cont.remove();
+  } catch (err) {
+    console.error(err);
+    alert('No se pudo generar el PDF. Revisa la consola (F12).');
+  }
+});
+</script>
+
+
+<script>
+document.addEventListener('click', async (e) => {
+  const btn = e.target.closest('.descargar-estado-cuenta');
+  if (!btn) return;
+  e.preventDefault();
+
+  try {
+    const url = btn.getAttribute('data-url') || btn.getAttribute('href');
+    const resp = await fetch(url, { credentials: 'same-origin' });
+    if (!resp.ok) throw new Error('No se pudo cargar el estado de cuenta');
+    const html = await resp.text();
+
+    // Contenedor fuera de pantalla
+    const cont = document.createElement('div');
+    cont.style.position = 'fixed';
+    cont.style.left = '-99999px';
+    cont.style.top = '0';
+    cont.style.width = '850px';
+    cont.innerHTML = html;
+    document.body.appendChild(cont);
+
+    // Overrides para PDF
+    const style = document.createElement('style');
+    style.textContent = `
+      @page { size: Letter; margin: 0 !important; }
+      html, body { background:#fff !important; margin:0 !important; padding:0 !important; }
+      .sheet { width:8.5in !important; margin:0 !important; box-shadow:none !important; border:none !important; }
+    `;
+    (cont.querySelector('head') || cont).appendChild(style);
+
+    const el = cont.querySelector('.sheet') || cont;
+
+    // === Escalado automático a 1 página Letter ===
+    const PX_PER_IN = 96;                  // densidad típica del navegador
+    const pageW = 8.5 * PX_PER_IN;
+    const pageH = 11  * PX_PER_IN;
+    el.style.width = pageW + 'px';
+    el.style.maxWidth = pageW + 'px';
+
+    // espera un tick para que se apliquen estilos
+    await new Promise(r => setTimeout(r, 50));
+
+    const h = el.scrollHeight;
+    if (h > pageH) {
+      const scale = (pageH - 8) / h;       // margen de seguridad 8px
+      el.style.transformOrigin = 'top left';
+      el.style.transform = `scale(${scale})`;
+      // fija la altura resultante para que html2canvas no agregue nueva página
+      el.style.height = Math.ceil(h * scale) + 'px';
+    }
+
+    await html2pdf().from(el).set({
+      margin: 0,
+      jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' },
+      pagebreak: { mode: ['css','legacy'] },  // 👈 sin 'avoid-all'
+      html2canvas: { scale: 2, useCORS: true, allowTaint: true, scrollY: 0 }
+    }).save('estado_cuenta.pdf');
+
+    cont.remove();
+  } catch (err) {
+    console.error(err);
+    alert('No se pudo generar el PDF del estado de cuenta. Revisa la consola (F12).');
+  }
+});
+</script>
+
+
+
+
+
+<script>
+(function(){
+  function getCookie(name){
+    const m=document.cookie.match('(^|;)\\s*'+name+'\\s*=\\s*([^;]+)');
+    return m?m.pop():'';
+  }
+
+  async function generarCargos(url){
+    const csrftoken = getCookie('csrftoken');
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-CSRFToken': csrftoken
+      },
+      body: new URLSearchParams({}) // aquí puedes enviar 'concepto_id' si quieres
+    });
+    if (!resp.ok) {
+      const txt = await resp.text().catch(()=> '');
+      throw new Error(txt || ('HTTP '+resp.status));
+    }
+    return resp.json();
+  }
+
+  document.getElementById('btnGenerarCargos')?.addEventListener('click', async (e)=>{
+    e.preventDefault();
+    const url = e.currentTarget.getAttribute('data-url');
+
+    // Confirmación
+    const seguro = confirm('Esto generará los cargos mensuales (día 6) desde el mes de inicio del programa por todos los meses del plan. ¿Continuar?');
+    if (!seguro) return;
+
+    try {
+      e.currentTarget.disabled = true;
+      const data = await generarCargos(url);
+
+      if (data.ok) {
+        const msg = `Creados: ${data.creados} • Ya existían: ${data.existentes}\n` +
+                    `Concepto: ${data.concepto} • Monto: $${data.monto}\n` +
+                    `Desde: ${data.desde} • Meses: ${data.meses}`;
+        if (window.notify) {
+          notify('Cargos generados correctamente. ' + msg.replace(/\n/g, ' • '), 'success');
+        } else {
+          alert('Cargos generados correctamente.\n\n' + msg);
+        }
+        // Recarga para ver la tabla actualizada
+        window.location.reload();
+      } else {
+        throw new Error(data.error || 'No se pudo generar cargos.');
+      }
+    } catch(err) {
+      console.error(err);
+      if (window.notify) notify('Error: ' + err.message, 'danger');
+      else alert('Error: ' + err.message);
+    } finally {
+      e.currentTarget.disabled = false;
+    }
+  });
+})();
+</script>
+
+
+
+
+<script>
+  document.addEventListener('click', function(e){
+    const btn = e.target.closest('.btn-whatsapp-cargo');
+    if(!btn) return;
+
+    // Sanitizar número
+    let tel = (btn.dataset.tel || '').replace(/\D+/g, '');
+    if (!tel) { alert('El alumno no tiene teléfono válido.'); return; }
+    if (!/^52/.test(tel)) {
+      // Asume MX si no incluye prefijo; ajusta si necesitas otro país
+      if (tel.length === 10) tel = '52' + tel;
+      else if (tel.length < 12) tel = '52' + tel;
+    }
+
+    const nombre   = (btn.dataset.nombre || '').trim();
+    const fecha    = (btn.dataset.fecha  || '').trim();
+    const monto    = (btn.dataset.monto  || '').trim();
+    const overdue  = btn.dataset.overdue === '1';
+    const dueToday = btn.dataset.dueToday === '1';
+
+    const saludo = nombre ? `Hola ${nombre},` : 'Hola,';
+    let cuerpo   = '';
+
+    if (overdue) {
+      cuerpo = 'nos comunicamos de IUAF para recordarle que su pago de colegiatura se encuentra VENCIDO.';
+    } else if (dueToday) {
+      cuerpo = 'nos comunicamos de IUAF para recordarle que su pago de colegiatura está programado para hoy.';
+    } else {
+      cuerpo = `nos comunicamos de IUAF para recordarle que su pago de colegiatura está programado para el ${fecha}.`;
+    }
+
+    const detalle = `\n\n• Fecha: ${fecha}\n• Monto: $${monto}\n\nPor favor, realice su pago a la brevedad. Si ya efectuó el pago, le pedimos amablemente enviarnos su comprobante.`;
+    const firma   = `\n\nGracias.`;
+    const msg     = `${saludo} ${cuerpo}${detalle}${firma}`;
+
+    const url = `https://wa.me/${tel}?text=${encodeURIComponent(msg)}`;
+    window.open(url, '_blank', 'noopener');
+  });
+</script>
+
+
+<script>
+document.addEventListener('click', async (e) => {
+  const btn = e.target.closest('.btn-eliminar-cargo');
+  if (!btn) return;
+  e.preventDefault();
+
+  const url = btn.getAttribute('data-url') || btn.getAttribute('href');
+
+  // Confirmación
+  const ok = confirm('¿Está seguro de eliminar este cargo? Esta acción no se puede deshacer.');
+  if (!ok) return;
+
+  // CSRF (reutiliza getCookie ya definido arriba)
+  function getCookie(name){
+    const m=document.cookie.match('(^|;)\\s*'+name+'\\s*=\\s*([^;]+)');
+    return m?m.pop():'';
+  }
+  const csrftoken = getCookie('csrftoken');
+
+  try {
+    btn.disabled = true;
+
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-CSRFToken': csrftoken,
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      // Si tu vista espera algún flag para distinguir borrado, envíalo:
+      // body: new URLSearchParams({ action: 'delete' })
+      body: new URLSearchParams({})
+    });
+
+    if (!resp.ok) {
+      const txt = await resp.text().catch(()=> '');
+      throw new Error(txt || ('HTTP ' + resp.status));
+    }
+
+    // Intenta leer JSON {ok:true} si tu vista lo envía; si no, recarga igual
+    let data = null;
+    try { data = await resp.json(); } catch(_) {}
+    if (!data || data.ok) {
+      if (window.notify) notify('Cargo eliminado correctamente.', 'success');
+      window.location.reload();
+    } else {
+      throw new Error(data.error || 'No se pudo eliminar el cargo.');
+    }
+  } catch (err) {
+    console.error(err);
+    if (window.notify) notify('Error: ' + err.message, 'danger');
+    else alert('Error: ' + err.message);
+  } finally {
+    btn.disabled = false;
+  }
+});
+</script>
+
+
+
+
+
+{% comment %}  {% endcomment %}
+ <script>
+(function(){
+  function getCookie(name){
+    const m=document.cookie.match('(^|;)\\s*'+name+'\\s*=\\s*([^;]+)');
+    return m?m.pop():'';
+  }
+  function sanitizeTel(t){ return (t||'').replace(/\D+/g,''); }
+
+  async function postJSON(url, data){
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-CSRFToken': getCookie('csrftoken'),
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: new URLSearchParams(data||{})
+    });
+    if(!resp.ok){
+      const txt = await resp.text().catch(()=> '');
+      throw new Error(txt || ('HTTP '+resp.status));
+    }
+    return resp.json();
+  }
+
+  document.addEventListener('click', async (e)=>{
+    const btn = e.target.closest('.btn-whatsapp2-cargo');
+    if(!btn) return;
+
+    e.preventDefault();
+    try{
+      let tel = sanitizeTel(btn.dataset.tel);
+      if(!tel){ alert('El alumno no tiene teléfono válido.'); return; }
+      if(!/^52/.test(tel)) {
+        if (tel.length === 10) tel = '52' + tel;
+        else if (tel.length < 12) tel = '52' + tel;
+      }
+
+      btn.disabled = true;
+      const endpoint = btn.getAttribute('data-endpoint');
+      const data = await postJSON(endpoint);
+
+      if(!data.ok || !data.url){ throw new Error('No se pudo generar el enlace de pago.'); }
+
+      const nombre = (btn.dataset.nombre||'').trim();
+      const monto  = data.amount || '';
+      const link   = data.url;
+
+      const saludo = nombre ? `Hola ${nombre},` : 'Hola,';
+      const cuerpo = `puede realizar su pago de $${monto} en línea mediante el siguiente enlace seguro:`;
+      const msg = `${saludo} ${cuerpo}\n\n${link}\n\nGracias.`;
+      const wa = `https://wa.me/${tel}?text=${encodeURIComponent(msg)}`;
+      window.open(wa, '_blank', 'noopener');
+
+    }catch(err){
+      console.error(err);
+      alert('Error: ' + err.message);
+    }finally{
+      btn.disabled = false;
+    }
+  });
+})();
+</script>
+
+
+
+
+
+{% endblock %}

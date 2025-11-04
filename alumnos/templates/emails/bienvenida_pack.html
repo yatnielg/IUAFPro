@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>{{ subject }}</title>
+  <meta name="color-scheme" content="light only">
+  <style>
+    /* estilos inline-safe para email */
+    .container{max-width:640px;margin:0 auto;background:#ffffff;border-radius:10px;
+      border:1px solid #e5e7eb;overflow:hidden}
+    .header{padding:20px 22px;background:#0f172a;color:#fff}
+    .brand{display:flex;align-items:center;gap:12px}
+    .brand img{display:block;width:44px;height:44px;border-radius:8px}
+    .title{margin:0;font-size:18px;letter-spacing:.02em}
+    .body{padding:22px;color:#111827;font-size:15px;line-height:1.55}
+    .cta{display:inline-block;margin-top:14px;padding:12px 18px;text-decoration:none;
+      background:#2563eb;color:#fff;border-radius:8px;font-weight:600}
+    .muted{color:#6b7280;font-size:12px;margin-top:18px}
+    .card{background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;padding:14px;margin-top:10px}
+    .footer{padding:16px 22px;color:#6b7280;font-size:12px;border-top:1px solid #e5e7eb;background:#f9fafb}
+  </style>
+</head>
+<body style="background:#f3f4f6;padding:24px 12px;">
+  <div class="container">
+    <div class="header">
+      <div class="brand">
+        <img src="cid:logo_cid" alt="IUAF">
+        <div>
+          <h1 class="title">Campus IUAF</h1>
+          <div style="opacity:.85;font-size:12px">Formación con propósito</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="body">
+      <p>Hola{% if alumno_nombre %} {{ alumno_nombre }}{% endif %},</p>
+      <p>{{ intro }}</p>
+
+      <div class="card">
+        <strong>¿Qué encontrarás en los adjuntos?</strong>
+        <ul style="margin:8px 0 0 18px;padding:0">
+          <li>Reglamento y lineamientos generales.</li>
+          <li>Calendario académico.</li>
+          <li>Guía rápida de acceso al Campus.</li>
+        </ul>
+      </div>
+
+      {% if portal_url %}
+      <p>
+        <a class="cta" href="{{ portal_url }}" target="_blank" rel="noopener">Ir al Campus</a>
+      </p>
+      {% endif %}
+
+      <p class="muted">
+        Si tienes dudas, responde a este correo y con gusto te ayudamos.
+      </p>
+    </div>
+
+    <div class="footer">
+      INSTITUTO UNIVERSITARIO DE ALTA FORMACIÓN IUAF SC · Cancún, Q. Roo · cadministrativa@iuaf.edu.mx
+    </div>
+  </div>
+</body>
+</html>

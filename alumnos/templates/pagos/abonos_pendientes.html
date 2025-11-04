@@ -1,0 +1,33 @@
+{% extends "panel/grafico.html" %}
+{% block main_content %}
+<h3 style="color: #ffffffff;">Abonos pendientes de conciliación</h3>
+
+<form method="get" class="form-inline mb-2">
+  <input name="q" value="{{ q|default:'' }}" class="form-control mr-2" placeholder="Buscar…">
+  <button class="btn btn-primary">Buscar</button>
+</form>
+
+<table class="table table-striped">
+ <thead><tr>
+   <th>ID</th><th>Fecha</th><th>Monto</th><th>Emisor / Detectado</th><th>Referencia</th><th></th>
+ </tr></thead>
+ <tbody>
+ {% for m in movs %}
+   <tr>
+     <td>{{ m.id }}</td>
+     <td>{{ m.fecha|default:"—" }}</td>
+     <td>${{ m.monto|default:"—" }}</td>
+     <td>{{ m.emisor_nombre|default:m.nombre_detectado|default:"—" }}</td>
+     <td>{{ m.referencia_numerica|default:"—" }}</td>
+     <td class="text-right">
+       <a class="btn btn-sm btn-outline-primary" href="{% url 'conciliar_movimiento' m.id %}">
+         Conciliar
+       </a>
+     </td>
+   </tr>
+ {% empty %}
+   <tr><td colspan="6" class="text-muted">Sin pendientes.</td></tr>
+ {% endfor %}
+ </tbody>
+</table>
+{% endblock %}

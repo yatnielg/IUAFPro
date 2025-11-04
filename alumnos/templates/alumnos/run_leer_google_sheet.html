@@ -1,0 +1,107 @@
+{% extends "panel/grafico.html" %}
+{% load i18n %}
+
+{% block title %}Actualizar movimientos — CampusIUAF{% endblock %}
+
+{% block main_content %}
+
+<div class="d-flex justify-content-between align-items-center">
+  <h1 class="h4 m-0 text-white">
+    <i class="material-icons align-middle mr-1">sync</i>
+    Actualizar movimientos (Google Sheet → JSON)
+  </h1>
+</div>
+
+{% if messages %}
+  <div class="mt-3">
+    {% for message in messages %}
+      <div class="alert {% if message.tags %}alert-{{ message.tags }}{% else %}alert-info{% endif %}" role="alert">
+        {{ message }}
+      </div>
+    {% endfor %}
+  </div>
+{% endif %}
+
+<div class="card mt-3">
+  <div class="card-header card-header-primary card-header-icon d-flex align-items-center">
+    <div class="card-icon"><i class="material-icons">published_with_changes</i></div>
+    <div>
+      <h4 class="card-title m-0">Ejecución del comando</h4>
+      <p class="card-category m-0">Lee la hoja pública y actualiza el JSON (y opcionalmente guarda en DB)</p>
+    </div>
+    <div class="ml-auto"></div>
+  </div>
+
+  <div class="card-body">
+    <div class="d-flex flex-wrap gap-2">
+      <!-- Botón: Solo generar JSON -->
+      <form method="post" class="mr-2 mb-2 run-form" data-action="json">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-primary btn-run">
+          <i class="material-icons align-middle mr-1">play_arrow</i>
+          Ejecutar (solo JSON)
+        </button>
+      </form>
+
+      <!-- Botón: Generar JSON + Guardar en DB -->
+      <form method="post" class="mb-2 run-form" data-action="db">
+        {% csrf_token %}
+        <input type="hidden" name="save_db" value="1">
+        <button type="submit" class="btn btn-success btn-run">
+          <i class="material-icons align-middle mr-1">save</i>
+          Ejecutar y guardar en DB
+        </button>
+      </form>
+
+      <!-- Indicador de progreso -->
+      <div id="runSpinner" class="d-none align-items-center ml-3">
+        <span class="spinner-border spinner-border-sm mr-2" role="status" aria-hidden="true"></span>
+        <span>Procesando…</span>
+      </div>
+    </div>
+
+    {% if out_path %}
+      <div class="text-muted mt-2" style="font-size:.9rem;">
+        <i class="material-icons align-middle mr-1" style="font-size: 18px;">folder</i>
+        Último JSON guardado en: <code>{{ out_path }}</code>
+      </div>
+    {% endif %}
+
+    {% if output %}
+      <hr>
+      <h2 class="h6 mt-3 mb-2">Salida del comando (debug)</h2>
+      <pre style="max-height: 420px; overflow:auto; background:#0b1021; color:#cfe5ff; padding:12px; border-radius:8px; font-size: .9rem;">
+{{ output|escape }}
+      </pre>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+  (function () {
+    const forms = document.querySelectorAll('.run-form');
+    const spinner = document.getElementById('runSpinner');
+
+    function toggleRunning(isRunning) {
+      const buttons = document.querySelectorAll('.btn-run');
+      buttons.forEach(btn => {
+        btn.disabled = isRunning;
+        btn.classList.toggle('disabled', isRunning);
+      });
+      if (spinner) spinner.classList.toggle('d-none', !isRunning);
+    }
+
+    forms.forEach(f => {
+      f.addEventListener('submit', function () {
+        toggleRunning(true);
+      });
+    });
+
+    // Por si el navegador navega hacia atrás y deja botones deshabilitados
+    window.addEventListener('pageshow', function () {
+      toggleRunning(false);
+    });
+  })();
+</script>
+
+{% endblock %}

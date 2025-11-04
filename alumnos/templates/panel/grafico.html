@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+
+
+{% load static %}
+      {% include "panel/head.html" %}      
+<body class="dark-edition ">  
+
+
+<div id="page-loader-overlay">
+  <div class="loader-spinner"></div>
+</div>
+  <div class="wrapper ">
+    <div class="sidebar" data-color="purple" data-background-color="default" data-image="">
+        {% include "panel/panel_left.html" %}
+    </div>
+    <div class="main-panel">
+        {% include "panel/panel_top.html" %}
+      <div class="content">
+        <div class="content">
+          <div class="container-fluid">
+            {% block main_content %}
+
+            {% endblock main_content %}
+          </div>
+        </div>
+      </div>
+        {% include "panel/footer.html" %}
+    </div>
+  </div>
+  {% include "panel/engrane.html" %}
+  {% include "panel/js.html" %}
+</body>
+
+
+
+
+<style>
+#page-loader-overlay {
+  position: fixed;
+  top: 0; left: 0; width: 100vw; height: 100vh;
+  background: rgba(0,0,0,0.35); /* Puedes ajustar la opacidad */
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 1;
+  transition: opacity 0.7s cubic-bezier(.4,0,.2,1); /* Animación suave */
+  pointer-events: all;
+}
+
+/* Ocultar con animación */
+#page-loader-overlay.fade-out {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Spinner opcional */
+.loader-spinner {
+  border: 5px solid #f3f3f3;
+  border-top: 5px solid #3bb77e;
+  border-radius: 50%;
+  width: 46px;
+  height: 46px;
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  0% { transform: rotate(0deg);}
+  100% { transform: rotate(360deg);}
+}
+</style>
+
+
+<script>
+  window.addEventListener('load', function() {
+  var overlay = document.getElementById('page-loader-overlay');
+  overlay.classList.add('fade-out');
+  setTimeout(function() {
+    overlay.style.display = 'none';
+  }, 800); // Debe ser un poco mayor que el transition del CSS
+});
+</script>
+
+
+
+
+
+
+
+
+</html>

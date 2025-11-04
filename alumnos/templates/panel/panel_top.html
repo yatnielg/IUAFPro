@@ -1,0 +1,272 @@
+     <!-- Navbar -->
+
+<nav class="navbar navbar-expand-lg navbar-transparent navbar-absolute fixed-top ">
+  <div class="container-fluid">
+
+
+ <div class="navbar-wrapper">
+  <div class="navbar-minimize">
+    <button id="minimizeSidebar" class="btn btn-just-icon btn-white btn-fab btn-round">
+      <i class="material-icons text_align-center visible-on-sidebar-regular">more_vert</i>
+      <i class="material-icons design_bullet-list-67 visible-on-sidebar-mini">view_list</i>
+    </button>
+  </div>
+  <a class="navbar-brand" href="javascript:;">Panel de control.</a>
+
+
+
+</div>
+
+
+
+  <!-- Enlace a la tienda -->
+<style>
+.tienda-url { display: inline; }
+@media (max-width: 767px) { .tienda-url { display: none; } }
+</style>
+
+
+
+
+
+{% comment %} <a class="btn btn-outline-info rounded-pill px-3 py-2 mx-2 d-flex align-items-center" 
+
+   href="" 
+   data-bs-toggle="tooltip" title="Ir a tu tienda: {{ request.user.cliente.negocio.nombre }}.gona-tienda.com">
+  <span class="material-icons" style="font-size:1.3em; vertical-align:middle;">storefront</span>
+  <span class="ms-2 fw-bold">Ir a tu tienda:</span>
+  <span class="tienda-url ms-2 text-primary fw-bold">{{ request.user.cliente.negocio.nombre }}.gona-tienda.com</span>
+</a> {% endcomment %}
+<style>
+.tienda-url { display: inline; }
+@media (max-width: 767px) { .tienda-url { display: none; } }
+</style>
+
+<script>
+  var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+  var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+    return new bootstrap.Tooltip(tooltipTriggerEl)
+  })
+</script>
+
+
+          <button class="navbar-toggler" type="button" data-toggle="collapse" aria-controls="navigation-index" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="sr-only">Toggle navigation</span>
+            <span class="navbar-toggler-icon icon-bar"></span>
+            <span class="navbar-toggler-icon icon-bar"></span>
+            <span class="navbar-toggler-icon icon-bar"></span>
+          </button>
+          <div class="collapse navbar-collapse justify-content-end">
+            <form class="navbar-form">
+              <div class="input-group no-border">
+                <input type="text" value="" class="form-control" placeholder="Buscar...">
+                <button type="submit" class="btn btn-white btn-round btn-just-icon">
+                  <i class="material-icons">search</i>
+                  <div class="ripple-container"></div>
+                </button>
+              </div>
+            </form>
+            <ul class="navbar-nav">
+              <li class="nav-item">
+                <a class="nav-link" href="{% url 'principal' %}">
+                  <i class="material-icons">dashboard</i>
+                  <p class="d-lg-none d-md-block">
+                    Estadísticas
+                  </p>
+                </a>
+              </li>
+<li class="nav-item dropdown">
+  <a class="nav-link" href="http://www.codifica360.com" id="navbarDropdownMenuLink" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+    <i class="material-icons">notifications</i>
+    <span class="notification">{{ alertas_global|length }}</span>                  
+    <p class="d-lg-none d-md-block">Acciones</p>
+  </a>
+
+  {% if alertas_global %}
+    <div class="dropdown-menu dropdown-menu-right" aria-labelledby="navbarDropdownMenuLink">
+      {% for nombre, mensaje in alertas_global.items %}
+        <a class="dropdown-item" href="#">{{forloop.counter}} - {{mensaje}}</a>
+      {% endfor %}
+      <!-- Aquí se insertarán los chats recibidos -->
+      <div id="chat-alerts"></div>
+    </div>
+  {% else %}
+    <div class="dropdown-menu dropdown-menu-right" aria-labelledby="navbarDropdownMenuLink">
+      <!-- Aquí se insertarán los chats recibidos -->
+      <div id="chat-alerts"></div>
+    </div>
+  {% endif %}
+</li>
+
+{% comment %}  {% endcomment %}
+
+    {% if  data_api_subscription_global.status == "canceled" %}      
+
+          <li class="nav-item">
+            {% comment %} {% url "subscription_options2" plan_actual_global %} {% endcomment %}
+            <a class="nav-link" href="">
+
+    {% comment %}           <li class="nav-item">
+            <a class="nav-link btn btn-danger text-white font-weight-bold" 
+           
+               href=""
+               style="border-radius: 20px; padding: 0.7em 1.5em; font-size: 1.1em;">
+              <i class="material-icons" style="vertical-align: middle; font-size: 1.3em;">credit_card</i>
+              &nbsp; Tu membresía ha vencido1 <span class="font-italic">¡Renueva ahora!</span>
+            </a>
+          </li>  {% endcomment %}
+            </a>
+          </li> 
+    {% endif %}
+
+
+{% if url_change_tarjeta and not data_api_subscription_global.status == 'active' and not data_api_subscription_global.status == "canceled" %}
+  <li class="nav-item">
+    <a class="nav-link btn btn-warning text-dark font-weight-bold"
+       href="{{ url_change_tarjeta }}"
+       style="border-radius: 20px; padding: 0.7em 1.5em; font-size: 1.1em;">
+      <i class="material-icons" style="vertical-align: middle; font-size: 1.3em;">credit_card</i>
+      &nbsp; Tenemos un problema con tu cobro.
+      <span class="font-italic">Actualiza tu tarjeta para reactivar tu membresía111.</span>
+    </a>
+  </li>
+{% endif %}
+
+
+{% if data_api_subscription_global %}
+
+  {% if not url_change_tarjeta %}
+  <li class="nav-item">
+            <a class="nav-link" href="">
+
+              <li class="nav-item">
+            <a class="nav-link btn btn-danger text-white font-weight-bold"
+               href=""
+               style="border-radius: 20px; padding: 0.7em 1.5em; font-size: 1.1em;">
+              <i class="material-icons" style="vertical-align: middle; font-size: 1.3em;">credit_card</i>
+              &nbsp; Sin Plan Activo. <span class="font-italic">¡Activa ahora!</span>
+            </a>
+          </li> 
+            </a>
+          </li> 
+
+  {% else %}
+      {% if data_api_subscription_global.plan_name != 'Plan-Gratis-Anual' and data_api_subscription_global.plan_name != 'Plan-Gratis-Mensual' %}
+      {% if data_api_subscription_global.days_left <= 0 %}
+          <li class="nav-item">
+            <a class="nav-link" href="">
+
+ {% comment %}              <li class="nav-item">
+            <a class="nav-link btn btn-danger text-white font-weight-bold"
+               href="{% url "cambiar_plan_view" %}"
+               style="border-radius: 20px; padding: 0.7em 1.5em; font-size: 1.1em;">
+              <i class="material-icons" style="vertical-align: middle; font-size: 1.3em;">credit_card</i>
+              &nbsp; Tu membresía ha vencido. <span class="font-italic">¡Renueva ahora11!</span>
+            </a>
+          </li>  {% endcomment %}
+            </a>
+          </li> 
+      {% endif %}
+    {% endif %}    
+  {% endif %}
+
+
+
+
+
+
+          
+
+
+    {% else %}
+    
+{% comment %}           <li class="nav-item">
+            <a class="nav-link" href="{% url "subscription_options2" plan_actual_global %}">
+
+              <li class="nav-item">
+            <a class="nav-link btn btn-danger text-white font-weight-bold" 
+               href="{% url "subscription_options2" plan_actual_global %}"
+               style="border-radius: 20px; padding: 0.7em 1.5em; font-size: 1.1em;">
+              <i class="material-icons" style="vertical-align: middle; font-size: 1.3em;">credit_card</i>
+              &nbsp; Tu membresía ha vencido. <span class="font-italic">¡Renueva ahora!</span>
+            </a>
+          </li> 
+            </a>
+          </li>  {% endcomment %}
+{% comment %} <li class="nav-item">
+  <a class="nav-link btn btn-danger text-white fw-bold
+            px-3 py-2 px-md-4 py-md-3
+            fs-6 fs-md-5 fs-lg-4 w-100"
+     href=""
+     style="border-radius: 20px;">
+    <i class="material-icons" style="vertical-align: middle; font-size: 1.3em;">credit_card</i>
+    &nbsp; Tu membresía ha vencido. <span class="font-italic">¡Renueva ahora!</span>
+  </a>
+</li> {% endcomment %}
+
+{% endif %}
+
+
+
+
+
+
+              <li class="nav-item dropdown">
+                <a class="nav-link" href="javascript:;" id="navbarDropdownProfile" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                  <i class="material-icons">person</i>
+                  <p class="d-lg-none d-md-block">
+                    Cuenta
+                  </p>
+                </a>
+                <div class="dropdown-menu dropdown-menu-right" aria-labelledby="navbarDropdownProfile">
+                  <a class="dropdown-item" href="">
+                    <i class="material-icons" style="vertical-align: middle;">person</i> Perfil
+                  </a>
+                   {% comment %}  {% if  url_change_tarjeta and data_api_subscription_global.status == 'active' %}
+                        <a class="dropdown-item" href="{% url 'cambiar_plan_view' %}">
+                          <i class="material-icons" style="vertical-align: middle;">credit_card</i>  Membresia ({{data_api_subscription_global.days_left}} días restantes)
+                        </a>
+
+                    {% elif  url_change_tarjeta and not data_api_subscription_global.status == 'active' and not data_api_subscription_global.status == "canceled" %}
+                        <a class="dropdown-item" href="{{ url_change_tarjeta }}">
+                          <i class="material-icons" style="vertical-align: middle;">credit_card</i>  Membresia Problema con Tarjeta (Cambiar tarjeta)
+                        </a>
+
+                      
+                    {% elif data_api_subscription_global.status == "canceled" %}
+                        <a class="dropdown-item" href="">                    
+                          <i class="material-icons" style="vertical-align: middle;">credit_card</i> Membresía (Vencida)
+                        </a>
+                      {% else %}
+                        <a class="dropdown-item" href="">                    
+                          <i class="material-icons" style="vertical-align: middle;">credit_card</i> Membresía (Sin plan)
+                        </a>
+                    {% endif %}  {% endcomment %}
+                  
+
+
+
+
+
+                  <div class="dropdown-divider"></div>
+{# Dentro del dropdown #}
+<form id="logout-form" method="post" action="{% url 'account_logout' %}" style="display:none;">
+  {% csrf_token %}
+  {# opcional: adónde redirigir después #}
+  <input type="hidden" name="next" value="{% url 'account_login' %}">
+</form>
+
+
+              <a class="dropdown-item" href="#"
+   onclick="event.preventDefault(); if(confirm('¿Estás seguro que deseas cerrar sesión?')) document.getElementById('logout-form').submit();">
+  <i class="material-icons" style="vertical-align: middle;">exit_to_app</i> Cerrar sesión
+</a>
+                </div>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </nav>
+      <!-- End Navbar -->
+
+    

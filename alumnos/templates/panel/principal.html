@@ -1,0 +1,80 @@
+{% extends "panel/grafico.html" %}  <!-- o el nombre de tu base -->
+
+{% block main_content %}
+
+
+    {% if alertas_global %}
+        {% if alertas_global.negocio %}
+            {% include "ecommerce/panel/paneltem/wizard_crear_Negocio.html" %}
+        {% elif alertas_global.country %}
+            <div class="alert alert-info alert-with-icon" data-notify="container" style="font-size:1.05rem;">
+                <i class="material-icons" data-notify="icon">shopping_cart</i>
+                <span>
+                    Vamos a elegir el país donde vas a vender.<br>
+                    Más adelante, si quieres vender en otros países, podrás agregarlos fácilmente.
+                </span>
+            </div>
+            {% include "ecommerce/panel/paneltem/wizard_pais.html" %}
+
+        {% elif alertas_global.state %}        
+            <div class="alert alert-info alert-with-icon" data-notify="container" style="font-size:1.05rem;">
+                <i class="material-icons" data-notify="icon">location_city</i>
+                <span>
+                    Ahora vamos a crear un estado o provincia dentro del país donde vas a vender.<br>
+                    Más adelante podrás agregar más estados o provincias fácilmente.
+                </span>
+            </div>
+            {% include "ecommerce/panel/paneltem/wizard_estado.html" with country=country_global %}
+        {% elif alertas_global.municipality %}        
+            <div class="alert alert-info alert-with-icon" data-notify="container" style="font-size:1.05rem;">
+                <i class="material-icons" data-notify="icon">map</i>
+                <span>
+                    Ahora vamos a crear un municipio dentro de la provincia que ya elegiste.<br>
+                    Más adelante podrás agregar más municipios fácilmente.
+                </span>
+            </div>
+            {% include "ecommerce/panel/paneltem/wizard_municipio.html" with state=state_global %}
+        {% elif alertas_global.warehouses %}    
+            <div class="alert alert-info alert-with-icon" data-notify="container" style="font-size:1.05rem;">
+                <i class="material-icons" data-notify="icon">store</i>
+                <span>
+                    Ahora vamos a crear un almacén dentro del municipio que ya elegiste.<br>
+                    Más adelante podrás agregar más almacenes fácilmente.
+                </span>
+            </div>
+            {% include "ecommerce/panel/paneltem/wizard_warehouse.html" with users=users_global municipio=municipality_global %}
+        {% elif alertas_global.category %}
+             <script>
+                window.location.href = "{% url 'formulario_agregar_categoria' %}";
+             </script>
+
+             {% elif alertas_global.producto %}
+             <script>
+                window.location.href = "{% url 'stockentry_panel' %}";
+             </script>
+
+             
+        {% endif %}
+
+
+    {% else %}
+        {% include "panel/cart_mapa.html" %}
+        {% include "panel/canvas.html" %}
+        {% include "panel/4cart.html" %}
+  {% comment %}       {% include "panel/orders.html" %}  {% endcomment %}   
+    {% endif %}
+    
+
+    {% comment %} {% include "ecommerce/panel/paneltem/imagen_cart.html" %} {% endcomment %}
+
+{% comment %} este es para instalar en movil {% endcomment %}
+<script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/static/sw.js', { scope: '/' })
+      .then(reg => console.log("Service Worker registrado", reg))
+      .catch(err => console.error("Error Service Worker", err));
+  }
+</script>
+
+
+{% endblock main_content %}

@@ -1,0 +1,82 @@
+{# templates/alumnos/cargos_con_saldo.html #}
+{% extends "panel/grafico.html" %}
+{% block title %}Cargos con saldo — Alumno #{{ alumno.numero_estudiante }}{% endblock %}
+{% block main_content %}
+
+<div class="d-flex justify-content-between align-items-center">
+  <h4 class="m-0 text-white">
+    <i class="material-icons align-middle mr-1">shopping_cart</i>
+    Cargos con saldo — Alumno #{{ alumno.numero_estudiante }}
+  </h4>
+  <div>
+    <a class="btn btn-outline-secondary" href="{% url 'alumnos_detalle' alumno.pk %}">Volver</a>
+    <a class="btn btn-outline-primary" href="?orden={% if orden == 'antiguos' %}recientes{% else %}antiguos{% endif %}">
+      Ordenar por {% if orden == 'antiguos' %}recientes{% else %}antiguos{% endif %}
+    </a>
+  </div>
+</div>
+
+<div class="card mt-3">
+  <div class="card-header card-header-primary card-header-icon">
+    <div class="card-icon"><i class="material-icons">receipt</i></div>
+    <h4 class="card-title m-0">Resumen</h4>
+    <p class="card-category m-0">
+      Total cargos: <strong>$ {{ totales.original }}</strong> &nbsp;•&nbsp;
+      Pagos aplicados (simulados): <strong>$ {{ totales.aplicado }}</strong> &nbsp;•&nbsp;
+      Pendiente: <strong>$ {{ totales.restante }}</strong>
+    </p>
+  </div>
+  <div class="card-body">
+    <div class="table-responsive">
+      <table class="table table-hover">
+  <thead>
+    <tr>
+      <th>Fecha</th>
+      <th>Vence</th>  {# 👈 NUEVA COLUMNA #}
+      <th>Concepto</th>
+      <th class="text-right">Monto</th>
+      <th class="text-right">Aplicado</th>
+      <th class="text-right">Pendiente</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for r in rows %}
+      <tr>
+        <td>{{ r.fecha_cargo|date:"d/m/Y" }}</td>
+
+        <td>
+          {% with fv=r.fecha_vencimiento|default:r.fecha_cargo %}
+            <span class="{% if r.is_overdue %}text-danger font-weight-bold{% endif %}">
+              {{ fv|date:"d/m/Y" }}
+            </span>
+          {% endwith %}
+          {% if r.monto_restante > 0 %}
+            {% if r.is_overdue %}
+              <span class="badge badge-danger ml-1">Vencido{% if r.dias_mora %} ({{ r.dias_mora }} d){% endif %}</span>
+            {% elif r.is_due_today %}
+              <span class="badge badge-warning text-dark ml-1">En fecha</span>
+            {% else %}
+              <span class="badge badge-info ml-1">Por pagar</span>
+            {% endif %}
+          {% endif %}
+        </td>
+
+        <td>
+          {{ r.concepto_codigo|default:"—" }}
+          {% if r.concepto_nombre %}<small class="text-muted"> — {{ r.concepto_nombre }}</small>{% endif %}
+        </td>
+
+        <td class="text-right">$ {{ r.monto_original }}</td>
+        <td class="text-right">$ {{ r.monto_aplicado }}</td>
+        <td class="text-right {% if r.monto_restante > 0 %}text-danger font-weight-bold{% endif %}">$ {{ r.monto_restante }}</td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="6" class="text-center text-muted">Sin cargos para este alumno.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

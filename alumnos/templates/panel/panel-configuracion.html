@@ -1,0 +1,309 @@
+{% extends "panel/grafico.html" %}
+{% load static %}
+
+{% block main_content %}
+<!-- Panel de configuración tipo dashboard para tienda online -->
+<div class="container mt-4 mb-4">
+  <div class="row justify-content-center">
+
+
+<!-- WhatsApp -->
+<div class="col-lg-3 col-md-4 col-6 mb-4">
+  <a href="#" 
+     class="card text-center py-4" 
+     style="min-height: 180px;"
+     data-bs-toggle="tooltip"
+     data-bs-placement="top"
+     title="Activa/Desactiva el botón de WhatsApp y configura número, mensaje y horario.">
+    
+    <i class="fa-brands fa-whatsapp" style="font-size:64px;color:#2196f3;"></i>
+    <div class="mt-2" style="font-size:1.25rem;font-weight:500;">WhatsApp</div>
+  </a>
+</div>
+
+
+<!-- Twilio -->
+<div class="col-lg-3 col-md-4 col-6 mb-4">
+  <a href="#" 
+     class="card text-center py-4" 
+     style="min-height: 180px;"
+     data-bs-toggle="tooltip"
+     data-bs-placement="top"
+     title="Configura el envío de mensajes SMS mediante Twilio">
+    <span class="material-icons" style="font-size:64px;color:#2196f3;">sms</span>
+    <div class="mt-2" style="font-size:1.25rem;font-weight:500;">SMS(Twilio)</div>
+  </a>
+</div>
+
+
+<!-- Correo -->
+<div class="col-lg-3 col-md-4 col-6 mb-4">
+  <a href="#" 
+     class="card text-center py-4" 
+     style="min-height: 180px;"
+     data-bs-toggle="tooltip"
+     data-bs-placement="top"
+     title="Configura el servidor SMTP para envío de correos">
+    <span class="material-icons" style="font-size:64px;color:#2196f3;">email</span>
+    <div class="mt-2" style="font-size:1.25rem;font-weight:500;">Correo</div>
+  </a>
+</div>
+
+
+
+<!-- Telegram -->
+<div class="col-lg-3 col-md-4 col-6 mb-4">
+  <a href="#" 
+     class="card text-center py-4" 
+     style="min-height: 180px;"
+     data-bs-toggle="tooltip"
+     data-bs-placement="top"
+     title="Configura la integración y notificaciones de Telegram">
+    <span class="material-icons" style="font-size:64px;color:#2196f3;">send</span>
+    <div class="mt-2" style="font-size:1.25rem;font-weight:500;">Telegram</div>
+  </a>
+</div>
+
+
+
+
+<!-- Credenciales de Pago -->
+<div class="col-lg-3 col-md-4 col-6 mb-4">
+  <a href="#" 
+     class="card text-center py-4" 
+     style="min-height: 180px;"
+     data-bs-toggle="tooltip"
+     data-bs-placement="top"
+     title="Configura credenciales para pagos digitales">
+    <span class="material-icons" style="font-size:64px;color:#2196f3;">vpn_key</span>
+    <div class="mt-2" style="font-size:1.25rem;font-weight:500;">Pagos</div>
+  </a>
+</div>
+
+
+<div class="col-lg-3 col-md-4 col-6 mb-4">
+  <a href="#" 
+     class="card text-center py-4" 
+     style="min-height: 180px;"
+     data-bs-toggle="tooltip"
+     data-bs-placement="top"
+     title="Administra los usuarios y clientes de tu negocio">
+    <span class="material-icons" style="font-size:64px;color:#2196f3;">person</span>
+    <div class="mt-2" style="font-size:1.25rem;font-weight:500;">Usuarios</div>
+  </a>
+</div>
+
+
+
+
+<!-- Grupos -->
+<div class="col-lg-3 col-md-4 col-6 mb-4">
+  <a href="#" 
+     class="card text-center py-4" 
+     style="min-height: 180px;"
+     data-bs-toggle="tooltip"
+     data-bs-placement="top"
+     title="Organiza usuarios en diferentes grupos">
+    <span class="material-icons" style="font-size:64px;color:#2196f3;">groups</span>
+    <div class="mt-2" style="font-size:1.25rem;font-weight:500;">Grupos</div>
+  </a>
+</div>
+
+
+
+<!-- Paises -->
+<div class="col-lg-3 col-md-4 col-6 mb-4">
+  <a href="#" 
+     class="card text-center py-4" 
+     style="min-height: 180px;"
+     data-bs-toggle="tooltip"
+     data-bs-placement="top"
+     title="Administra la lista de países disponibles">
+    <span class="material-icons" style="font-size:64px;color:#2196f3;">location_on</span>
+    <div class="mt-2" style="font-size:1.25rem;font-weight:500;">Paises</div>
+  </a>
+</div>
+
+
+
+
+
+  <!-- Carousel -->
+<div class="col-lg-3 col-md-4 col-6 mb-4">
+  <a href="#" 
+     class="card text-center py-4" 
+     style="min-height: 180px;"
+     data-bs-toggle="tooltip" 
+     data-bs-placement="top"
+     title="Gestiona imágenes para el carrusel principal">
+    <span class="material-icons" style="font-size:64px;color:#2196f3;">photo_library</span>
+    <div class="mt-2" style="font-size:1.25rem;font-weight:500;">Carrusel</div>
+  </a>
+</div>
+
+
+ <!-- Descuentos -->
+<div class="col-lg-3 col-md-4 col-6 mb-4">
+  <a href="#" 
+     class="card text-center py-4"
+     style="min-height: 180px;"
+     data-bs-toggle="tooltip"
+     data-bs-placement="top"
+     title="Gestiona las promociones y descuentos para tus productos">
+    <span class="material-icons" style="font-size:64px;color:#2196f3;">percent</span>
+    <div class="mt-2" style="font-size:1.25rem;font-weight:500;">Descuentos</div>
+  </a>
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+<!-- Proveedores -->
+<div class="col-lg-3 col-md-4 col-6 mb-4">
+  <a href="#" 
+     class="card text-center py-4" 
+     style="min-height: 180px;"
+     data-bs-toggle="tooltip"
+     data-bs-placement="top"
+     title="Administra la lista de proveedores y contactos">
+    <span class="material-icons" style="font-size:64px;color:#2196f3;">local_shipping</span>
+    <div class="mt-2" style="font-size:1.25rem;font-weight:500;">Proveedores</div>
+  </a>
+</div>
+
+
+
+
+
+
+
+
+
+
+<!-- Listado de Monedas -->
+<div class="col-lg-3 col-md-4 col-6 mb-4">
+  <a href="#" 
+     class="card text-center py-4" 
+     style="min-height: 180px;"
+     data-bs-toggle="tooltip"
+     data-bs-placement="top"
+     title="Gestiona las monedas disponibles en el sistema">
+    <span class="material-icons" style="font-size:64px;color:#2196f3;">monetization_on</span>
+    <div class="mt-2" style="font-size:1.25rem;font-weight:500;">Monedas</div>
+  </a>
+</div>
+
+
+<!-- Negocio -->
+<div class="col-lg-3 col-md-4 col-6 mb-4">
+  <a href="#" 
+     class="card text-center py-4" 
+     style="min-height: 180px;"
+     data-bs-toggle="tooltip"
+     data-bs-placement="top"
+     title="Gestiona la información y configuración de tu negocio">
+    <span class="material-icons" style="font-size:64px;color:#2196f3;">business</span>
+    <div class="mt-2" style="font-size:1.25rem;font-weight:500;">Negocio</div>
+  </a>
+</div>
+
+
+<!-- Configuración -->
+<div class="col-lg-3 col-md-4 col-6 mb-4">
+  <a href="#" 
+     class="card text-center py-4" 
+     style="min-height: 180px;"
+     data-bs-toggle="tooltip"
+     data-bs-placement="top"
+     title="Modifica la configuración general de la tienda">
+    <span class="material-icons" style="font-size:64px;color:#2196f3;">settings</span>
+    <div class="mt-2" style="font-size:1.25rem;font-weight:500;">Configuración</div>
+  </a>
+</div>
+
+
+
+
+
+
+<!-- SEO -->
+<div class="col-lg-3 col-md-4 col-6 mb-4">
+  <a href="#" 
+     class="card text-center py-4" 
+     style="min-height: 180px;"
+     data-bs-toggle="tooltip"
+     data-bs-placement="top"
+     title="Configura parámetros de SEO para mejorar el posicionamiento">
+    <span class="material-icons" style="font-size:64px;color:#2196f3;">search</span>
+    <div class="mt-2" style="font-size:1.25rem;font-weight:500;">SEO</div>
+  </a>
+</div>
+
+<!-- SMTP -->
+<div class="col-lg-3 col-md-4 col-6 mb-4">
+  <a href="#" 
+     class="card text-center py-4" 
+     style="min-height: 180px;"
+     data-bs-toggle="tooltip"
+     data-bs-placement="top"
+     title="Configura el servidor SMTP para envío de correos">
+    <span class="material-icons" style="font-size:64px;color:#2196f3;">email</span>
+    <div class="mt-2" style="font-size:1.25rem;font-weight:500;">SMTP</div>
+  </a>
+</div>
+
+
+<!-- FAQ -->
+<div class="col-lg-3 col-md-4 col-6 mb-4">
+  <a href="#" 
+     class="card text-center py-4" 
+     style="min-height: 180px;"
+     data-bs-toggle="tooltip"
+     data-bs-placement="top"
+     title="Gestiona preguntas frecuentes para tus usuarios">
+    <span class="material-icons" style="font-size:64px;color:#2196f3;">help_outline</span>
+    <div class="mt-2" style="font-size:1.25rem;font-weight:500;">FAQ</div>
+  </a>
+</div>
+
+<!-- Términos y Condiciones -->
+<div class="col-lg-3 col-md-4 col-6 mb-4">
+  <a href="#" 
+     class="card text-center py-4" 
+     style="min-height: 180px;"
+     data-bs-toggle="tooltip"
+     data-bs-placement="top"
+     title="Edita los términos y condiciones del sitio">
+    <span class="material-icons" style="font-size:64px;color:#2196f3;">gavel</span>
+    <div class="mt-2" style="font-size:1.25rem;font-weight:500;">Términos</div>
+  </a>
+</div>
+
+<!-- Política de Privacidad -->
+<div class="col-lg-3 col-md-4 col-6 mb-4">
+  <a href="#" 
+     class="card text-center py-4" 
+     style="min-height: 180px;"
+     data-bs-toggle="tooltip"
+     data-bs-placement="top"
+     title="Actualiza la política de privacidad para tus usuarios">
+    <span class="material-icons" style="font-size:64px;color:#2196f3;">privacy_tip</span>
+    <div class="mt-2" style="font-size:1.25rem;font-weight:500;">Privacidad</div>
+  </a>
+</div>
+
+
+
+
+  </div>
+</div>
+
+{% endblock main_content %}

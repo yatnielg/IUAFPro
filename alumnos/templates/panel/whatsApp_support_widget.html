@@ -1,0 +1,87 @@
+<!-- WhatsApp Soporte IUAF (número: 9986603526) -->
+<div id="wa-support" style="position:fixed;right:16px;bottom:16px;z-index:9999;">
+  <button id="wa-support-toggle"
+          aria-label="Abrir soporte por WhatsApp"
+          style="padding:10px 14px;border-radius:999px;border:none;cursor:pointer;background:#25D366;color:#fff;box-shadow:0 8px 24px rgba(0,0,0,.18);display:flex;align-items:center;gap:8px;">
+    <svg width="18" height="18" viewBox="0 0 32 32" fill="currentColor" aria-hidden="true">
+      <path d="M19.11 17.6c-.28-.14-1.63-.81-1.88-.9-.25-.09-.43-.14-.61.14-.18.28-.7.9-.86 1.08-.16.18-.32.2-.6.07-.28-.14-1.16-.43-2.22-1.37-.82-.73-1.37-1.63-1.53-1.9-.16-.28-.02-.43.12-.57.12-.12.28-.32.42-.48.14-.16.18-.28.28-.47.09-.18.05-.35-.02-.49-.07-.14-.61-1.47-.84-2.02-.22-.53-.45-.46-.61-.47l-.52-.01c-.18 0-.49.07-.75.35-.25.28-.98.96-.98 2.34 0 1.38 1 2.71 1.14 2.9.14.18 1.98 3.02 4.79 4.24.67.29 1.19.46 1.6.59.67.21 1.28.18 1.76.11.54-.08 1.63-.66 1.86-1.3.23-.64.23-1.19.16-1.3-.07-.11-.25-.18-.53-.32zM16.06 29C9.39 29 4 23.61 4 16.94 4 10.28 9.39 4.88 16.06 4.88c6.66 0 12.06 5.4 12.06 12.06 0 6.67-5.4 12.06-12.06 12.06zm0-26.5C8.2 2.5 1.62 9.07 1.62 16.94c0 2.7.73 5.2 2 7.36L2 30.38l6.27-1.64c2.09 1.14 4.48 1.8 7 1.8 7.86 0 14.44-6.58 14.44-14.44S23.92 2.5 16.06 2.5z"/>
+    </svg>
+    WhatsApp
+  </button>
+
+  <div id="wa-support-panel"
+       style="display:none;width:320px;height:240px;background:#fff;border:1px solid #ddd;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.15);margin-top:8px;flex-direction:column;overflow:hidden;box-sizing:border-box;">
+    <div style="padding:12px 10px;border-bottom:1px solid #eee;font-weight:600">
+      Soporte IUAF por WhatsApp
+      <div style="font-size:12px;color:#666;font-weight:400;">¿Dudas para usar la app? Escríbenos.</div>
+    </div>
+
+    <div style="padding:12px;display:flex;flex-direction:column;gap:8px;">
+      <label for="wa-input" style="font-size:12px;color:#555;">Tu mensaje</label>
+      <input id="wa-input" placeholder="Escribe tu mensaje…"
+             style="flex:1;min-width:0;padding:10px;border:1px solid #ddd;border-radius:8px;">
+      <button id="wa-send"
+              style="padding:10px 12px;border:none;border-radius:8px;background:#25D366;color:#fff;cursor:pointer;font-weight:600;">
+        Abrir WhatsApp
+      </button>
+      <div id="wa-footnote" style="font-size:12px;color:#666;text-align:center;"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  // === CONFIGURACIÓN: número y textos ===
+  const WHATSAPP_E164   = "529986603526"; // 52 + 9986603526 (sin + ni espacios)
+  const WHATSAPP_DISPLAY= "998 660 3526";
+  const DEFAULT_MSG     = "Hola, tengo una duda sobre el uso de la app IUAF.";
+  const BRAND_NAME      = "IUAF";
+  const UTM             = ""; // si quieres tracking, pon: "utm_source=widget&utm_medium=whatsapp&utm_campaign=soporte"
+
+  const panel   = document.getElementById("wa-support-panel");
+  const toggle  = document.getElementById("wa-support-toggle");
+  const input   = document.getElementById("wa-input");
+  const sendBtn = document.getElementById("wa-send");
+  const foot    = document.getElementById("wa-footnote");
+
+  foot.textContent = `Te atenderemos por WhatsApp: ${WHATSAPP_DISPLAY}`;
+
+  function openPanel(){ panel.style.display = "flex"; setTimeout(()=>input.focus(),0); }
+  function closePanel(){ panel.style.display = "none"; }
+
+  toggle.addEventListener("click", () => {
+    const hidden = panel.style.display === "none" || panel.style.display === "";
+    hidden ? openPanel() : closePanel();
+  });
+
+  function buildWaUrl(msg){
+    const base = `https://wa.me/${WHATSAPP_E164}`;
+    const text = encodeURIComponent(msg || DEFAULT_MSG);
+    return `${base}?text=${text}${UTM ? "&" + UTM : ""}`;
+  }
+
+  function send(){
+    const msg = (input.value || DEFAULT_MSG).trim();
+    window.open(buildWaUrl(msg), "_blank", "noopener");
+    try { localStorage.setItem("wa_last_msg", msg); } catch(_){}
+  }
+
+  sendBtn.addEventListener("click", send);
+  input.addEventListener("keydown", (e)=>{ if (e.key === "Enter") { e.preventDefault(); send(); } });
+
+  // Cerrar si hace click fuera
+  document.addEventListener("mousedown", (ev) => {
+    if (panel.style.display !== "flex") return;
+    const container = document.getElementById("wa-support");
+    if (!container.contains(ev.target)) closePanel();
+  });
+
+  // Precargar último mensaje o default
+  try {
+    const last = localStorage.getItem("wa_last_msg");
+    input.value = last || DEFAULT_MSG;
+  } catch(_){
+    input.value = DEFAULT_MSG;
+  }
+})();
+</script>

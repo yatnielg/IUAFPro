@@ -1,0 +1,375 @@
+{% extends "panel/grafico.html" %}
+{% load i18n %}
+
+{% block title %}Documentos — Alumno {{ alumno.numero_estudiante }}{% endblock %}
+
+{% block main_content %}
+
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
+
+<style>
+/* Select de "Válido" visible en tema oscuro */
+.table-docs select[name$="-valido"]{
+  background:#1f2430;
+  color:#e6eaf2;
+  border:1px solid #394056;
+  border-radius:.375rem;
+  padding:.375rem .75rem;
+  height:calc(2.25rem + 2px);
+}
+
+/* Menú desplegable (lista de opciones) también oscuro */
+.table-docs select[name$="-valido"] option{
+  background:#1f2430;
+  color:#e6eaf2;
+}
+
+/* Colorear el control según selección */
+.table-docs select[name$="-valido"].is-yes{
+  background:#1f2a21;          /* verde oscuro */
+  border-color:#2e7d32;
+  color:#b9f6ca;
+}
+.table-docs select[name$="-valido"].is-no{
+  background:#2b1f20;          /* rojo oscuro */
+  border-color:#c62828;
+  color:#ff8a80;
+}
+.table-docs select[name$="-valido"].is-unknown{
+  background:#1f2430;          /* gris por defecto */
+  border-color:#394056;
+  color:#e6eaf2;
+}
+</style>
+
+
+<style>
+  .section-title {
+    font-size:.95rem; letter-spacing:.06em; text-transform:uppercase;
+    color:#9aa0a6; margin:1.25rem 0 .5rem; display:flex; align-items:center; gap:.5rem;
+  }
+  .badge-missing { opacity:.7 }
+  .table-docs td { vertical-align:middle; }
+  /* Asegurar que el input file sea visible en tu tema */
+  input[type="file"]{
+    opacity:1 !important;
+    position:static !important;
+    width:100% !important;
+    height:auto !important;
+    display:block !important;
+  }
+</style>
+
+<div class="d-flex justify-content-between align-items-center mb-2">
+  <h1 class="h4 m-0 text-white">
+    <i class="material-icons align-middle mr-1">folder_open</i>
+    Documentos — {{ alumno.numero_estudiante }}
+  </h1>
+  <div class="btn-group">
+    <a class="btn btn-outline-secondary" href="{% url 'alumnos_detalle' alumno.pk %}">
+      <i class="material-icons align-middle">arrow_back</i> Volver a ficha
+    </a>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header card-header-primary card-header-icon d-flex align-items-center">
+    <div class="card-icon"><i class="material-icons">badge</i></div>
+    <div>
+      <h4 class="card-title m-0">Subida y gestión de documentos</h4>
+
+
+
+<div class="d-flex align-items-center gap-2 mb-3">
+  <button id="btnGenLink" type="button" class="btn btn-outline-primary">
+    <i class="material-icons align-middle">link</i> Generar enlace
+  </button>
+
+  <button id="btnCopyLink" type="button" class="btn btn-outline-info" disabled>
+    <i class="material-icons align-middle">content_copy</i> Copiar
+  </button>
+
+  <button id="btnWaLink" type="button" class="btn btn-success" disabled>
+    <i class="material-icons align-middle">send</i> Enviar por WhatsApp
+  </button>
+
+  <small id="genLinkInfo" class="text-muted ml-2" style="display:none"></small>
+</div>
+
+<div id="alumnoMeta"
+     data-alumno-id="{{ alumno.pk }}"
+     data-alumno-nombre="{{ alumno.nombre }} {{ alumno.apellido_p }} {{ alumno.apellido_m }}"
+     data-alumno-numero="{{ alumno.telefono|default:'' }}">
+</div>
+
+
+
+      <p class="card-category m-0">
+        {% if info and info.programa %}
+          Programa: <strong>{{ info.programa.codigo }} — {{ info.programa.nombre }}</strong>
+          {% if docs_total %}&nbsp;•&nbsp; Cargados: <strong>{{ docs_total }}</strong>{% endif %}
+          {% if docs_last_update %}&nbsp;•&nbsp; Última actualización: <strong>{{ docs_last_update|date:"d/m/Y H:i" }}</strong>{% endif %}
+        {% else %}
+          Sin programa asignado.
+        {% endif %}
+      </p>
+    </div>
+  </div>
+
+  <div class="card-body">
+    {% if not info or not info.programa %}
+      <div class="text-muted">Este alumno no tiene Programa asignado, por lo que no hay requisitos configurados.</div>
+    {% else %}
+
+      <!-- ================== AGREGAR NUEVO DOCUMENTO ================== -->
+      <div class="section-title"><i class="material-icons">upload_file</i> Agregar documento</div>
+      <form method="post" enctype="multipart/form-data" class="mb-3">
+        {% csrf_token %}
+        <div class="form-row">
+          <div class="form-group col-md-6">
+            <label>{{ create_form.tipo.label }}</label>
+            {{ create_form.tipo }}
+            {% for e in create_form.tipo.errors %}
+              <div class="text-danger small">{{ e }}</div>
+            {% endfor %}
+          </div>
+          <div class="form-group col-md-6">
+            <label>{{ create_form.archivo.label }}</label>
+            {{ create_form.archivo }}
+            {% for e in create_form.archivo.errors %}
+              <div class="text-danger small">{{ e }}</div>
+            {% endfor %}
+          </div>
+        </div>
+        {% if create_form.non_field_errors %}
+          <div class="text-danger small mb-2">
+            {% for e in create_form.non_field_errors %}{{ e }}<br>{% endfor %}
+          </div>
+        {% endif %}
+        <button type="submit" name="add" class="btn btn-primary">
+          <i class="material-icons align-middle">add</i> Agregar
+        </button>
+      </form>
+
+      <!-- Tipos faltantes -->
+      {% if faltantes %}
+        <div class="mb-3">
+          <strong>Faltantes:</strong>
+          {% for t in faltantes %}
+            <span class="badge badge-light badge-missing">{{ t.nombre }}</span>
+          {% endfor %}
+        </div>
+      {% endif %}
+
+      <!-- ================== LISTA / EDICIÓN DE EXISTENTES ================== -->
+      <div class="section-title"><i class="material-icons">description</i> Documentos cargados</div>
+
+      <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        {{ formset.management_form }}
+
+        {% if formset.non_form_errors %}
+          <div class="alert alert-danger">
+            {% for e in formset.non_form_errors %}{{ e }}<br>{% endfor %}
+          </div>
+        {% endif %}
+
+        <div class="table-responsive">
+          <table id="tabla-docs" class="table table-hover table-docs">
+            <thead>
+              <tr>
+                <th style="width:26%">Tipo</th>
+                <th style="width:30%">Archivo (reemplazar)</th>
+                <th style="width:14%">Válido</th>
+                <th style="width:22%">Notas</th>
+                <th style="width:8%">Eliminar</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for f in formset %}
+              <tr>
+                <!-- OBLIGATORIO: incluye el hidden id dentro de la fila -->
+                <td>
+                  {{ f.id }}  {# hidden #}
+                  {% if f.instance and f.instance.tipo %}
+                    {{ f.instance.tipo.nombre }}
+                  {% else %}
+                    <span class="text-muted">—</span>
+                  {% endif %}
+                  <div class="small text-muted">
+                    {% if f.instance and f.instance.archivo %}
+                      <a href="{{ f.instance.archivo.url }}" target="_blank" rel="noopener">
+                        <i class="material-icons align-middle">open_in_new</i> Abrir actual
+                      </a>
+                    {% else %}Sin archivo{% endif %}
+                  </div>
+
+                  {% if f.non_field_errors %}
+                    <div class="text-danger small mt-1">
+                      {% for e in f.non_field_errors %}{{ e }}<br>{% endfor %}
+                    </div>
+                  {% endif %}
+                </td>
+
+                <td>
+                  {{ f.archivo }}
+                  {% for e in f.archivo.errors %}
+                    <div class="text-danger small">{{ e }}</div>
+                  {% endfor %}
+                </td>
+
+                <td>
+                  <label class="mb-0">
+                    {{ f.valido }} <span class="small">Marcar como válido</span>
+                  </label>
+                  {% for e in f.valido.errors %}
+                    <div class="text-danger small">{{ e }}</div>
+                  {% endfor %}
+                </td>
+
+                <td>
+                  {{ f.notas }}
+                  {% for e in f.notas.errors %}
+                    <div class="text-danger small">{{ e }}</div>
+                  {% endfor %}
+                </td>
+
+                <td>
+                  {% if formset.can_delete and f.DELETE %}
+                    <label class="mb-0">
+                      {{ f.DELETE }} <span class="small">Eliminar fila</span>
+                    </label>
+                  {% endif %}
+                </td>
+              </tr>
+              {% empty %}
+              <tr>
+                <td colspan="5" class="text-muted">Aún no hay documentos.</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+
+        <button type="submit" class="btn btn-primary">
+          <i class="material-icons align-middle">save</i> Guardar cambios
+        </button>
+      </form>
+
+    {% endif %}
+  </div>
+</div>
+
+<!-- Scripts (DataTables opcional) -->
+<script src="https://code.jquery.com/jquery-3.7.1.min.js" integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFSX8GJv7vC18o=" crossorigin="anonymous"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+<script>
+  (function(){
+    if (window.jQuery && $.fn.DataTable) {
+      $('#tabla-docs').DataTable({
+        paging: false,
+        searching: false,
+        info: false,
+        order: []
+      });
+    }
+  })();
+</script>
+
+
+<script>
+(function(){
+  function paint(sel){
+    // Normaliza y asigna clase visual
+    const v = (sel.value || '').toLowerCase();
+    sel.classList.remove('is-yes','is-no','is-unknown');
+    if (v === 'si' || v === 'sí' || v === 'true' || v === '1') sel.classList.add('is-yes');
+    else if (v === 'no' || v === 'false' || v === '0')          sel.classList.add('is-no');
+    else                                                        sel.classList.add('is-unknown');
+  }
+
+  const selects = document.querySelectorAll("select[name$='-valido']");
+  selects.forEach(s => { paint(s); s.addEventListener('change', ()=>paint(s)); });
+})();
+</script>
+
+
+
+
+
+<script>
+(function(){
+  const meta = document.getElementById('alumnoMeta');
+  const alumnoId   = meta?.dataset.alumnoId;
+  const alumnoNom  = meta?.dataset.alumnoNombre || '';
+  let   alumnoTel  = (meta?.dataset.alumnoNumero || '').replace(/\D/g, ''); // solo dígitos
+
+  const btnGen = document.getElementById('btnGenLink');
+  const btnCopy= document.getElementById('btnCopyLink');
+  const btnWa  = document.getElementById('btnWaLink');
+  const info   = document.getElementById('genLinkInfo');
+
+  let lastUrl = '';
+
+  async function generarLink(){
+    if (!alumnoId) return alert('Falta ID de alumno.');
+    btnGen.disabled = true; btnGen.innerText = 'Generando...';
+    try {
+      const resp = await fetch("{% url 'generar_enlace_subida_json' 0 %}".replace('/0/', `/${alumnoId}/`), {
+        method: 'POST',
+        headers: {'X-CSRFToken': getCookie('csrftoken')}
+      });
+      const data = await resp.json();
+      if (!data.ok) throw new Error('No se pudo generar el enlace.');
+      lastUrl = data.url;
+      btnCopy.disabled = false;
+      btnWa.disabled   = false;
+      info.style.display = 'inline';
+      info.textContent = `Link creado (vence ${new Date(data.expires_at).toLocaleString()})`;
+      btnGen.innerHTML = '<i class="material-icons align-middle">refresh</i> Volver a generar';
+    } catch(e){
+      alert(e.message || e);
+    } finally {
+      btnGen.disabled = false;
+    }
+  }
+
+  function copiarLink(){
+    if (!lastUrl) return;
+    navigator.clipboard.writeText(lastUrl).then(()=>{
+      btnCopy.innerHTML = '<i class="material-icons align-middle">check</i> Copiado';
+      setTimeout(()=>btnCopy.innerHTML = '<i class="material-icons align-middle">content_copy</i> Copiar', 1500);
+    });
+  }
+
+  function enviarWhatsApp(){
+    if (!lastUrl) return;
+    // Pide teléfono si no lo tenemos
+    if (!alumnoTel){
+      const t = prompt('Número de WhatsApp con código de país (ej. 5215512345678):', '');
+      if (!t) return;
+      alumnoTel = t.replace(/\D/g, '');
+    }
+    const msg = `Hola 👋\n\n` +
+            `Somos del equipo *IUAF*. Le compartimos este enlace seguro para que pueda subir sus documentos:\n${lastUrl}\n\n` +
+            `Por favor, recuerde que el enlace tiene una vigencia de *7 días*. ` +
+            `Si tiene alguna duda, puede responder a este mensaje o comunicarse con nosotros.`;
+    const waUrl = `https://wa.me/${alumnoTel}?text=${encodeURIComponent(msg)}`;
+    window.open(waUrl, '_blank');
+  }
+
+  function getCookie(name){
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop().split(';').shift();
+  }
+
+  if (btnGen) btnGen.addEventListener('click', generarLink);
+  if (btnCopy) btnCopy.addEventListener('click', copiarLink);
+  if (btnWa) btnWa.addEventListener('click', enviarWhatsApp);
+})();
+</script>
+
+
+
+{% endblock %}

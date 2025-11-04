@@ -1,0 +1,953 @@
+{% extends "panel/grafico.html" %}
+{% load static %}
+
+{% block main_content %}
+
+<style>
+  .section-title{font-size:.95rem;letter-spacing:.06em;text-transform:uppercase;color:#9aa0a6;margin:1.25rem 0 .5rem;display:flex;align-items:center;gap:.5rem}
+  .section-title .material-icons{font-size:1.1rem}
+  .row{padding-left:50px;padding-right:50px}
+  @media (max-width:576px){.row{padding-left:18px;padding-right:18px}}
+  .age-badge{display:inline-block;min-width:54px;text-align:center;padding:.25rem .5rem;border-radius:999px;font-size:.85rem;background:rgba(255,255,255,.08)}
+  .nav-pills .nav-link{border-radius:999px}
+  .tab-pane{padding-top:.75rem}
+  /* solo lectura visual */
+  .is-readonly{background:#2b2b2b;opacity:.9;pointer-events:none}
+</style>
+
+<style>
+  .form-group label.required::after{content:" *";color:#d32f2f;font-weight:600}
+  .form-control:required:invalid{box-shadow:none;border-color:#d32f2f}
+</style>
+
+<style>
+  .curp-loading{display:flex;align-items:center;gap:.5rem;margin-top:.25rem;font-size:.9rem;color:#9aa0a6}
+  .curp-spinner{width:16px;height:16px;border:2px solid rgba(255,255,255,.2);border-top-color:#9aa0a6;border-radius:50%;animation:curpSpin .9s linear infinite}
+  @keyframes curpSpin{to{transform:rotate(360deg)}}
+</style>
+
+<style>
+.is-readonly-input {
+    background-color: #ffffffff;
+    opacity: 1;
+    pointer-events: none;
+
+    padding: .375rem .75rem;
+    font-size: 1rem;
+    line-height: 1.5;
+    color: #7f8994ff;
+    background-color: #fff;
+    background-clip: padding-box;
+    transition: border-color .15s ease-in-out,box-shadow .15s ease-in-out;
+}
+</style>
+
+{% if form.errors %}
+  <pre class="text-warning small">{{ form.errors }}</pre>
+{% endif %}
+
+<div class="col-md-10 mx-auto">
+  <div class="card">
+    <div class="card-header card-header-primary card-header-icon">
+      <div class="card-icon"><i class="material-icons">person</i></div>
+      <h4 class="card-title">{% if modo == "editar" %}Editar Alumno{% else %}Nuevo Alumno{% endif %}</h4>
+    </div>
+
+    <div class="card-body px-6">
+      <form method="post" class="needs-validation" novalidate id="alumnoForm">
+        {% csrf_token %}
+
+        {# ---------- Tabs ---------- #}
+        <ul class="nav nav-pills nav-justified mb-4" id="wizardTabs" role="tablist">
+          <li class="nav-item">
+            <a class="nav-link active" id="tab-personales" data-toggle="tab" href="#pane-personales" role="tab">
+              <i class="material-icons align-middle">account_circle</i> &nbsp;Datos personales
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" id="tab-ubicacion" data-toggle="tab" href="#pane-ubicacion" role="tab">
+              <i class="material-icons align-middle">place</i> &nbsp;Ubicación y plan
+            </a>
+          </li>
+
+          {% if modo == "editar" %}
+          <li class="nav-item">
+            <a class="nav-link" id="tab-plan" data-toggle="tab" href="#pane-plan" role="tab">
+              <i class="material-icons align-middle">payments</i> &nbsp;Plan (editar)
+            </a>
+          </li>
+
+          {% if can_view_pagos %}
+          <li class="nav-item">
+            <a class="nav-link" id="tab-pagos" data-toggle="tab" href="#pane-pagos" role="tab">
+              <i class="material-icons align-middle">receipt_long</i> &nbsp;Pagos (DIARIO)
+            </a>
+          </li>
+          {% endif %}
+          {% endif %}
+        </ul>
+
+        <div class="tab-content" id="wizardContent">
+
+          {# ==================== PANE 1 ==================== #}
+          <div
+            class="tab-pane fade show active"
+            id="pane-personales"
+            role="tabpanel"
+            data-required="#{{ form.nombre.auto_id }}{% if modo == 'editar' %},#{{ form.numero_estudiante.auto_id }}{% endif %}"
+          >
+            <div class="section-title"><i class="material-icons">badge</i> Identificación</div>
+            <div class="row">
+              <div class="form-group col-md-4">
+                <label for="{{ form.numero_estudiante.id_for_label }}" class="md-label-floating">
+                  {{ form.numero_estudiante.label }}
+                  {% if modo == "editar" and form.numero_estudiante.field.required %}<span class="text-danger">*</span>{% endif %}
+                </label>
+
+                {% if modo == "editar" %}
+                  {{ form.numero_estudiante }}
+                {% else %}
+                  {{ form.numero_estudiante }}
+                  <input type="text" class="form-control" value="Se asignará automáticamente al guardar" disabled>
+                {% endif %}
+
+                {% for error in form.numero_estudiante.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
+              </div>
+
+              <div class="form-group col-md-4">
+                <label for="{{ form.curp.id_for_label }}" class="md-label-floating {% if form.curp.field.required %}required{% endif %}">
+                  {{ form.curp.label }}
+                </label>
+                <div class="input-group">
+                  {{ form.curp }}
+                  <div class="input-group-append">
+                    <button class="btn btn-outline-primary btn-sm" type="button" id="btnCurpLookup" title="Buscar datos por CURP">
+                      <i class="material-icons" style="font-size:18px;vertical-align:middle;">search</i>
+                    </button>
+                  </div>
+                </div>
+                <small id="curpLookupStatus" class="form-text text-muted" style="display:none;"></small>
+                {% for error in form.curp.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
+                <div id="curpLoading" class="curp-loading" style="display:none;" aria-live="polite">
+                  <div class="curp-spinner" aria-hidden="true"></div><span>Cargando datos…</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="section-title"><i class="material-icons">account_circle</i> Datos personales</div>
+            <div class="row">
+              <div class="form-group col-md-4">
+                <label for="{{ form.nombre.id_for_label }}" class="md-label-floating">
+                  {{ form.nombre.label }}{% if form.nombre.field.required %} <span class="text-danger">*</span>{% endif %}
+                </label>
+                {{ form.nombre }}
+                {% for error in form.nombre.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
+              </div>
+              <div class="form-group col-md-4">
+                <label for="{{ form.apellido_p.id_for_label }}" class="md-label-floating {% if form.apellido_p.field.required %}required{% endif %}">
+                  {{ form.apellido_p.label }}
+                </label>
+                {{ form.apellido_p }}
+                {% for error in form.apellido_p.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
+              </div>
+              <div class="form-group col-md-4">
+                <label for="{{ form.apellido_m.id_for_label }}" class="md-label-floating {% if form.apellido_m.field.required %}required{% endif %}">
+                  {{ form.apellido_m.label }}
+                </label>
+                {{ form.apellido_m }}
+                {% for error in form.apellido_m.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
+              </div>
+            </div>
+
+            <div class="row">
+              <div class="form-group col-md-4">
+                <label for="{{ form.fecha_nacimiento.id_for_label }}" class="md-label-floating">{{ form.fecha_nacimiento.label }}</label>
+                <div class="d-flex align-items-center gap-2">
+                  {{ form.fecha_nacimiento }}
+                  <small class="age-badge ml-2" id="edadBadge">—</small>
+                </div>
+                {% for error in form.fecha_nacimiento.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
+              </div>
+              <div class="form-group col-md-4">
+                <label for="{{ form.sexo.id_for_label }}" class="md-label-floating">{{ form.sexo.label }}</label>
+                {{ form.sexo }}
+                {% for error in form.sexo.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
+              </div>
+            </div>
+
+            <div class="section-title"><i class="material-icons">mail</i> Contacto</div>
+            <div class="row">
+              <div class="form-group col-md-4">
+                <label for="{{ form.email.id_for_label }}" class="md-label-floating {% if form.email.field.required %}required{% endif %}">
+                  {{ form.email.label }}
+                </label>
+                {{ form.email }}
+                {% for error in form.email.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
+              </div>
+
+              <div class="form-group col-md-4">
+                <label for="{{ form.email_institucional.id_for_label }}" class="md-label-floating {% if form.email_institucional.field.required %}required{% endif %}">
+                  {{ form.email_institucional.label }}
+                </label>
+                {{ form.email_institucional }}
+                {% for error in form.email_institucional.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
+              </div>
+
+              <div class="form-group col-md-4">
+                <label for="{{ form.telefono.id_for_label }}" class="md-label-floating {% if form.telefono.field.required %}required{% endif %}">
+                  {{ form.telefono.label }}
+                </label>
+                {{ form.telefono }}
+                {% for error in form.telefono.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
+              </div>
+            </div>
+
+            <div class="d-flex justify-content-between mt-3">
+              <div>
+                {% if can_view_documentos and alumno and alumno.pk %}
+                  <a class="btn btn-outline-primary" href="{% url 'alumnos_documentos_editar' alumno.pk %}">Documentos</a>
+                {% endif %}
+              </div>
+              <button class="btn btn-primary" type="button" data-next="#tab-ubicacion">
+                Siguiente <i class="material-icons align-middle">arrow_forward</i>
+              </button>
+            </div>
+          </div>
+
+          {# ==================== PANE 2 ==================== #}
+          <div class="tab-pane fade" id="pane-ubicacion" role="tabpanel"
+               data-required="#{{ form.pais.auto_id }}">
+            <div class="section-title"><i class="material-icons">place</i> Ubicación</div>
+            <div class="row">
+              <div class="form-group col-md-12">
+                <label for="{{ form.pais.id_for_label }}" class="md-label-floating">{{ form.pais.label }}</label>
+                {{ form.pais }}
+                {% for error in form.pais.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
+              </div>
+              {# estado oculto por ahora #}
+            </div>
+
+            <div class="section-title"><i class="material-icons">payments</i> Plan (Asignación)</div>
+            <div class="row">
+              <div class="form-group col-md-12">
+                <label class="md-label-floating">Plan financiero</label>
+
+                {% if modo == "editar" and alumno.informacionEscolar %}
+                  <input type="text" class="form-control is-readonly"
+                         value="Programa: {{ alumno.informacionEscolar.programa|default:'—' }}{% if alumno.informacionEscolar.financiamiento %} • Financiamiento: {{ alumno.informacionEscolar.financiamiento }}{% endif %}"
+                         readonly>
+                  {{ form.informacionEscolar.as_hidden }}
+                {% elif modo == "editar" %}
+                  <input type="text" class="form-control is-readonly"
+                         value="Este alumno aún no tiene plan asignado."
+                         readonly>
+                  {{ form.informacionEscolar.as_hidden }}
+                {% else %}
+                  <input type="text" class="form-control is-readonly"
+                         value="El plan se asigna después de crear al alumno."
+                         readonly>
+                  {{ form.informacionEscolar.as_hidden }}
+                {% endif %}
+
+                {% for error in form.informacionEscolar.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
+              </div>
+            </div>
+
+            <div class="d-flex justify-content-between mt-3">
+              <button class="btn btn-secondary" type="button" data-prev="#tab-personales">
+                <i class="material-icons align-middle">arrow_back</i> Anterior
+              </button>
+
+              {% if not modo or modo != "editar" %}
+                <button type="submit" class="btn btn-fill btn-primary">
+                  <i class="material-icons align-middle">save</i>
+                  Crear alumno
+                </button>
+              {% else %}
+                <button class="btn btn-primary" type="button" data-next="#tab-plan">
+                  Siguiente <i class="material-icons align-middle">arrow_forward</i>
+                </button>
+              {% endif %}
+            </div>
+          </div>
+
+          {# ==================== PANE 3 (editar) ==================== #}
+          {% if modo == "editar" %}
+          <div class="tab-pane fade" id="pane-plan" role="tabpanel">
+            <div class="section-title"><i class="material-icons">school</i> Programa y financiamiento</div>
+            <div class="row">
+              <div class="form-group col-md-6">
+                <label for="{{ form_info.programa.id_for_label }}">{{ form_info.programa.label }}</label>
+                {{ form_info.programa }}
+                {% for error in form_info.programa.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
+              </div>
+              <div class="form-group col-md-6">
+                <label for="{{ form_info.financiamiento.id_for_label }}">{{ form_info.financiamiento.label }}</label>
+                {{ form_info.financiamiento }}
+                {% for error in form_info.financiamiento.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
+              </div>
+            </div>
+
+            <div class="section-title"><i class="material-icons">payments</i> Precios y reinscripciones</div>
+
+            <div class="row">
+              <div class="form-group col-md-4">
+                <label for="{{ form_info.precio_colegiatura.id_for_label }}">{{ form_info.precio_colegiatura.label }}</label>
+                {{ form_info.precio_colegiatura }}
+              </div>
+              <div class="form-group col-md-4">
+                <label for="{{ form_info.monto_descuento.id_for_label }}">{{ form_info.monto_descuento.label }}</label>
+                {{ form_info.monto_descuento }}
+              </div>
+              <div class="form-group col-md-4">
+                <label for="{{ form_info.precio_final.id_for_label }}">{{ form_info.precio_final.label }}</label>
+                {{ form_info.precio_final }}
+              </div>
+            </div>
+
+            <div class="row">
+              <div class="form-group col-md-3">
+                <label for="{{ form_info.meses_programa.id_for_label }}">{{ form_info.meses_programa.label }}</label>
+                {{ form_info.meses_programa }}
+              </div>
+              <div class="form-group col-md-3">
+                <label for="{{ form_info.numero_reinscripciones.id_for_label }}">{{ form_info.numero_reinscripciones.label }}</label>
+                {{ form_info.numero_reinscripciones }}
+              </div>
+              <div class="form-group col-md-3">
+                <label for="{{ form_info.precio_inscripcion.id_for_label }}">{{ form_info.precio_inscripcion.label }}</label>
+                {{ form_info.precio_inscripcion }}
+              </div>
+              <div class="form-group col-md-3">
+                <label for="{{ form_info.precio_reinscripcion.id_for_label }}">{{ form_info.precio_reinscripcion.label }}</label>
+                {{ form_info.precio_reinscripcion }}
+              </div>
+            </div>
+
+            <div class="row">
+              <div class="form-group col-md-6">
+                <label for="{{ form_info.precio_titulacion.id_for_label }}">{{ form_info.precio_titulacion.label }}</label>
+                {{ form_info.precio_titulacion }}
+              </div>
+              <div class="form-group col-md-6">
+                <label for="{{ form_info.precio_equivalencia.id_for_label }}">{{ form_info.precio_equivalencia.label }}</label>
+                {{ form_info.precio_equivalencia }}
+              </div>
+            </div>
+
+            <div class="row">
+              <div class="form-group col-md-6">
+                <label for="{{ form_info.sede.id_for_label }}">{{ form_info.sede.label }}</label>
+                {{ form_info.sede }}
+              </div>
+            </div>
+
+            {# ======= Sección combinada: Matrícula + Fechas + Grupo ======= #}
+            <div class="section-title"><i class="material-icons">tag</i> Matrícula, fechas y grupo</div>
+            <div class="row">
+              <div class="form-group col-md-4">
+                <label for="{{ form_info.matricula.id_for_label }}">{{ form_info.matricula.label }}</label>
+                {{ form_info.matricula }}
+              </div>
+              <div class="form-group col-md-4">
+                <label for="{{ form_info.inicio_programa.id_for_label }}">{{ form_info.inicio_programa.label }}</label>
+                {{ form_info.inicio_programa }}
+              </div>
+              <div class="form-group col-md-4">
+                <label for="{{ form_info.fin_programa.id_for_label }}">{{ form_info.fin_programa.label }}</label>
+                {{ form_info.fin_programa }}
+              </div>
+              <div class="form-group col-md-4">
+                <label for="{{ form_info.grupo.id_for_label }}">{{ form_info.grupo.label }}</label>
+                {{ form_info.grupo }}
+              </div>
+            </div>
+            {# ======= Fin sección combinada ======= #}
+
+            <div class="section-title"><i class="material-icons">cast_for_education</i> Modalidad y estatus</div>
+            <div class="row">
+              <div class="form-group col-md-4">
+                <label for="{{ form_info.modalidad.id_for_label }}">{{ form_info.modalidad.label }}</label>
+                {{ form_info.modalidad }}
+              </div>
+              <div class="form-group col-md-4">
+                <label for="{{ form_info.estatus_academico.id_for_label }}">{{ form_info.estatus_academico.label }}</label>
+                {{ form_info.estatus_academico }}
+              </div>
+              <div class="form-group col-md-4">
+                <label for="{{ form_info.estatus_administrativo.id_for_label }}">{{ form_info.estatus_administrativo.label }}</label>
+                {{ form_info.estatus_administrativo }}
+              </div>
+            </div>
+
+            <div class="section-title"><i class="material-icons">receipt</i> Facturación</div>
+            <div class="row">
+              <div class="form-group col-md-6">
+                <div class="form-check mt-2">
+                  <label class="form-check-label" for="{{ form_info.requiere_datos_de_facturacion.id_for_label }}">
+                    {{ form_info.requiere_datos_de_facturacion }}
+                    ¿Requiere datos de facturación?
+                    <span class="form-check-sign"><span class="check"></span></span>
+                  </label>
+                </div>
+                {% for error in form_info.requiere_datos_de_facturacion.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
+              </div>
+            </div>
+
+            <div class="d-flex justify-content-between mt-3">
+              <button class="btn btn-secondary" type="button" data-prev="#tab-ubicacion">
+                <i class="material-icons align-middle">arrow_back</i> Anterior
+              </button>
+              <button type="submit" class="btn btn-fill btn-primary">
+                <i class="material-icons align-middle">save</i>
+                Guardar cambios
+              </button>
+            </div>
+          </div>
+          {% endif %}
+
+          {# ==================== PANE 4 (pagos) ==================== #}
+          {% if modo == "editar" %}
+          <div class="tab-pane fade" id="pane-pagos" role="tabpanel">
+            <div class="section-title"><i class="material-icons">receipt_long</i> Pagos asociados (DIARIO)</div>
+
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <div class="small text-muted">
+                Total registros: <strong>{{ pagos|length }}</strong>
+                &nbsp;•&nbsp;
+                Suma de montos: <strong>$ {{ pagos_total }}</strong>
+              </div>
+              <div>
+                <a class="btn btn-outline-primary btn-sm" href="/admin/alumnos/pagodiario/?alumno__id__exact={{ alumno.id }}" target="_blank">Ver en Admin</a>
+              </div>
+            </div>
+
+            <div class="table-responsive">
+              <table id="tabla-pagos-alumno" class="table table-striped table-hover" width="100%">
+                <thead>
+                  <tr>
+                    <th>Fecha</th><th>Folio</th><th>Monto</th><th>Concepto</th><th>Detalle</th><th>Programa</th><th>Forma</th><th>Sede</th><th>CURP</th><th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for p in pagos %}
+                  <tr>
+                    <td>{% if p.fecha %}{{ p.fecha|date:"d/m/Y" }}{% else %}—{% endif %}</td>
+                    <td>{{ p.folio|default:"—" }}</td>
+                    <td>{% if p.monto != None %}$ {{ p.monto }}{% else %}—{% endif %}</td>
+                    <td>{{ p.concepto|default:"—" }}</td>
+                    <td>{{ p.pago_detalle|default:"—" }}</td>
+                    <td>{{ p.programa|default:"—" }}</td>
+                    <td>{{ p.forma_pago|default:"—" }}</td>
+                    <td>{{ p.sede|default:"—" }}</td>
+                    <td>{{ p.curp|default:"—" }}</td>
+                    <td class="text-right">
+                      <a href="/admin/alumnos/pagodiario/{{ p.pk }}/change/" class="btn btn-link text-info btn-just-icon like" title="Ver/Editar (admin)">
+                        <i class="material-icons">visibility</i>
+                      </a>
+                    </td>
+                  </tr>
+                  {% empty %}
+                  <tr><td colspan="10" class="text-center text-muted py-4">Este alumno no tiene pagos asociados todavía.</td></tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          {% endif %}
+        </div>
+
+        {% if form.non_field_errors %}
+          <div class="alert alert-danger mt-3">
+            {% for error in form.non_field_errors %}<div>{{ error }}</div>{% endfor %}
+          </div>
+        {% endif %}
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Edad visual
+  (function(){
+    const input=document.getElementById("{{ form.fecha_nacimiento.auto_id }}");
+    const badge=document.getElementById("edadBadge");
+    if(!input||!badge) return;
+    function calcEdad(){
+      if(!input.value){badge.textContent="—";return;}
+      const hoy=new Date(), fn=new Date(input.value);
+      if(isNaN(fn)){badge.textContent="—";return;}
+      let e=hoy.getFullYear()-fn.getFullYear();
+      const m=hoy.getMonth()-fn.getMonth();
+      if(m<0||(m===0&&hoy.getDate()<fn.getDate())) e--;
+      badge.textContent=e+" años";
+    }
+    input.addEventListener('change',calcEdad); calcEdad();
+  })();
+</script>
+
+<script>
+  // Navegación y validación de tabs + recordar tab activo
+  (function(){
+    const TAB_KEY="alumno_active_tab";
+    const serverActiveTab="{{ active_tab|default:'' }}"; // p.ej. "#pane-plan"
+
+    function goToTabByHref(href){
+      const trigger=document.querySelector('a[href="'+href+'"]');
+      if(trigger){ $(trigger).tab('show'); return true; }
+      return false;
+    }
+    function goToTab(selector){
+      const trigger=document.querySelector(selector);
+      if(trigger) $(trigger).tab('show');
+    }
+
+    // botones sig/ant
+    document.querySelectorAll('[data-next]').forEach(btn=>{
+      btn.addEventListener('click',function(){
+        const pane=this.closest('.tab-pane'); if(pane && !validatePane(pane)) return;
+        goToTab(this.getAttribute('data-next'));
+      });
+    });
+    document.querySelectorAll('[data-prev]').forEach(btn=>{
+      btn.addEventListener('click',function(){goToTab(this.getAttribute('data-prev'));});
+    });
+
+    // guarda/recupera tab activo
+    $('a[data-toggle="tab"]').on('shown.bs.tab', function (e) {
+      localStorage.setItem(TAB_KEY, e.target.getAttribute('href'));
+    });
+
+    // al cargar: prioridad 1) active_tab del servidor; 2) el último en LocalStorage; 3) fallback por errores
+    (function(){
+      if(serverActiveTab && goToTabByHref(serverActiveTab)) return;
+
+      const panes=['#pane-personales','#pane-ubicacion','#pane-plan','#pane-pagos'];
+      let moved=false;
+      for(const id of panes){
+        const p=document.querySelector(id);
+        if(p && (p.querySelector('.text-danger') || p.querySelector('.alert-danger'))){
+          goToTabByHref(id); moved=true; break;
+        }
+      }
+      if(!moved){
+        const last=localStorage.getItem(TAB_KEY);
+        if(last) goToTabByHref(last);
+      }
+    })();
+
+    function validatePane(pane){
+      const reqSel=pane.getAttribute('data-required'); if(!reqSel) return true;
+      const required=reqSel.split(',').map(s=>s.trim()).map(sel=>document.querySelector(sel)).filter(Boolean);
+      let ok=true;
+      required.forEach(el=>{
+        const wrap=el.closest('.form-group')||el.parentElement;
+        if(!el.value||el.value.trim()===""){ok=false; if(wrap) wrap.classList.add('has-error');}
+        else {if(wrap) wrap.classList.remove('has-error');}
+      });
+if(!ok){
+  // Mensaje más específico por pane (opcional)
+  const paneId = pane?.id || '';
+  const msg = (paneId === 'pane-ubicacion')
+    ? 'Selecciona el país antes de continuar.'
+    : 'Completa los campos requeridos para continuar.';
+
+  if (window.notify) {
+    notify(msg, 'warning', 'top', 'right', 'error');
+  } else {
+    alert(msg);
+  }
+}
+      return ok;
+    }
+  })();
+</script>
+
+<script>
+(function(){
+  const selPrograma=document.getElementById("{{ form_info.programa.auto_id }}");
+  const selFinan=document.getElementById("{{ form_info.financiamiento.auto_id }}");
+
+  const inputMeses=document.getElementById("{{ form_info.meses_programa.auto_id }}");
+  const inputCol=document.getElementById("{{ form_info.precio_colegiatura.auto_id }}");
+  const inputIns=document.getElementById("{{ form_info.precio_inscripcion.auto_id }}");
+  const inputReinsc=document.getElementById("{{ form_info.precio_reinscripcion.auto_id }}");  // <-- NUEVO
+  const inputTit=document.getElementById("{{ form_info.precio_titulacion.auto_id }}");
+  const inputEq=document.getElementById("{{ form_info.precio_equivalencia.auto_id }}");
+  const inputReins=document.getElementById("{{ form_info.numero_reinscripciones.auto_id }}");
+
+  const inputDesc=document.getElementById("{{ form_info.monto_descuento.auto_id }}");
+  const inputFinal=document.getElementById("{{ form_info.precio_final.auto_id }}");
+
+  if(!selPrograma) return;
+
+  async function cargarPrograma(pk){
+    if(!pk) return;
+    try{
+      const resp=await fetch(`/alumnos/api/programa/${pk}/`,{headers:{"X-Requested-With":"XMLHttpRequest"}});
+      if(!resp.ok) return;
+      const data=await resp.json();
+      if(inputMeses) inputMeses.value=data.meses_programa ?? "";
+      if(inputCol)   inputCol.value  =data.precio_colegiatura ?? "";
+      if(inputIns)   inputIns.value  =data.precio_inscripcion ?? "";
+      if(inputReinsc) inputReinsc.value = data.precio_reinscripcion ?? "";   // <-- NUEVO
+      if(inputTit)   inputTit.value  =data.precio_titulacion ?? "";
+      if(inputEq)    inputEq.value   =data.precio_equivalencia ?? "";
+      if(inputReins) inputReins.value=data.numero_reinscripciones ?? "";
+      recomputarFinalSegunFinanciamiento();
+    }catch(e){console.warn("No se pudo cargar info del programa",e);}
+  }
+
+  function toNumber(v){ if(v==null) return 0; const n=parseFloat(String(v).replace(/,/g,"")); return isNaN(n)?0:n; }
+  function setDesc(v){ if(!inputDesc) return; const num=Number.isFinite(v)?v:toNumber(v); inputDesc.value=(num||0).toFixed(2); }
+  function setFinal(v){ if(!inputFinal) return; const num=Number.isFinite(v)?v:toNumber(v); inputFinal.value=(num||0).toFixed(2); }
+
+  async function cargarFinanciamiento(pk){
+    if(!pk){ setDesc(0); recomputarFinal(); return; }
+    try{
+      const resp=await fetch(`/alumnos/api/financiamiento/${pk}/`,{headers:{"X-Requested-With":"XMLHttpRequest"}});
+      if(!resp.ok) return;
+      const data=await resp.json();
+      aplicarFinanciamiento(data);
+    }catch(e){console.warn("No se pudo cargar info de financiamiento",e);}
+  }
+
+  function aplicarFinanciamiento(data){
+    const coleg=toNumber(inputCol?.value); let descuento=0;
+    if(data?.tipo==="porcentaje"){ descuento=(coleg*(data.porcentaje||0))/100.0; }
+    else if(data?.tipo==="monto"){ descuento=toNumber(data.monto||0); }
+    setDesc(descuento); recomputarFinal();
+  }
+
+  function recomputarFinal(){
+    if(!inputFinal) return;
+    const coleg=toNumber(inputCol?.value);
+    const desc=toNumber(inputDesc?.value);
+    setFinal(coleg - desc);
+  }
+
+  function recomputarFinalSegunFinanciamiento(){
+    const fid=selFinan?.value;
+    if(fid){cargarFinanciamiento(fid);} else {recomputarFinal();}
+  }
+
+  selPrograma.addEventListener("change",e=>cargarPrograma(e.target.value));
+  if(selFinan) selFinan.addEventListener("change",e=>cargarFinanciamiento(e.target.value));
+  if(inputDesc) inputDesc.addEventListener("input",recomputarFinal);
+  if(inputCol)  inputCol.addEventListener("input",recomputarFinal);
+})();
+</script>
+
+{% comment %} Ajax CURP {% endcomment %}
+<script>
+(function(){
+  const btn=document.getElementById("btnCurpLookup");
+  const inputCurp=document.getElementById("{{ form.curp.auto_id }}");
+  const inputNombre=document.getElementById("{{ form.nombre.auto_id }}");
+  const inputApP=document.getElementById("{{ form.apellido_p.auto_id }}");
+  const inputApM=document.getElementById("{{ form.apellido_m.auto_id }}");
+  const inputFN=document.getElementById("{{ form.fecha_nacimiento.auto_id }}");
+  const inputSexo=document.getElementById("{{ form.sexo.auto_id }}");
+  const statusEl=document.getElementById("curpLookupStatus");
+  const loadingEl=document.getElementById("curpLoading");
+  const url="{% url 'api_curp_lookup' %}";
+  let countdownTimer=null;
+
+  function showStatus(msg,isError=false){ if(!statusEl) return; statusEl.style.display="block"; statusEl.className="form-text "+(isError?"text-danger":"text-muted"); statusEl.textContent=msg; }
+  function hideStatus(){ if(!statusEl) return; statusEl.style.display="none"; }
+  function showLoading(){ if(loadingEl) loadingEl.style.display="flex"; }
+  function hideLoading(){ if(loadingEl) loadingEl.style.display="none"; }
+
+  function startCountdown(seconds){
+    if(countdownTimer) clearInterval(countdownTimer);
+    let remaining=Number(seconds)||40;
+    const update=()=>{ showStatus(`Consultando datos en gob.mx… esto puede tardar ~${remaining}s.`,false); remaining-=1; if(remaining<0){ clearInterval(countdownTimer); countdownTimer=null; } };
+    update(); countdownTimer=setInterval(update,1000);
+  }
+  function stopCountdown(){ if(countdownTimer){ clearInterval(countdownTimer); countdownTimer=null; } }
+
+  function toYmd(ddmmyyyy){
+    if(!ddmmyyyy||!ddmmyyyy.includes("/")) return "";
+    const [dd,mm,yyyy]=ddmmyyyy.split("/");
+    if(!dd||!mm||!yyyy) return "";
+    return `${yyyy.padStart(4,"0")}-${mm.padStart(2,"0")}-${dd.padStart(2,"0")}`;
+  }
+  function getCookie(name){
+    const m=document.cookie.match('(^|;)\\s*'+name+'\\s*=\\s*([^;]+)');
+    return m?m.pop():'';
+  }
+
+  async function lookup(){
+    const curp=(inputCurp?.value||"").trim().toUpperCase();
+    if(!curp){ showStatus("Escribe un CURP primero.",true); return; }
+    btn.disabled=true; showLoading(); startCountdown(70);
+    const ctrl=new AbortController(); const timeoutId=setTimeout(()=>ctrl.abort(),70000);
+    try{
+      const resp=await fetch(
+        url,
+        {
+          method:"POST",
+          headers:{
+            "X-CSRFToken":getCookie("csrftoken"),
+            "X-Requested-With":"XMLHttpRequest",
+            "Content-Type":"application/x-www-form-urlencoded; charset=UTF-8"
+          },
+          body:new URLSearchParams({curp}),
+          signal:ctrl.signal
+        }
+      );
+      clearTimeout(timeoutId);
+      const data=await resp.json();
+      if(!resp.ok||!data.ok){
+        const msg=(data&&data.error)?data.error:"Falla desconocida en la consulta.";
+        stopCountdown(); showStatus(msg,true);
+        return;
+      }
+      const d=data.data||{};
+      if(inputNombre && d["Nombre"]) setValueAndFloat(inputNombre,d["Nombre"]);
+      if(inputApP    && d["PrimerApellido"]) setValueAndFloat(inputApP,d["PrimerApellido"]);
+      if(inputApM    && d["SegundoApellido"]) setValueAndFloat(inputApM,d["SegundoApellido"]);
+      if(inputFN && d["FechaNacimiento"]){
+        const ymd=toYmd(d["FechaNacimiento"]);
+        if(ymd) setValueAndFloat(inputFN,ymd);
+      }
+      if(inputSexo && d["Sexo"]){
+        const raw=String(d["Sexo"]||"").trim();
+        const canon=raw.toLowerCase();
+        let target=null;
+        if(["h","hombre"].includes(canon)) target="Hombre";
+        else if(["m","mujer"].includes(canon)) target="Mujer";
+        if(target){
+          const opt=Array.from(inputSexo.options||[]).find(o=>o.value===target);
+          if(opt){
+            setValueAndFloat(inputSexo,opt.value);
+            inputSexo.dispatchEvent(new Event("change",{bubbles:true}));
+          }
+        }
+      }
+      stopCountdown(); showStatus("Datos cargados correctamente.",false); setTimeout(hideStatus,6000);
+    }catch(err){
+      const aborted=err?.name==="AbortError";
+      stopCountdown();
+      showStatus(aborted?"Tiempo agotado al consultar (60s).":"Error: "+err,true);
+    }finally{
+      hideLoading(); btn.disabled=false;
+    }
+  }
+
+  if(btn) btn.addEventListener("click",lookup);
+})();
+</script>
+
+<script>
+// Marca el form-group como lleno y dispara eventos para el label flotante
+function setValueAndFloat(el,value){
+  if(!el) return;
+  el.value=value ?? "";
+  el.dispatchEvent(new Event("input",{bubbles:true}));
+  el.dispatchEvent(new Event("change",{bubbles:true}));
+  const group=el.closest('.bmd-form-group, .form-group');
+  if(group){ group.classList.add('is-filled'); group.classList.remove('is-empty'); }
+}
+</script>
+
+<script>
+  // Helper para notificaciones con tu mensaje
+  function notify(msg, type='info', from='top', align='right', icon='add_alert', delay=3500) {
+    $.notify(
+      { icon: 'material-icons ' + icon, message: msg },
+      {
+        type,                             // 'info' | 'success' | 'warning' | 'danger' | 'primary' | 'rose'
+        placement: { from, align },       // 'top'/'bottom' + 'left'/'center'/'right'
+        timer: delay,                     // compat con tema
+        allow_dismiss: true,
+        newest_on_top: true,
+        z_index: 2000,
+        template: `
+          <div data-notify="container" class="col-11 col-sm-4 alert alert-{0} alert-with-icon" role="alert">
+            <button type="button" aria-hidden="true" class="close" data-notify="dismiss">
+              <i class="material-icons">close</i>
+            </button>
+            <i class="material-icons" data-notify="icon">notifications</i>
+            <span data-notify="message">{2}</span>
+          </div>`
+      }
+    );
+  }
+</script>
+
+
+
+
+<script>
+(function(){
+  const selPrograma = document.getElementById("{{ form_info.programa.auto_id }}");
+  const selFinan    = document.getElementById("{{ form_info.financiamiento.auto_id }}");
+
+  if(!selPrograma || !selFinan) return;
+
+  const EMPTY_LABEL = "— Selecciona un financiamiento —";
+
+  function setDisabled(el, disabled=true){
+    el.disabled = !!disabled;
+    try { $(el).selectpicker('refresh'); } catch(e){}
+  }
+
+  function refreshSelectpicker(el){
+    try { $(el).selectpicker('refresh'); } catch(e){}
+  }
+
+  function repoblarFinanciamientos(items, keepSelectedId){
+    // Guardar selección actual si sigue siendo válida
+    const current = keepSelectedId ?? selFinan.value;
+    const allowedIds = new Set(items.map(i => String(i.id)));
+
+    // Vaciar y poblar
+    selFinan.innerHTML = "";
+    const optEmpty = document.createElement("option");
+    optEmpty.value = "";
+    optEmpty.textContent = EMPTY_LABEL;
+    selFinan.appendChild(optEmpty);
+
+    for(const it of items){
+      const opt = document.createElement("option");
+      opt.value = String(it.id);
+      opt.textContent = it.label || String(it.id);
+      selFinan.appendChild(opt);
+    }
+
+    // Reseleccionar si aún es válido, si no, dejar vacío
+    if(current && allowedIds.has(String(current))){
+      selFinan.value = String(current);
+    } else {
+      selFinan.value = "";
+    }
+
+    refreshSelectpicker(selFinan);
+    // Disparar change para que tu lógica de descuento se ejecute si cambió
+    selFinan.dispatchEvent(new Event("change", {bubbles:true}));
+  }
+
+  async function cargarFinanciamientos(programaId, keepSelectedId=null){
+    setDisabled(selFinan, true);
+
+    const url = new URL("{% url 'api_financiamientos_list' %}", window.location.origin);
+    if(programaId) url.searchParams.set("programa", programaId);
+
+    try{
+      const resp = await fetch(url.toString(), { headers: {"X-Requested-With":"XMLHttpRequest"} });
+      if(!resp.ok) throw new Error("HTTP "+resp.status);
+      const data = await resp.json();
+      if(!data.ok) throw new Error("Respuesta no OK");
+      repoblarFinanciamientos(data.items || [], keepSelectedId);
+    }catch(err){
+      console.warn("No se pudieron cargar financiamientos:", err);
+      // Fallback vacío
+      repoblarFinanciamientos([], null);
+    }finally{
+      setDisabled(selFinan, false);
+    }
+  }
+
+  // 1) Al cambiar de programa => recargar financiamientos
+  selPrograma.addEventListener("change", function(e){
+    const pid = e.target.value || "";
+    // Mantener selección si sigue siendo válida:
+    const keepId = selFinan.value || null;
+    cargarFinanciamientos(pid, keepId);
+  });
+
+  // 2) Al cargar la página (modo editar) => inicializar financiamientos en función del programa mostrado
+  //    (si el backend ya aplicó queryset y hay opciones, esto no estorba; si no, garantiza consistencia)
+  window.addEventListener("DOMContentLoaded", function(){
+    const pid = selPrograma.value || "";
+    // Mantener lo que venga pre-seleccionado en el HTML si aplica:
+    const keepId = selFinan.value || null;
+    cargarFinanciamientos(pid, keepId);
+  });
+})();
+</script>
+
+
+{% comment %} {% endcomment %}
+ <script>
+(function(){
+  // Inputs
+  const inputInicio = document.getElementById("{{ form_info.inicio_programa.auto_id }}");
+  const inputFin    = document.getElementById("{{ form_info.fin_programa.auto_id }}");
+  const inputMeses  = document.getElementById("{{ form_info.meses_programa.auto_id }}");
+
+  if(!inputInicio || !inputFin || !inputMeses) return;
+
+  // yyyy-mm-dd -> Date (en local)
+  function parseYmd(ymd){
+    if(!ymd || !/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return null;
+    const [y,m,d] = ymd.split("-").map(Number);
+    // OJO: meses en JS van 0-11
+    return new Date(y, m-1, d);
+  }
+
+  // Date -> yyyy-mm-dd
+  function toYmd(date){
+    const y = date.getFullYear();
+    const m = String(date.getMonth()+1).padStart(2,"0");
+    const d = String(date.getDate()).padStart(2,"0");
+    return `${y}-${m}-${d}`;
+  }
+
+  // Último día del mes (1-31)
+  function lastDayOfMonth(year, monthIndex){ // monthIndex: 0-11
+    return new Date(year, monthIndex + 1, 0).getDate();
+  }
+
+  // Suma "months" meses manteniendo el día si es posible; si no, ajusta al último del mes
+  function addMonthsClamp(date, months){
+    const y = date.getFullYear();
+    const m = date.getMonth(); // 0-11
+    const d = date.getDate();
+
+    const targetMonthIndex = m + Number(months||0);
+    const targetYear  = y + Math.floor(targetMonthIndex / 12);
+    const targetMonth = ((targetMonthIndex % 12) + 12) % 12;
+
+    const lastDay = lastDayOfMonth(targetYear, targetMonth);
+    const day = Math.min(d, lastDay);
+    return new Date(targetYear, targetMonth, day);
+  }
+
+  function recomputeFin(){
+    const inicio = parseYmd(inputInicio.value);
+    const meses  = parseInt(inputMeses.value, 10);
+    if(!inicio || isNaN(meses) || meses < 0){
+      // Si no hay datos válidos, no tocamos el fin
+      return;
+    }
+    const fin = addMonthsClamp(inicio, meses);
+    inputFin.value = toYmd(fin);
+
+    // Dispara eventos para que el label flotante/validaciones reaccionen
+    inputFin.dispatchEvent(new Event("input",{bubbles:true}));
+    inputFin.dispatchEvent(new Event("change",{bubbles:true}));
+    const group = inputFin.closest('.bmd-form-group, .form-group');
+    if(group){ group.classList.add('is-filled'); group.classList.remove('is-empty'); }
+  }
+
+  // Recalcular cuando cambia inicio o meses
+  inputInicio.addEventListener("change", recomputeFin);
+  inputMeses.addEventListener("input", recomputeFin);
+  inputMeses.addEventListener("change", recomputeFin);
+
+  // También recalcula si desde otro script se actualiza meses (p. ej., al elegir Programa)
+  // Ejecutar al cargar por si ya viene relleno
+  window.addEventListener("DOMContentLoaded", recomputeFin);
+
+  // Si ya tienes una función que carga programa y setea meses (cargarPrograma),
+  // asegúrate de llamar recomputeFin() después de asignar inputMeses.value
+  // (en tu código ya llamas a recomputarFinalSegunFinanciamiento(); puedes añadir:)
+  //   if (typeof recomputeFin === 'function') recomputeFin();
+})();
+</script>
+
+
+
+{% endblock %}

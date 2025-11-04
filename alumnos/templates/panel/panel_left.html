@@ -1,0 +1,463 @@
+
+      
+      
+      <div class="logo"><a href="" class="simple-text logo-mini">
+       {% comment %}    dd {% endcomment %}
+        </a>
+        <a href="" class="simple-text logo-normal">
+        {% comment %}   {{ user.cliente.negocio.nombre }} {% endcomment %}
+            IUAFPro
+        </a></div>
+           <div class="sidebar-wrapper">
+        <div class="user">
+          <div class="photo">
+            <img src="https://cdn-icons-png.flaticon.com/512/149/149071.png" />
+          </div>
+          <div class="user-info">
+            <a data-toggle="collapse" href="#collapseExample" class="username">
+              <span>
+                {% if user.cliente and not user.cliente.first_name == None %}
+                  {{ user.cliente.first_name }} {{ user.cliente.last_name }}
+                {% else %}
+                <span class="small"> {{ request.user }} </span>
+                {% endif %}
+                <b class="caret"></b>
+              </span>
+            </a>
+            <div class="collapse" id="collapseExample">
+              <ul class="nav">
+       {% comment %}          <li class="nav-item">
+                  <a class="nav-link" href="#">
+                    <span class="sidebar-mini"> MP </span>
+                    <span class="sidebar-normal"> Mi perfil </span>
+                  </a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="#">
+                    <span class="sidebar-mini"> EP </span>
+                    <span class="sidebar-normal"> Editar perfil </span>
+                  </a>
+                </li> {% endcomment %}
+         {% comment %}        <li class="nav-item">
+                  <a class="nav-link" href="#">
+                    <span class="sidebar-mini"> C </span>
+                    <span class="sidebar-normal"> Configuración </span>
+                  </a>
+                </li> {% endcomment %}
+              </ul>
+            </div>
+          </div>
+        </div>
+        <ul class="nav">
+          <li class="nav-item {% if  request.resolver_match.url_name == 'principal'  %} active {% endif %}">
+            <a class="nav-link" href="{% url 'principal' %}">
+              <i class="material-icons">dashboard</i>
+              <p> Inicio </p>
+            </a>
+          </li>
+
+ 
+
+
+          <li class="nav-item {% if  request.resolver_match.url_name == 'estudiantes' or request.resolver_match.url_name == 'stockentry_panel' %} active {% endif %}">
+           {% if alertas_global.negocio or alertas_global.state or alertas_global.municipality or alertas_global.warehouses or alertas_global.category %}
+              <a class="nav-link" href="{% url 'principal' %}">
+            {% else %}
+              <a class="nav-link" href="{% url 'estudiantes' %}">
+           
+          {% endif %} 
+              <i class="material-icons">group</i>
+              <p> Estudiantes </p>
+            </a>
+          </li>
+
+        <li class="nav-item {% if  request.resolver_match.url_name == 'documentos_lista' or request.resolver_match.url_name == 'formulario_agregar_categoria' %} active {% endif %}">
+            {% if alertas_global.negocio or alertas_global.state or alertas_global.municipality or alertas_global.warehouses %}
+                <a class="nav-link" href="{% url 'principal' %}">
+            {% else %}
+              <a class="nav-link" href="{% url 'documentos_alumnos_lista' %}">
+            {% endif %}    
+              <i class="material-icons">cloud_upload</i>
+              <p> Subir Documentos </p>
+            </a>
+          </li>
+
+            <li class="nav-item {% if  request.resolver_match.url_name == 'pagos_diario_lista'  %} active {% endif %}">
+            <a class="nav-link" href="{% url 'pagos_diario_lista' %}">
+              <i class="material-icons">payment</i>
+              <p> Pagos </p>
+            </a>
+          </li>
+
+          <li class="nav-item {% if  request.resolver_match.url_name == 'cargos_pendientes_todos'  %} active {% endif %}">
+            <a class="nav-link" href="{% url 'cargos_pendientes_todos' %}">
+              <i class="material-icons">payment</i>
+              <p> Cargos Pendientes </p>
+            </a>
+          </li>
+
+
+
+
+
+
+         <li class="nav-item {% if  request.resolver_match.url_name == 'movimientos_banco_lista'  %} active {% endif %}">
+            <a class="nav-link" href=" {% url 'movimientos_banco_lista' %}">
+              <i class="material-icons">account_balance</i>
+              <p> Movimientos de Banco </p>
+            </a>
+          </li>
+
+
+
+
+          <li class="nav-item {% if  request.resolver_match.url_name == 'config_panel'  %} active {% endif %}">
+            <a class="nav-link" href=" {% url 'config_panel' %}">
+              <i class="material-icons">settings</i>
+              <p> Configuración </p>
+            </a>
+          </li>
+
+
+{% comment %}  {% endcomment %}          
+ {% comment %}  {% endcomment %}
+  {% comment %}  {% endcomment %}
+ {% comment %}   <li class="nav-item">
+  <a class="nav-link" data-toggle="collapse" href="#componentsExamples2">
+    <i class="material-icons">compare_arrows</i>
+    <p> Movimientos
+      <b class="caret"></b>
+    </p>
+  </a>
+  <div class="collapse {% if request.resolver_match.url_name in 'stockentry_list stockexit_list stockexit_create inventorytransfer_list inventorytransfer_create inventorytransfer_edit inventorytransfer_delete productexchange_list productexchange_create productexchange_edit productexchange_delete' %}show{% endif %}" id="componentsExamples2">
+    <ul class="nav">
+
+
+     <li class="nav-item {% if  request.resolver_match.url_name == 'stockentry_list' %} active {% endif %}">
+            <a class="nav-link" href="">
+              <i class="material-icons">login</i>
+              <p> Entradas </p>
+            </a>
+          </li>
+
+          <li class="nav-item {% if  request.resolver_match.url_name == 'stockexit_list' or request.resolver_match.url_name == 'stockexit_create' %} active {% endif %}">
+            <a class="nav-link" href="">
+              <i class="material-icons">logout</i>
+              <p> Salidas </p>
+            </a>
+          </li>
+
+          
+          <li class="nav-item {% if  request.resolver_match.url_name == 'inventorytransfer_list' or request.resolver_match.url_name == 'inventorytransfer_create' or request.resolver_match.url_name == 'inventorytransfer_edit' or request.resolver_match.url_name == 'inventorytransfer_delete'  %}  active {% endif %}">
+            <a class="nav-link" href="">
+              <i class="material-icons">swap_horiz</i>
+              <p> Transferencias </p>
+            </a>
+          </li>
+          
+    <li class="nav-item {% if  request.resolver_match.url_name == 'productexchange_list' or request.resolver_match.url_name == 'productexchange_create' or request.resolver_match.url_name == 'productexchange_edit' or request.resolver_match.url_name == 'productexchange_delete'  %}  active {% endif %}">
+            <a class="nav-link" href="">
+              <i class="material-icons">autorenew</i>
+              <p> Cambios de Producto </p>
+            </a>
+          </li>
+
+
+
+
+    
+    </ul>
+  </div>
+</li> {% endcomment %}
+
+   {% comment %}      <li class="nav-item {% if request.resolver_match.url_name == 'productos_en_almacen' or request.resolver_match.url_name == 'warehouses_list' or request.resolver_match.url_name == 'warehouses_create' or request.resolver_match.url_name == 'warehouses_edit' or request.resolver_match.url_name == 'warehouses_delete' %} active {% endif %}">
+            <a class="nav-link" href="">
+              <i class="material-icons">store</i>
+              <p> Almacenes </p>
+            </a>
+          </li>  {% endcomment %}
+
+{% comment %}  {% endcomment %}
+ {% comment %}  {% endcomment %}
+  {% comment %}  {% endcomment %}
+          
+{% comment %}  {% endcomment %}
+ {% comment %}  {% endcomment %}
+  {% comment %}  {% endcomment %}
+          
+
+
+
+
+
+{% comment %}  {% endcomment %}
+ {% comment %}  {% endcomment %}
+  {% comment %}  {% endcomment %}
+{% comment %} <li class="nav-item ">
+  <a class="nav-link" data-toggle="collapse" href="#componentsExamples">
+    <i class="material-icons">store</i>
+    <p> Almacenes
+      <b class="caret"></b>
+    </p>
+  </a>
+  <div class="collapse" id="componentsExamples">
+    <ul class="nav">
+
+
+
+      {% for pais, almacenes in agrupados_almacenes_global_por_pais.items %}
+        <li class="nav-item ">
+          <a class="nav-link" data-toggle="collapse" href="#componentsCollapse{{ pais.id }}">
+            <span class="sidebar-mini">   {{ pais.nome|slice:":2"|upper }} </span>
+            <span class="sidebar-normal"> {{ pais.nome }}
+              <b class="caret"></b>
+            </span>
+          </a>
+          <div class="collapse" id="componentsCollapse{{ pais.id }}">
+            <ul class="nav">
+              {% for almacen in almacenes %}
+                <li class="nav-item ">                  
+                  <a class="nav-link" href="{% url 'productos_de_almacen' almacen.id %}">
+                    <span class="sidebar-mini"> {{ almacen.nombre|slice:":2"|upper }} </span>
+                    <span class="sidebar-normal"> {{ almacen.nombre }}</span>
+                  </a>
+                </li>
+              {% empty %}
+                <li class="nav-item">
+                  <span class="sidebar-normal text-muted">No hay almacenes en este país</span>
+                </li>
+              {% endfor %}
+            </ul>
+          </div>
+        </li>
+      {% empty %}
+        <li class="nav-item">
+          <span class="sidebar-normal text-muted">No hay países con almacenes</span>
+        </li>
+      {% endfor %}
+    </ul>
+  </div>
+</li> {% endcomment %}
+
+
+{% comment %}  {% endcomment %}
+{% comment %}  {% endcomment %}
+{% comment %} request.resolver_match.url_name == 'storeconfig_list' or request.resolver_match.url_name == 'storeconfig_create' or request.resolver_match.url_name == 'storeconfig_edit' or request.resolver_match.url_name == 'storeconfig_delete' {% endcomment %}
+{% comment %}    <li class="nav-item {% if  request.resolver_match.url_name == 'tienda_config' or request.resolver_match.url_name == 'paises_list' or request.resolver_match.url_name == 'discount_list' or request.resolver_match.url_name == 'discount_create' or request.resolver_match.url_name == 'discount_edit' or request.resolver_match.url_name == 'discount_delete' or request.resolver_match.url_name == 'currency_list' or request.resolver_match.url_name == 'currency_create' or request.resolver_match.url_name == 'currency_edit' or request.resolver_match.url_name == 'currency_delete' or request.resolver_match.url_name == 'negocio_list' or request.resolver_match.url_name == 'negocio_create' or request.resolver_match.url_name == 'negocio_edit' or request.resolver_match.url_name == 'negocio_delete' or request.resolver_match.url_name == 'storeconfig_list' or request.resolver_match.url_name == 'storeconfig_create' or request.resolver_match.url_name == 'storeconfig_edit' or request.resolver_match.url_name == 'storeconfig_delete' or request.resolver_match.url_name == 'negocioimagen_list' or request.resolver_match.url_name == 'negocioimagen_create' or request.resolver_match.url_name == 'negocioimagen_edit' or request.resolver_match.url_name == 'negocioimagen_delete' or request.resolver_match.url_name == 'supplier_list' or request.resolver_match.url_name == 'supplier_create' or request.resolver_match.url_name == 'supplier_edit' or request.resolver_match.url_name == 'supplier_delete'  or request.resolver_match.url_name == 'paymentgatewaysettings_list' or request.resolver_match.url_name == 'paymentgatewaysettings_create' or request.resolver_match.url_name == 'paymentgatewaysettings_edit' or request.resolver_match.url_name == 'paymentgatewaysettings_delete' or request.resolver_match.url_name == 'currency_list' or request.resolver_match.url_name == 'currency_create' or request.resolver_match.url_name == 'currency_edit' or request.resolver_match.url_name == 'currency_delete' or request.resolver_match.url_name == 'negocio_list' or request.resolver_match.url_name == 'negocio_create' or request.resolver_match.url_name == 'negocio_edit' or request.resolver_match.url_name == 'negocio_delete' or request.resolver_match.url_name == 'smsconfig_list' or request.resolver_match.url_name == 'smsconfig_create' or request.resolver_match.url_name == 'smsconfig_update' or request.resolver_match.url_name == 'smsconfig_delete' or request.resolver_match.url_name == 'telegramconfig_list' or request.resolver_match.url_name == 'telegramconfig_create' or request.resolver_match.url_name == 'telegramconfig_update' or request.resolver_match.url_name == 'telegramconfig_delete'  or  request.resolver_match.url_name == 'emailsettings_list' or request.resolver_match.url_name == 'emailsettings_nuevo' or request.resolver_match.url_name == 'emailsettings_editar' or request.resolver_match.url_name == 'emailsettings_eliminar' or request.resolver_match.url_name == 'faq_list' or request.resolver_match.url_name == 'faq_editar' or request.resolver_match.url_name == 'faq_eliminar' or request.resolver_match.url_name == 'terminos_list' or request.resolver_match.url_name == 'termino_nuevo' or request.resolver_match.url_name == 'termino_editar' or request.resolver_match.url_name == 'privacidad_list' or request.resolver_match.url_name == 'privacidad_nueva' or request.resolver_match.url_name == 'privacidad_editar' or request.resolver_match.url_name == 'clientes_list' or request.resolver_match.url_name == 'grupos_list' %} active {% endif %}">
+            <a class="nav-link" href="">
+              <i class="material-icons">business</i>
+              <p> Configuración </p>
+            </a>
+          </li> {% endcomment %}
+
+   {% comment %}      <li class="nav-item {% if  request.resolver_match.url_name == 'paises_list' %} active {% endif %}">
+            <a class="nav-link" href="{% url 'paises_list' %}">
+              <i class="material-icons">location_on</i>
+              <p> Países </p>
+            </a>
+          </li> {% endcomment %}
+
+          {% comment %}  {% endcomment %}
+          {% comment %}  {% endcomment %}
+      
+     {% comment %}      <li class="nav-item ">
+            <a class="nav-link" data-toggle="collapse" href="#tablesExamples">
+              <i class="material-icons">group</i>
+              <p>  Usuarios
+                <b class="caret"></b>
+              </p>
+            </a>
+          {% endcomment %}
+           {% comment %}  <div class="collapse {% if request.resolver_match.url_name in 'grupos_list clientes_list' %}show{% endif %}" id="tablesExamples">
+              <ul class="nav"> {% endcomment %}
+            {% comment %}     <li class="nav-item {% if  request.resolver_match.url_name == 'grupos_list' %} active {% endif %}">
+                  <a class="nav-link" href="{% url 'grupos_list' %}">
+                    <span class="sidebar-mini"> GR </span>
+                    <span class="sidebar-normal"> Grupos </span>
+                  </a>
+                </li> {% endcomment %}
+
+           {% comment %}      {% if request.user.cliente %}
+                <li class="nav-item {% if  request.resolver_match.url_name == 'clientes_list' %} active {% endif %}">                  
+                  <a class="nav-link" href="{% url 'clientes_list' request.user.cliente.negocio.id %}">
+                    <span class="sidebar-mini"> US </span>
+                    <span class="sidebar-normal"> Usuarios </span>
+                  </a>
+                </li>
+                {% endif %} {% endcomment %}
+             {% comment %}  </ul>
+            </div> {% endcomment %}
+         {% comment %}  </li> {% endcomment %}
+
+
+{% comment %}              <li class="nav-item {% if  request.resolver_match.url_name == 'warehouses_list' or request.resolver_match.url_name == 'warehouses_create' or request.resolver_match.url_name == 'warehouses_edit' or request.resolver_match.url_name == 'warehouses_delete' %} active {% endif %}">
+                  <a class="nav-link" href="{% url 'warehouses_list' %}">
+                    <span class="sidebar-mini"> AL </span>
+                    <span class="sidebar-normal"> Almacenes</span>
+                  </a>
+                </li> {% endcomment %}
+
+
+       
+          {% comment %}  {% endcomment %}
+           {% comment %}  {% endcomment %}
+            {% comment %}  {% endcomment %}
+
+        
+
+    {% comment %}       <li class="nav-item ">
+            <a class="nav-link" data-toggle="collapse" href="#mapsExamples">
+              <i class="material-icons">build</i>
+              <p> Ajustes
+                <b class="caret"></b>
+              </p>
+            </a>
+           <div class="collapse{% if request.resolver_match.url_name == 'discount_list' or request.resolver_match.url_name == 'discount_create' or request.resolver_match.url_name == 'discount_edit' or request.resolver_match.url_name == 'discount_delete' or request.resolver_match.url_name == 'currency_list' or request.resolver_match.url_name == 'currency_create' or request.resolver_match.url_name == 'currency_edit' or request.resolver_match.url_name == 'currency_delete' or request.resolver_match.url_name == 'negocio_list' or request.resolver_match.url_name == 'negocio_create' or request.resolver_match.url_name == 'negocio_edit' or request.resolver_match.url_name == 'negocio_delete' or request.resolver_match.url_name == 'storeconfig_list' or request.resolver_match.url_name == 'storeconfig_create' or request.resolver_match.url_name == 'storeconfig_edit' or request.resolver_match.url_name == 'storeconfig_delete' or request.resolver_match.url_name == 'negocioimagen_list' or request.resolver_match.url_name == 'negocioimagen_create' or request.resolver_match.url_name == 'negocioimagen_edit' or request.resolver_match.url_name == 'negocioimagen_delete' or request.resolver_match.url_name == 'supplier_list' or request.resolver_match.url_name == 'supplier_create' or request.resolver_match.url_name == 'supplier_edit' or request.resolver_match.url_name == 'supplier_delete' or request.resolver_match.url_name == 'warehouses_list' or request.resolver_match.url_name == 'warehouses_create' or request.resolver_match.url_name == 'warehouses_edit' or request.resolver_match.url_name == 'warehouses_delete' %} show{% endif %}" id="mapsExamples">
+              <ul class="nav"> {% endcomment %}
+             {% comment %}    <li class="nav-item {% if  request.resolver_match.url_name == 'discount_list' or request.resolver_match.url_name == 'discount_create' or request.resolver_match.url_name == 'discount_edit' or request.resolver_match.url_name == 'discount_delete' %} active {% endif %}">
+                  <a class="nav-link" href="{% url 'discount_list' %}">
+                    <span class="sidebar-mini"> DES </span>
+                    <span class="sidebar-normal"> Descuentos </span>
+                  </a>
+                </li>
+ {% endcomment %}
+                {% comment %} <li class="nav-item {% if  request.resolver_match.url_name == 'paymentgatewaysettings_list' or request.resolver_match.url_name == 'paymentgatewaysettings_create' or request.resolver_match.url_name == 'paymentgatewaysettings_edit' or request.resolver_match.url_name == 'paymentgatewaysettings_delete' %} active {% endif %}">                  
+                  <a class="nav-link" href="{% url 'paymentgatewaysettings_list' %}">
+                    <span class="sidebar-mini"> CDP </span>
+                    <span class="sidebar-normal"> Credenciales de Pago </span>
+                  </a>
+                </li> {% endcomment %}
+
+                {% comment %} <li class="nav-item {% if  request.resolver_match.url_name == 'currency_list' or request.resolver_match.url_name == 'currency_create' or request.resolver_match.url_name == 'currency_edit' or request.resolver_match.url_name == 'currency_delete' %} active {% endif %}">
+                  <a class="nav-link" href="{% url 'currency_list' %}">
+                    <span class="sidebar-mini"> MON </span>
+                    <span class="sidebar-normal"> Monedas</span>
+                  </a>
+                </li> {% endcomment %}
+                {% comment %} <li class="nav-item {% if  request.resolver_match.url_name == 'negocio_list' or request.resolver_match.url_name == 'negocio_create' or request.resolver_match.url_name == 'negocio_edit' or request.resolver_match.url_name == 'negocio_delete' %} active {% endif %}">
+                  <a class="nav-link" href="{% url 'negocio_list' %}">
+                    <span class="sidebar-mini"> NEG </span>
+                    <span class="sidebar-normal"> Negocios </span>
+                  </a>
+                </li>
+ {% endcomment %}
+                      {% comment %} <li class="nav-item {% if  request.resolver_match.url_name == 'storeconfig_list' or request.resolver_match.url_name == 'storeconfig_create' or request.resolver_match.url_name == 'storeconfig_edit' or request.resolver_match.url_name == 'storeconfig_delete' %} active {% endif %}">
+                  <a class="nav-link" href="{% url 'storeconfig_list' %}">
+                    <span class="sidebar-mini"> CON </span>
+                    <span class="sidebar-normal"> Configuración </span>
+                  </a>
+                </li> {% endcomment %}
+{% comment %} 
+          <li class="nav-item {% if  request.resolver_match.url_name == 'negocioimagen_list' or request.resolver_match.url_name == 'negocioimagen_create' or request.resolver_match.url_name == 'negocioimagen_edit' or request.resolver_match.url_name == 'negocioimagen_delete' %} active {% endif %}">
+                  <a class="nav-link" href="{% url 'negocioimagen_list' %}">
+                    <span class="sidebar-mini"> CAR </span>
+                    <span class="sidebar-normal"> Carucel </span>
+                  </a>
+                </li> {% endcomment %}
+
+        {% comment %}         <li class="nav-item {% if  request.resolver_match.url_name == 'supplier_list' or request.resolver_match.url_name == 'supplier_create' or request.resolver_match.url_name == 'supplier_edit' or request.resolver_match.url_name == 'supplier_delete' %} active {% endif %}">
+                  <a class="nav-link" href="{% url 'supplier_list' %}">
+                    <span class="sidebar-mini"> PRO </span>
+                    <span class="sidebar-normal"> Proveedores </span>
+                  </a>
+                </li> {% endcomment %}
+
+             
+
+
+
+
+              {% comment %} <li class="nav-item {% if  request.resolver_match.url_name == 'smsconfig_list' or request.resolver_match.url_name == 'smsconfig_create' or request.resolver_match.url_name == 'smsconfig_update' or request.resolver_match.url_name == 'smsconfig_delete' %} active {% endif %}">
+                  <a class="nav-link" href="{% url 'smsconfig_list' %}">
+                    <span class="sidebar-mini"> SMS </span>
+                    <span class="sidebar-normal"> SMS Twilio</span>
+                  </a>
+                </li>
+ {% endcomment %}
+
+              {% comment %} <li class="nav-item {% if  request.resolver_match.url_name == 'telegramconfig_list' or request.resolver_match.url_name == 'telegramconfig_create' or request.resolver_match.url_name == 'telegramconfig_update' or request.resolver_match.url_name == 'telegramconfig_delete' %} active {% endif %}">
+                  <a class="nav-link" href="{% url 'telegramconfig_list' %}">
+                    <span class="sidebar-mini"> TG </span>
+                    <span class="sidebar-normal"> Telegram</span>
+                  </a>
+                </li>
+ {% endcomment %}
+
+
+          {% comment %} <li class="nav-item {% if  request.resolver_match.url_name == 'warehouses_list' or request.resolver_match.url_name == 'warehouses_create' or request.resolver_match.url_name == 'warehouses_edit' or request.resolver_match.url_name == 'warehouses_delete' %} active {% endif %}">
+                  <a class="nav-link" href="{% url 'seo_list' %}">
+                    <span class="sidebar-mini"> Ce </span>
+                    <span class="sidebar-normal"> Ceo</span>
+                  </a>
+                </li>
+ {% endcomment %}
+
+
+                
+       {% comment %}               <li class="nav-item {% if  request.resolver_match.url_name == 'emailsettings_list' or request.resolver_match.url_name == 'emailsettings_nuevo' or request.resolver_match.url_name == 'emailsettings_editar' or request.resolver_match.url_name == 'emailsettings_eliminar' %} active {% endif %}">
+                  <a class="nav-link" href="{% url 'emailsettings_list' %}">
+                    <span class="sidebar-mini"> EM </span>
+                    <span class="sidebar-normal"> Email </span>
+                  </a>
+                </li>
+ {% endcomment %}
+
+
+
+                     {% comment %} <li class="nav-item {% if  request.resolver_match.url_name == 'faq_list' or request.resolver_match.url_name == 'faq_editar' or request.resolver_match.url_name == 'faq_eliminar' %} active {% endif %}">
+                  <a class="nav-link" href="{% url 'faq_list' %}">
+                    <span class="sidebar-mini"> F </span>
+                    <span class="sidebar-normal"> FAQ </span>
+                  </a>
+                </li> {% endcomment %}
+
+                        {% comment %} <li class="nav-item {% if  request.resolver_match.url_name == 'terminos_list' or request.resolver_match.url_name == 'termino_nuevo' or request.resolver_match.url_name == 'termino_editar' %} active {% endif %}">
+                        <a class="nav-link" href="{% url 'terminos_list' %}">
+                          <span class="sidebar-mini"> F </span>
+                          <span class="sidebar-normal"> Términos y Condiciones </span>
+                        </a>
+                      </li>
+ {% endcomment %}
+
+                          {% comment %} <li class="nav-item {% if  request.resolver_match.url_name == 'privacidad_list' or request.resolver_match.url_name == 'privacidad_nueva' or request.resolver_match.url_name == 'privacidad_editar' %} active {% endif %}">
+                        <a class="nav-link" href="{% url 'privacidad_list' %}">
+                          <span class="sidebar-mini"> PP </span>
+                          <span class="sidebar-normal"> Política de Privacidad </span>
+                        </a>
+                      </li>
+ {% endcomment %}
+
+
+{% comment %} 
+              </ul>
+            </div>            
+          </li>
+ {% endcomment %}
+          {% comment %}  {% endcomment %}
+           {% comment %}  {% endcomment %}
+            {% comment %}  {% endcomment %}
+      {% comment %}     <li class="nav-item ">
+            <a class="nav-link" href="/admin">
+              <i class="material-icons">storage</i>
+              <p> Base de Datos </p>
+            </a>
+          </li>
+ {% endcomment %}
+
+{% comment %}           <li class="nav-item ">
+            <a class="nav-link" href="{% url 'categories' %}">
+              <i class="material-icons">storefront</i>
+              <p> Tienda </p>
+            </a>
+          </li>
+ {% endcomment %}
+
+{% comment %}    <li class="nav-item ">
+    <a class="nav-link" href="{% url 'logout' %}" onclick="return confirm('¿Estás seguro que deseas cerrar sesión?');">
+      <i class="material-icons">exit_to_app</i>
+      <p> Cerrar Sesión </p>
+    </a>
+</li> {% endcomment %}
+          
+        </ul>
+      </div>   
