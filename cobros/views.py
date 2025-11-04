@@ -362,7 +362,7 @@ def _handle_stripe_event(event):
 
 
 ##############################
-# cobros/views.py (reemplaza tu link_pago_cargo completo)
+# cobros/views.py
 from decimal import Decimal, InvalidOperation
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse, HttpResponseBadRequest
@@ -372,11 +372,17 @@ from django.utils import timezone
 from django.conf import settings
 import logging, uuid
 
+import stripe
 from alumnos.models import Cargo
 from .models import PaymentRecord
 
 logger = logging.getLogger(__name__)
 stripe.api_key = settings.STRIPE_SECRET_KEY
+
+
+def _mk_idem(prefix="cargo"):
+    return f"{prefix}:{uuid.uuid4()}:{timezone.now().isoformat()}"
+
 
 @login_required
 @csrf_protect
@@ -392,6 +398,7 @@ def link_pago_cargo(request, cargo_id):
         if not cargo.alumno:
             return JsonResponse({"ok": False, "error": "El cargo no está vinculado a un alumno."}, status=400)
 
+        # Monto válido
         try:
             monto = Decimal(cargo.monto or 0)
         except InvalidOperation:
@@ -402,59 +409,111 @@ def link_pago_cargo(request, cargo_id):
         amount_cents = int(monto * 100)
         desc = f"{cargo.concepto.nombre if cargo.concepto_id else 'Cargo IUAF'} ({cargo.pk})"
 
-        # 1) Crea el PaymentRecord primero
+        # === 1) Buscar PaymentRecord existente para este cargo ===
+        # Si tu modelo tiene FK: 'cargo = models.OneToOneField/ForeignKey(...)', filtra por ese campo.
+        pr = PaymentRecord.objects.filter(type="one_time", cargo=cargo).order_by("-created_at").first()
+
+        # === 2) Si ya está pagado, no generes link nuevo ===
+        if pr and pr.status == "paid":
+            return JsonResponse({"ok": True, "already_paid": True, "message": "El cargo ya está pagado."})
+
+        # Helper para (re)crear Session y actualizar el MISMO PR
+        def _create_or_refresh_session_for(pr_obj):
+            session = stripe.checkout.Session.create(
+                mode="payment",
+                line_items=[{
+                    "price_data": {
+                        "currency": "mxn",
+                        "product_data": {"name": desc},
+                        "unit_amount": amount_cents,
+                    },
+                    "quantity": 1,
+                }],
+                success_url=settings.FRONTEND_SUCCESS_URL + "?session_id={CHECKOUT_SESSION_ID}",
+                cancel_url=settings.FRONTEND_CANCEL_URL,
+                client_reference_id=str(cargo.alumno_id),
+                metadata={
+                    "tipo": "cargo",
+                    "cargo_id": str(cargo.pk),
+                    "alumno_id": str(cargo.alumno_id),
+                    "pr_id": str(pr_obj.pk),
+                },
+                payment_intent_data={
+                    "metadata": {
+                        "tipo": "cargo",
+                        "cargo_id": str(cargo.pk),
+                        "alumno_id": str(cargo.alumno_id),
+                        "pr_id": str(pr_obj.pk),
+                    }
+                },
+                expand=["payment_intent"],
+                idempotency_key=_mk_idem("cargo"),
+            )
+
+            pr_obj.checkout_session_id = session.id or ""
+            pr_obj.payment_intent_id = getattr(session, "payment_intent", None).id if getattr(session, "payment_intent", None) else ""
+            pr_obj.customer_id = getattr(session, "customer", "") or pr_obj.customer_id
+            pr_obj.status = "pending"
+            pr_obj.amount = monto  # por si cambió el cargo
+            pr_obj.extra = {**(pr_obj.extra or {}), "cargo_id": cargo.pk, "url": session.url}
+            pr_obj.save(update_fields=["checkout_session_id", "payment_intent_id", "customer_id", "status", "amount", "extra"])
+            return session
+
+        # === 3) Reutilizar PR existente si hay ===
+        if pr:
+            sess_id = pr.checkout_session_id or ""
+            if sess_id:
+                try:
+                    sess = stripe.checkout.Session.retrieve(sess_id)
+                    sess_status = getattr(sess, "status", None)          # 'open' | 'complete' | 'expired'
+                    pay_status  = getattr(sess, "payment_status", None)  # 'paid' | 'unpaid' | 'no_payment_required'
+
+                    # a) Abierta → reutiliza el mismo link
+                    if sess_status == "open":
+                        url = getattr(sess, "url", None) or (pr.extra or {}).get("url")
+                        if url:
+                            return JsonResponse({"ok": True, "url": url, "amount": f"{monto:.2f}"})
+
+                    # b) Completa → si pagado, marcamos y avisamos; si no, generamos nueva
+                    if sess_status == "complete":
+                        if pay_status == "paid":
+                            pr.status = "paid"
+                            pr.save(update_fields=["status"])
+                            return JsonResponse({"ok": True, "already_paid": True, "message": "El cargo ya se pagó."})
+                        # unpaid → nueva Session
+                        new_sess = _create_or_refresh_session_for(pr)
+                        return JsonResponse({"ok": True, "url": new_sess.url, "amount": f"{monto:.2f}"})
+
+                    # c) Expirada u otro estado → nueva Session
+                    new_sess = _create_or_refresh_session_for(pr)
+                    return JsonResponse({"ok": True, "url": new_sess.url, "amount": f"{monto:.2f}"})
+
+                except Exception:
+                    # No se pudo recuperar → crear nueva sobre el mismo PR
+                    new_sess = _create_or_refresh_session_for(pr)
+                    return JsonResponse({"ok": True, "url": new_sess.url, "amount": f"{monto:.2f}"})
+            else:
+                # PR sin Session → crear una y actualizar el PR existente
+                new_sess = _create_or_refresh_session_for(pr)
+                return JsonResponse({"ok": True, "url": new_sess.url, "amount": f"{monto:.2f}"})
+
+        # === 4) No existe PR → crearlo UNA sola vez (respeta la restricción única por cargo) ===
         pr = PaymentRecord.objects.create(
             alumno=cargo.alumno,
+            cargo=cargo,              # <-- FK/OneToOne al cargo
             type="one_time",
             status="created",
             amount=monto,
             currency="MXN",
             extra={"cargo_id": cargo.pk},
-            cargo=cargo,
         )
+        sess = _create_or_refresh_session_for(pr)
+        return JsonResponse({"ok": True, "url": sess.url, "amount": f"{monto:.2f}"})
 
-        # 2) Idempotencia: como opción, no en el payload
-        idem = f"cargo:{cargo.pk}:{monto}:{timezone.now().date().isoformat()}:{uuid.uuid4()}"
-
-        # 3) Crea la sesión de Checkout y manda el pr_id en metadata para enlazar en el webhook
-        session = stripe.checkout.Session.create(
-            mode="payment",
-            line_items=[{
-                "price_data": {
-                    "currency": "mxn",
-                    "product_data": {"name": desc},
-                    "unit_amount": amount_cents,
-                },
-                "quantity": 1,
-            }],
-            success_url=settings.FRONTEND_SUCCESS_URL + "?session_id={CHECKOUT_SESSION_ID}",
-            cancel_url=settings.FRONTEND_CANCEL_URL,
-            client_reference_id=str(cargo.alumno_id),
-            metadata={
-                "tipo": "cargo",
-                "cargo_id": str(cargo.pk),
-                "alumno_id": str(cargo.alumno_id),
-                "pr_id": str(pr.pk),
-            },
-            # 👇 esto va como opción, no dentro del dict anterior
-            idempotency_key=idem,
-        )
-
-        # 4) Guarda identificadores Stripe en tu PaymentRecord
-        pr.checkout_session_id = session.id or ""
-        pr.payment_intent_id = (getattr(session, "payment_intent", "") or "")
-        pr.customer_id = (getattr(session, "customer", "") or "")
-        pr.idempotency_key = idem
-        pr.status = "pending"  # la verdad final vendrá del webhook
-        pr.save(update_fields=[
-            "checkout_session_id", "payment_intent_id", "customer_id",
-            "idempotency_key", "status"
-        ])
-
-        return JsonResponse({"ok": True, "url": session.url, "amount": f"{monto:.2f}"})
     except Exception as e:
-        logger.exception("Error creando link de pago (cargo_id=%s)", cargo_id)
+        logger.exception("Error creando/reutilizando link de pago (cargo_id=%s)", cargo_id)
         return JsonResponse({"ok": False, "error": str(e)}, status=500)
+
 
 #########################################################################################
 

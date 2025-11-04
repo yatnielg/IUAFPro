@@ -859,18 +859,18 @@
         &nbsp;WhatsApp
       </button>
 
-      {% if request.user.is_superuser %}
-      {# 👉 NUEVO: WhatsApp2 (genera link Stripe y arma el mensaje) #}
-      <button type="button"
-              class="btn btn-outline-success btn-sm btn-whatsapp2-cargo d-inline-flex align-items-center"
-              title="Enviar link de pago (Stripe) por WhatsApp"
-              data-endpoint="{% url 'cobros:link_pago_cargo' c.id %}"
-              data-tel="{{ alumno.telefono|cut:' '|cut:'-'|cut:'('|cut:')' }}"
-              data-nombre="{{ alumno.nombre }} {{ alumno.apellido_p }} {{ alumno.apellido_m }}">
-        <span class="material-icons align-middle" style="font-size:18px;line-height:1;">send</span>
-        &nbsp;WhatsApp2
-      </button>
-      {% endif %}
+{% if request.user.is_superuser %}
+  {# 👉 NUEVO: Stripe (genera link Stripe y arma el mensaje) #}
+  <button type="button"
+          class="btn btn-outline-success btn-sm btn-whatsapp2-cargo d-inline-flex align-items-center"
+          title="Enviar link de pago (Stripe) por WhatsApp"
+          data-endpoint="{% url 'cobros:link_pago_cargo' c.id %}"
+          data-tel="{{ alumno.telefono|cut:' '|cut:'-'|cut:'('|cut:')' }}"
+          data-nombre="{{ alumno.nombre }} {{ alumno.apellido_p }} {{ alumno.apellido_m }}">
+    <span class="material-icons align-middle" style="font-size:18px;line-height:1;">send</span>
+    &nbsp;Stripe
+  </button>
+{% endif %}
     {% else %}
       <button type="button" class="btn btn-secondary btn-sm" disabled title="Sin teléfono">
         <span class="material-icons align-middle" style="font-size:18px;line-height:1;">chat</span>
@@ -1517,6 +1517,12 @@ document.addEventListener('click', async (e) => {
       btn.disabled = true;
       const endpoint = btn.getAttribute('data-endpoint');
       const data = await postJSON(endpoint);
+
+      if (data.already_paid) {
+        alert('Este cargo ya está pagado. No se generará un enlace nuevo.');
+      return;
+    }
+
 
       if(!data.ok || !data.url){ throw new Error('No se pudo generar el enlace de pago.'); }
 
