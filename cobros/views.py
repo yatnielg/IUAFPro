@@ -1,5 +1,6 @@
 import json
 import stripe
+
 from django.http import HttpResponse, HttpResponseBadRequest, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
@@ -372,7 +373,7 @@ from django.utils import timezone
 from django.conf import settings
 import logging, uuid
 
-import stripe
+
 from alumnos.models import Cargo
 from .models import PaymentRecord
 
@@ -419,6 +420,10 @@ def link_pago_cargo(request, cargo_id):
 
         # Helper para (re)crear Session y actualizar el MISMO PR
         def _create_or_refresh_session_for(pr_obj):
+            alumno = pr_obj.alumno  # (opcional, por si luego lo quieres tomar del alumno)
+            email_prefill = ((getattr(alumno, "email", None) or getattr(alumno, "email_institucional", None) or "").strip() or None)
+
+            
             session = stripe.checkout.Session.create(
                 mode="payment",
                 line_items=[{
@@ -446,6 +451,10 @@ def link_pago_cargo(request, cargo_id):
                         "pr_id": str(pr_obj.pk),
                     }
                 },
+                customer_email=email_prefill,
+                customer_creation="if_required",
+                billing_address_collection="auto",
+
                 expand=["payment_intent"],
                 idempotency_key=_mk_idem("cargo"),
             )

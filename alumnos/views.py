@@ -3,6 +3,9 @@ from django.urls import reverse
 from django import forms
 from .models import Alumno, Programa
 from django.contrib.auth.models import User, Group
+from playwright.sync_api import sync_playwright
+
+from xhtml2pdf import pisa
 
 from django.contrib import messages
 from django.contrib.auth.models import User
@@ -2886,7 +2889,7 @@ def html_to_pdf(html: str, request=None) -> bytes:
         )
     except Exception:
         # Fallback: xhtml2pdf
-        from xhtml2pdf import pisa
+        
         buf = io.BytesIO()
         r = pisa.CreatePDF(io.StringIO(html), dest=buf)
         if r.err:
@@ -3922,7 +3925,7 @@ def html_to_pdf_bytes(html: str, base_url: str) -> bytes:
         _dbg(f"WeasyPrint falló: {e}\n{traceback.format_exc()}")
 
     _dbg("html_to_pdf_bytes: intentando xhtml2pdf…")
-    from xhtml2pdf import pisa
+    
     pdf_out = BytesIO()
     status = pisa.CreatePDF(
         src=html, dest=pdf_out,
@@ -3937,7 +3940,7 @@ def html_to_pdf_bytes(html: str, base_url: str) -> bytes:
     return data
 
 ###################################################
-from playwright.sync_api import sync_playwright
+
 
 def generar_carta_inscripcion_pdf(alumno, request) -> str | None:
     """
@@ -4307,7 +4310,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.utils import timezone
 
-from playwright.sync_api import sync_playwright
+
 
 from .models import Alumno
 
@@ -4365,7 +4368,7 @@ from django.template.loader import render_to_string
 from django.utils import timezone
 from django.conf import settings
 from django.contrib.staticfiles import finders
-from xhtml2pdf import pisa
+
 
 logger = logging.getLogger(__name__)
 
