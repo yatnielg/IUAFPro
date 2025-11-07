@@ -8,6 +8,12 @@ import pandas as pd
 from datetime import datetime
 from django.core.management.base import BaseCommand
 
+import io
+import requests
+import urllib.error
+
+from django.core.management.base import BaseCommand, CommandError
+
 # =======================
 # Defaults ajustables
 # =======================

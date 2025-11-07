@@ -3,9 +3,26 @@ from django.urls import reverse
 from django import forms
 from .models import Alumno, Programa
 from django.contrib.auth.models import User, Group
+
+
+try:
+    from weasyprint import HTML
+    _WEASY = True
+except Exception:
+    _WEASY = False
+
+try:
+    from xhtml2pdf import pisa
+    _PISA = True
+except Exception:
+    _PISA = False
+
+
+
+
 from playwright.sync_api import sync_playwright
 
-from xhtml2pdf import pisa
+
 
 from django.contrib import messages
 from django.contrib.auth.models import User
@@ -23,7 +40,7 @@ from datetime import date
 
 from .forms import  InformacionEscolarForm
 
-from django.db.models import Q
+from django.db.models import Q, Sum, Max
 from .models import  Pais, Estado
 
 from django.contrib.auth.decorators import login_required
@@ -109,7 +126,7 @@ from django.forms.models import model_to_dict
 from django.http import HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
 from django.contrib import messages
-from django.db.models import Q, Sum
+
 
 logger = logging.getLogger(__name__)
 
@@ -1160,6 +1177,10 @@ def documentos_alumno_editar(request, numero_estudiante):
 from django.utils.decorators import method_decorator
 from django.views.generic import ListView
 from .models import PagoDiario
+# Asegúrate de tener:
+from datetime import timedelta
+from django.utils import timezone
+
 
 @method_decorator(login_required, name="dispatch")
 class PagoDiarioListView(ListView):
@@ -1202,7 +1223,6 @@ class PagoDiarioListView(ListView):
                     cond = Q(alumno__informacionEscolar__sede_id__in=sedes_ids)
                     allowed = cond if allowed is None else (allowed | cond)
 
-            # Si no hay nada permitido => nada
             if allowed is None:
                 return qs.none()
 
@@ -1214,6 +1234,22 @@ class PagoDiarioListView(ListView):
         if not show_all:
             hace_dos_anios = timezone.now().date() - timedelta(days=730)
             base_qs = base_qs.filter(fecha__gte=hace_dos_anios)
+
+        # --- Filtros por fecha (desde/hasta) ---
+        fmin = self.request.GET.get("desde")
+        fmax = self.request.GET.get("hasta")
+        if fmin:
+            base_qs = base_qs.filter(fecha__gte=fmin)
+        if fmax:
+            base_qs = base_qs.filter(fecha__lte=fmax)
+
+        # --- NUEVO: filtros por creado_en (desde/hasta) ---
+        cmin = self.request.GET.get("creado_desde")
+        cmax = self.request.GET.get("creado_hasta")
+        if cmin:
+            base_qs = base_qs.filter(creado_en__date__gte=cmin)
+        if cmax:
+            base_qs = base_qs.filter(creado_en__date__lte=cmax)
 
         # Búsqueda libre
         q = (self.request.GET.get("q") or "").strip()
@@ -1230,6 +1266,16 @@ class PagoDiarioListView(ListView):
             )
 
         return base_qs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        # Mantén los valores de filtros en el contexto para el template
+        ctx["desde"] = self.request.GET.get("desde", "")
+        ctx["hasta"] = self.request.GET.get("hasta", "")
+        ctx["creado_desde"] = self.request.GET.get("creado_desde", "")
+        ctx["creado_hasta"] = self.request.GET.get("creado_hasta", "")
+        ctx["q"] = self.request.GET.get("q", "")
+        return ctx
     
 ############################################################################################################
 
@@ -1276,7 +1322,7 @@ def api_financiamiento(request, pk):
 # views.py
 #from django.contrib import messages
 #from django.contrib.auth.decorators import login_required
-#from django.db.models import Q
+
 #from django.http import HttpResponseForbidden
 #from django.shortcuts import get_object_or_404, redirect, render
 
@@ -1718,7 +1764,7 @@ import os
 from django.contrib.auth.decorators import login_required
 from django.http import Http404, HttpResponse, HttpResponseForbidden
 from django.shortcuts import get_object_or_404
-from django.db.models import Q, Max
+
 
 from pypdf import PdfWriter, PdfReader
 from PIL import Image
@@ -2017,23 +2063,31 @@ class MovimientoBancoListView(ListView):
             qs = qs.filter(signo=int(signo))
         if tipo:
             qs = qs.filter(tipo__icontains=tipo)
-        if fmin:
-            qs = qs.filter(fecha__gte=fmin)
-        if fmax:
-            qs = qs.filter(fecha__lte=fmax)
+
+        # ✅ Lógica de rango por defecto (últimos 6 meses) SI NO hay filtros de fecha
+        if fmin or fmax:
+            if fmin:
+                qs = qs.filter(fecha__gte=fmin)
+            if fmax:
+                qs = qs.filter(fecha__lte=fmax)
+        else:
+            six_months_ago = timezone.now().date() - timedelta(days=183)
+            qs = qs.filter(fecha__gte=six_months_ago)
+            # guardamos para prellenar inputs
+            self._default_desde = six_months_ago.isoformat()
+            self._default_hasta = timezone.now().date().isoformat()
 
         return qs.order_by("-id")
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         qs = self.object_list
-
         user = self.request.user
+
         ctx["total_registros"] = qs.count()
         ctx["total_abonos"] = qs.filter(signo=1).aggregate(s=Sum("monto"))["s"] or Decimal("0")
         ctx["total_cargos"] = qs.filter(signo=-1).aggregate(s=Sum("monto"))["s"] or Decimal("0")
 
-        # 🔸 Añadimos banderas de permisos por grupo
         ctx["puede_conciliar"] = (
             user.is_superuser or user.groups.filter(name="Conciliadores Bancarios").exists()
         )
@@ -2041,8 +2095,10 @@ class MovimientoBancoListView(ListView):
             user.is_superuser or user.groups.filter(name="Supervisores Bancarios").exists()
         )
 
+        # Valores por defecto para inputs si no vinieron en GET
+        ctx["desde_default"] = getattr(self, "_default_desde", "")
+        ctx["hasta_default"] = getattr(self, "_default_hasta", "")
         return ctx
-
 ###############################################################
 def _salidas_dir():
     base = getattr(settings, "BASE_DIR", Path.cwd())
@@ -4558,3 +4614,65 @@ def carta_inscripcion_pdf_view(request, alumno_id):
 
     # 4) Regresar a la misma página
     return redirect(request.META.get("HTTP_REFERER") or "alumnos_detalle", pk=alumno.pk)
+##########################################################
+
+# alumnos/views.py
+from django.views.decorators.http import require_POST
+from django.core.mail import EmailMessage
+from django.http import JsonResponse, HttpResponseForbidden
+from django.utils.text import slugify
+
+@login_required
+@require_POST
+def enviar_recibo_email_con_pdf(request, pago_id):
+    # Valida permisos mínimos (ajusta a tu lógica)
+    if not (request.user.is_staff or request.user.is_superuser):
+        return HttpResponseForbidden("No autorizado.")
+
+    pago = get_object_or_404(PagoDiario.objects.select_related("alumno"), pk=pago_id)
+    alumno = pago.alumno
+
+    # PDF subido desde el navegador (form-data key: 'recibo')
+    pdf_file = request.FILES.get("recibo")
+    if not pdf_file:
+        return JsonResponse({"ok": False, "error": "No se recibió el archivo PDF."}, status=400)
+
+    # Chequeo básico
+    ct = pdf_file.content_type or ""
+    if "pdf" not in ct:
+        return JsonResponse({"ok": False, "error": "El archivo no parece ser un PDF."}, status=400)
+
+    # Destinatario
+    to_email = (alumno.email or alumno.email_institucional or "").strip() or pago.email or ""
+    if not to_email:
+        return JsonResponse({"ok": False, "error": "El alumno no tiene correo."}, status=400)
+
+    # Asunto / cuerpo
+    asunto = f"Recibo de pago #{pago.folio or pago.pk}"
+    cuerpo = (
+        f"Hola {alumno.nombre or 'Alumno'},\n\n"
+        f"Te compartimos tu recibo de pago.\n\n"
+        f"Folio: {pago.folio or pago.pk}\n"
+        f"Fecha: {pago.fecha.strftime('%d/%m/%Y') if pago.fecha else '—'}\n"
+        f"Monto: $ {pago.monto or '0.00'}\n\n"
+        f"Saludos."
+    )
+
+    # Nombre del adjunto
+    base = slugify(f"recibo_{pago.folio or pago.pk}")
+    filename = f"{base}.pdf"
+
+    # Enviar
+    msg = EmailMessage(
+        subject=asunto,
+        body=cuerpo,
+        from_email=None,   # usa DEFAULT_FROM_EMAIL
+        to=[to_email],
+    )
+    msg.attach(filename, pdf_file.read(), "application/pdf")
+    sent = msg.send()
+
+    if sent:
+        return JsonResponse({"ok": True, "msg": f"Correo enviado a {to_email}."})
+    else:
+        return JsonResponse({"ok": False, "error": "El backend de correo no reportó envíos."}, status=500)

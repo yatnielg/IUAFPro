@@ -1,0 +1,9 @@
+/* static/pdf/recibo.css */
+* { box-sizing: border-box; }
+html, body { margin:0; padding:0; font-family: Arial, Helvetica, sans-serif; font-size: 11pt; color:#111; }
+.sheet { width: 8.5in; min-height: 11in; padding: 0.5in; }
+table { width: 100%; border-collapse: collapse; }
+td, th { border: 1px solid #999; padding: 3mm; vertical-align: top; }
+.center { text-align: center; }
+.right { text-align: right; }
+.muted { color: #666; }

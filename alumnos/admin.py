@@ -167,7 +167,7 @@ class InformacionEscolarAdmin(admin.ModelAdmin):
         "alumno__numero_estudiante", "alumno__nombre", "alumno__apellido_p", "alumno__apellido_m",
     )
     readonly_fields = (
-        "creado_en", "actualizado_en", "precio_final",
+        "creado_en", "actualizado_en",
         "bienvenida_enviada", "bienvenida_enviada_en", "bienvenida_enviada_por",
     )
     date_hierarchy = "creado_en"

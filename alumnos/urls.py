@@ -72,4 +72,11 @@ urlpatterns = [
     path("alumnos/<int:alumno_id>/carta/", views.carta_inscripcion_view, name="alumno_carta"),
     path("alumnos/<int:alumno_id>/carta/pdf/", views.carta_inscripcion_pdf_view, name="alumno_carta_pdf"),
 
+
+    #path("alumnos/pagos/<int:pk>/enviar-recibo-email/", views.enviar_recibo_pago_email, name="enviar_recibo_pago_email"),
+
+    path("alumnos/pagos/<int:pago_id>/enviar-recibo-con-pdf/", views.enviar_recibo_email_con_pdf, name="enviar_recibo_con_pdf"),
+
+
+
 ]

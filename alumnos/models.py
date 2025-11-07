@@ -818,6 +818,7 @@ class PagoDiario(models.Model):
             models.Index(fields=["folio"]),
             models.Index(fields=["fecha"]),
             models.Index(fields=["curp"]),
+            models.Index(fields=["creado_en"]),
         ]
 
     def __str__(self):
