@@ -1,0 +1,87 @@
+{% extends "panel/grafico.html" %}
+{% load static %}
+
+{% block main_content %}
+<div class="container-fluid">
+
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <h4 class="mb-0">
+      {{ listado.programa.codigo }} · {{ listado.nombre }}
+    </h4>
+    <a class="btn btn-outline-secondary" href="{% url 'academico:listados_list' %}">&larr; Volver</a>
+  </div>
+
+  {% if listado.descripcion %}
+    <p class="text-muted">{{ listado.descripcion }}</p>
+  {% endif %}
+
+  <div class="row">
+    <div class="col-lg-7">
+      <div class="card">
+        <div class="card-header card-header-primary">
+          <h5 class="card-title mb-0">Materias del listado</h5>
+        </div>
+        <div class="card-body">
+          <div class="table-responsive">
+            <table class="table table-sm table-striped">
+              <thead>
+                <tr>
+                  <th>Código</th>
+                  <th>Nombre</th>
+                  <th>Inicio</th>
+                  <th>Fin</th>
+                  <th>Califs</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for it in items %}
+                <tr>
+                  <td>{{ it.materia.codigo }}</td>
+                  <td>{{ it.materia.nombre }}</td>
+                  <td>{{ it.fecha_inicio|date:"d/m/Y" }}</td>
+                  <td>{{ it.fecha_fin|date:"d/m/Y" }}</td>
+                  <td>{{ calif_por_item.it.id|default:0 }}</td>
+                  <td class="text-right">
+                    <a class="btn btn-sm btn-outline-primary"
+                       href="{% url 'academico:calificaciones_item' it.pk %}">
+                      Calificaciones
+                    </a>
+                  </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="6" class="text-center text-muted">Sin materias.</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-5">
+      <div class="card">
+        <div class="card-header card-header-primary">
+          <h5 class="card-title mb-0">Alumnos inscritos</h5>
+        </div>
+        <div class="card-body">
+          <ul class="list-group">
+            {% for ins in inscripciones %}
+              <li class="list-group-item d-flex justify-content-between align-items-center">
+                <span>
+                  <strong>{{ ins.alumno.numero_estudiante }}</strong>
+                  — {{ ins.alumno.apellido_p }} {{ ins.alumno.apellido_m }}, {{ ins.alumno.nombre }}
+                </span>
+                <span class="text-muted small">{{ ins.agregado_en|date:"d/m/Y H:i" }}</span>
+              </li>
+            {% empty %}
+              <li class="list-group-item text-muted text-center">Sin alumnos inscritos.</li>
+            {% endfor %}
+          </ul>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

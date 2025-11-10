@@ -91,7 +91,7 @@
 
           <li class="nav-item {% if  request.resolver_match.url_name == 'cargos_pendientes_todos'  %} active {% endif %}">
             <a class="nav-link" href="{% url 'cargos_pendientes_todos' %}">
-              <i class="material-icons">payment</i>
+              <i class="material-icons">pending_actions</i>
               <p> Cargos Pendientes </p>
             </a>
           </li>
@@ -107,6 +107,15 @@
               <p> Movimientos de Banco </p>
             </a>
           </li>
+
+
+          <li class="nav-item {% if  request.resolver_match.url_name == 'listados_list' or request.resolver_match.url_name == 'listado_detalle' or request.resolver_match.url_name == 'calificaciones_item'  %} active {% endif %}">
+            <a class="nav-link" href=" {% url 'academico:listados_list' %}">
+              <i class="material-icons">school</i>
+              <p>Académico</p>
+            </a>
+          </li>
+
 
 
 

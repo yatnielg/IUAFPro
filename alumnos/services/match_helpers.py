@@ -22,14 +22,17 @@ def _compact(s: str) -> str:
 BLACKLIST_EXACT = {
     "payclip s de rl de cv",
     "por identificar",  # <= normaliza a minúsculas
+    
 }
 BLACKLIST_SUBSTR = [
     "deposito referenciado",
     "spei interbancario",
     "por identificar",
+    
 ]
 BLACKLIST_REGEX = [
     re.compile(r"\bpayclip\b.*\bs de rl de cv\b"),
+    
 ]
 
 def _is_blacklisted(texto: str) -> bool:

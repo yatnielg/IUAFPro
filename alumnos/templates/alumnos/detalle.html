@@ -457,6 +457,21 @@
               {% endif %}
             </div>
           </div>
+
+
+    <div class="col-sm-12 mb-3">
+      <div class="text-muted small">Grupo</div>
+      <div>
+        {% if alumno.informacionEscolar %}
+          {{ alumno.informacionEscolar.grupo_mostrado|default:"—" }}
+        {% else %}—{% endif %}
+      </div>
+    </div>
+
+
+
+
+
           <div class="col-sm-4 mb-3">
             <div class="text-muted small">País</div>
             <div>{{ alumno.pais.nombre|default:"—" }}</div>

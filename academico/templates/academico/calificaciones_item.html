@@ -1,0 +1,70 @@
+{% extends "panel/grafico.html" %}
+{% load static %}
+
+{% block main_content %}
+<div class="container-fluid">
+
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <h4 class="mb-0">
+      {{ listado.programa.codigo }} · {{ listado.nombre }} — {{ item.materia.codigo }} {{ item.materia.nombre }}
+    </h4>
+    <a class="btn btn-outline-secondary" href="{% url 'academico:listado_detalle' listado.pk %}">&larr; Volver</a>
+  </div>
+
+  <div class="card">
+    <div class="card-header card-header-primary">
+      <h5 class="card-title mb-0">Captura de calificaciones</h5>
+    </div>
+    <div class="card-body">
+      <form method="post">
+        {% csrf_token %}
+
+        <div class="table-responsive">
+          <table class="table table-sm table-striped align-middle">
+            <thead>
+              <tr>
+                <th style="width:140px;">No. Estudiante</th>
+                <th>Alumno</th>
+                <th style="width:120px;">Nota</th>
+                <th>Observaciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {{ formset.management_form }}
+              {% for form in formset %}
+                {% with cal=form.instance %}
+                <tr>
+                  <td>
+                    {{ cal.alumno.numero_estudiante }}
+                  </td>
+                  <td>
+                    {{ cal.alumno.apellido_p }} {{ cal.alumno.apellido_m }}, {{ cal.alumno.nombre }}
+                  </td>
+                  <td>
+                    {{ form.nota }}
+                    {% for e in form.nota.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+                  </td>
+                  <td>
+                    {{ form.observaciones }}
+                    {% for e in form.observaciones.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+                  </td>
+                </tr>
+                {% endwith %}
+              {% empty %}
+                <tr><td colspan="4" class="text-center text-muted">No hay alumnos inscritos en este listado.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="text-right">
+          <button class="btn btn-primary" type="submit">
+            Guardar calificaciones
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

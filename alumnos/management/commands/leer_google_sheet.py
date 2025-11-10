@@ -3,7 +3,7 @@ import sys
 import json
 import tempfile
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple
 import pandas as pd
 from datetime import datetime
 from django.core.management.base import BaseCommand
@@ -17,11 +17,8 @@ from django.core.management.base import BaseCommand, CommandError
 # =======================
 # Defaults ajustables
 # =======================
-# ID del Google Sheet que ya "sabemos"
 SHEET_ID_DEFAULT = "1G0P64LVOfxG4siNXmTm0gCORoaPby2W2_wu0Z869Dvk"
-# Si algún día prefieres usar GID, pon aquí el de la pestaña 2022:
 GID_DEFAULT = "1206699819"
-# Leer por nombre de hoja (recomendado)
 SHEET_NAME_DEFAULT = "2022"
 
 # =======================
@@ -33,10 +30,7 @@ def csv_url_by_gid(sheet_id: str, gid: str) -> str:
 def csv_url_by_name(sheet_id: str, sheet_name: str) -> str:
     return f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv&sheet={sheet_name}"
 
-def parse_sheet_url(url: str):
-    """
-    Extrae (sheet_id, gid?) del URL de Google Sheets.
-    """
+def parse_sheet_url(url: str) -> Tuple[Optional[str], Optional[str]]:
     m = re.search(r"/spreadsheets/d/([a-zA-Z0-9-_]+)", url)
     sheet_id = m.group(1) if m else None
     gid = None
@@ -50,16 +44,25 @@ def parse_sheet_url(url: str):
 # =======================
 AMOUNT_RX = re.compile(r"(-?\s?\$?\s?\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})?)")
 DATE_INLINE_RX = re.compile(r"\b(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\b")
-MONEY_CELL_RX = re.compile(r"^\s*-?\$?\s*\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})\s*$")
+MONEY_CELL_RX = re.compile(r"^\s*-?\(?\$?\s*\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})\)?\s*$")
+
+def clean_numeric_token(s: Optional[str]) -> Optional[str]:
+    if s is None: return None
+    ss = str(s).strip()
+    if ss in ("", "-", "–", "—"):  # guiones y vacío = None
+        return None
+    return ss
 
 def to_float(monto_str: Optional[str]):
-    if monto_str is None:
+    s = clean_numeric_token(monto_str)
+    if s is None:
         return None
-    s = str(monto_str).strip()
-    if s == "":
-        return None
+    # paréntesis -> negativo
+    if s.startswith("(") and s.endswith(")"):
+        s = "-" + s[1:-1]
+    # quitar símbolos
     s = s.replace("$", "").replace(" ", "").replace(",", "")
-    # caso latino: "1.234,56" -> 1234.56
+    # caso latino 1.234,56
     if "." in s and "," in s and s.rfind(",") > s.rfind("."):
         s = s.replace(".", "").replace(",", ".")
     try:
@@ -76,7 +79,6 @@ def parse_fecha(fecha_str: Optional[str]):
             return datetime.strptime(s, fmt).date().isoformat()
         except Exception:
             pass
-    # intento: detectar dentro del texto
     m = DATE_INLINE_RX.search(s)
     if m:
         cand = m.group(1).replace("-", "/")
@@ -86,16 +88,16 @@ def parse_fecha(fecha_str: Optional[str]):
             except Exception:
                 continue
         return cand
-    return s  # fallback: devuelve crudo
+    return None  # si no hay fecha válida, mejor None (muchas filas de encabezado)
 
 FIELD_RXS = {
-    "sucursal": re.compile(r"Sucursal:\s*([0-9A-Za-z/.-]+)"),
-    "referencia_numerica": re.compile(r"Referencia\s+Num[eé]rica:\s*([0-9A-Za-z/.-]+)"),
+    "sucursal": re.compile(r"Sucursal:\s*([0-9A-Za-z/.\-]+)"),
+    "referencia_numerica": re.compile(r"Referencia\s+Num[eé]rica:\s*([0-9A-Za-z/.\-]+)"),
     "referencia_alfanumerica": re.compile(r"Referencia\s+alfanum[eé]rica:\s*([^N]+?)(?:No\.|\bInstituci[oó]n|\bNombre|\bConcepto|$)"),
     "concepto": re.compile(r"Concepto\s+del\s+Pago:\s*([^N]+?)(?:No\.|\bInstituci[oó]n|\bNombre|$)"),
-    "autorizacion": re.compile(r"No\.\s*de\s*Autorizaci[oó]n:\s*([0-9A-Za-z/.-]+)"),
-    "emisor_nombre": re.compile(r"Nombre\s+del\s+Emisor:\s*(.+?)\s+Instituci[oó]n\s+Emisora:"),
-    "institucion_emisora": re.compile(r"Instituci[oó]n\s+Emisora:\s*([A-ZÁÉÍÓÚÑa-z0-9\s\.\/&]+)"),
+    "autorizacion": re.compile(r"No\.\s*de\s*Autorizaci[oó]n:\s*([0-9A-Za-z/.\-]+)"),
+    "emisor_nombre": re.compile(r"Nombre\s+del\s+Emisor:\s*(.+?)\s+(?:Instituci[oó]n\s+Emisora|$)"),
+    "institucion_emisora": re.compile(r"Instituci[oó]n\s+Emisora:\s*([A-ZÁÉÍÓÚÑa-z0-9\s./&]+)"),
 }
 
 def first_in_quotes(text: str):
@@ -126,8 +128,19 @@ def parse_desc_fields(desc: str):
     return out
 
 # =======================
-# Detección de columnas
+# Columns helpers
 # =======================
+# palabras para detectar columnas de SALDO/TOTAL/FACTURA (a excluir del monto)
+SALDO_WORDS = [
+    "saldo", "balance", "total", "factura", "marcar", "realizadas", "acumulado",
+    "restante", "resto", "por pagar", "por cobrar", "utilidad", "quedó", "quedo"
+]
+def is_saldo_header(name: Optional[str]) -> bool:
+    if not name:
+        return False
+    n = str(name).lower()
+    return any(w in n for w in SALDO_WORDS)
+
 def score_date_col(series: pd.Series) -> int:
     cnt = 0
     for v in series.astype(str).head(200):
@@ -144,23 +157,37 @@ def score_money_col(series: pd.Series) -> int:
 
 def score_text_col(series: pd.Series) -> float:
     s = series.astype(str).fillna("")
-    return s.map(lambda x: len(x)).head(200).mean()
+    return s.map(len).head(200).mean()
+
+def norm(s: str) -> str:
+    return s.strip().lower()
 
 def detect_columns(df: pd.DataFrame):
-    name_map = {c.lower(): c for c in df.columns}
+    # 1) match exactos primero
+    headers = {norm(c): c for c in df.columns}
 
-    def find_by_keywords(keywords):
-        for k, orig in name_map.items():
-            if any(w in k for w in keywords):
-                return orig
-        return None
+    abono_exact = None
+    for key in ["ingresos (en banco)", "ingresos en banco", "ingresos"]:
+        if key in headers: abono_exact = headers[key]; break
 
-    col_fecha = find_by_keywords(["fecha", "operaci", "aplicaci"])
-    col_cargo = find_by_keywords(["cargo", "retiro", "cargos", "egreso", "debit", "débito"])
-    col_abono = find_by_keywords(["abono", "deposit", "ingreso", "credito", "crédito"])
-    col_desc  = find_by_keywords(["descrip", "concepto", "detalle", "movimiento", "referen"])
+    cargo_exact = None
+    for key in ["egresos"]:
+        if key in headers: cargo_exact = headers[key]; break
 
-    # Heurística por contenido si faltan
+    fecha_exact = None
+    for key in ["fecha"]:
+        if key in headers: fecha_exact = headers[key]; break
+
+    desc_exact = None
+    for key in ["concepto", "concepto ", "descripcion", "descripción", "detalle", "movimiento", "referencia"]:
+        if key in headers: desc_exact = headers[key]; break
+
+    col_abono = abono_exact
+    col_cargo = cargo_exact
+    col_fecha = fecha_exact
+    col_desc  = desc_exact
+
+    # 2) si falta fecha -> heurística
     if not col_fecha:
         scores = {c: score_date_col(df[c]) for c in df.columns}
         if scores:
@@ -168,54 +195,78 @@ def detect_columns(df: pd.DataFrame):
             if scores[best] > 0:
                 col_fecha = best
 
+    # 3) construir candidatos monetarios excluyendo totales/saldos/fecha/desc
     money_scores = {c: score_money_col(df[c]) for c in df.columns}
-    money_candidates = sorted(money_scores, key=money_scores.get, reverse=True)
+    excluded = {c for c in df.columns if is_saldo_header(c)}
+    if col_desc:  excluded.add(col_desc)
+    if col_fecha: excluded.add(col_fecha)
+    money_candidates = [c for c in sorted(money_scores, key=money_scores.get, reverse=True) if c not in excluded]
 
-    if not col_abono or not col_cargo:
-        if money_candidates and money_scores[money_candidates[0]] >= 3:
-            # si no hay abono/cargo explícitos, tomamos la mejor como "importe"
-            if not col_abono and not col_cargo:
-                col_abono = money_candidates[0]
-        if len(money_candidates) >= 2 and (not col_abono or not col_cargo):
+    # 4) completar SOLO lo que falte (no sobreescribir exactos)
+    def has_neg(col):
+        for v in df[col].astype(str).head(200):
+            vv = v.strip()
+            if "-" in vv or "(" in vv:
+                return True
+        return False
+
+    if not col_abono and not col_cargo:
+        if len(money_candidates) >= 2:
             top2 = money_candidates[:2]
-            def has_neg(col):
-                for v in df[col].astype(str).head(200):
-                    vv = v.strip()
-                    if "-" in vv or "(" in vv:
-                        return True
-                return False
             if has_neg(top2[0]) and not has_neg(top2[1]):
                 col_cargo, col_abono = top2[0], top2[1]
-            elif has_neg(top2[1]) and not has_neg[top2[0]]:  # noqa: E741 (legibilidad)
+            elif has_neg(top2[1]) and not has_neg(top2[0]):
                 col_cargo, col_abono = top2[1], top2[0]
             else:
                 col_cargo, col_abono = top2[0], top2[1]
+        elif len(money_candidates) == 1:
+            # única columna: por defecto abono
+            col_abono = money_candidates[0]
+    elif col_abono and not col_cargo:
+        for c in money_candidates:
+            if c != col_abono:
+                col_cargo = c
+                break
+    elif col_cargo and not col_abono:
+        for c in money_candidates:
+            if c != col_cargo:
+                col_abono = c
+                break
 
+    # 5) si no hay descripción, elige la más “larga”
     if not col_desc:
         text_scores = {c: score_text_col(df[c]) for c in df.columns}
         if text_scores:
             col_desc = max(text_scores, key=text_scores.get)
 
-    return col_desc, col_cargo, col_abono, col_fecha
+    # 6) blindaje: nunca usar columnas saldo/total/factura como montos
+    if col_abono and is_saldo_header(col_abono): col_abono = None
+    if col_cargo and is_saldo_header(col_cargo): col_cargo = None
+
+    return col_desc, col_cargo, col_abono, col_fecha, money_candidates
 
 # =======================
 # Parse por fila
 # =======================
-def parse_row_with_columns(row, col_desc, col_cargo, col_abono, col_fecha):
+def parse_row_with_columns(row, col_desc, col_cargo, col_abono, col_fecha, has_money_cols: bool):
     desc = str(row[col_desc]) if col_desc else ""
     fecha = parse_fecha(row[col_fecha]) if col_fecha else None
+
+    # Nunca usar columnas de saldo/total/factura como monto
+    if col_abono and is_saldo_header(col_abono):
+        col_abono = None
+    if col_cargo and is_saldo_header(col_cargo):
+        col_cargo = None
 
     cargo = to_float(row[col_cargo]) if col_cargo else None
     abono = to_float(row[col_abono]) if col_abono else None
 
-    # Si sólo hay una columna de importe (p.ej. col_abono es realmente "importe")
-    if cargo is None and abono is not None and (("cargo" not in col_abono.lower()) and ("abono" not in col_abono.lower())):
+    # Si sólo hay una columna de importe (no etiquetada como cargo/abono)
+    if cargo is None and abono is not None and (("cargo" not in (col_abono or "").lower()) and ("abono" not in (col_abono or "").lower()) and ("egreso" not in (col_abono or "").lower()) and ("ingreso" not in (col_abono or "").lower())):
         lower = desc.lower()
         if any(w in lower for w in ["cargo", "pago", "retiro", "servicio", "comisión", "comision", "debit", "compra"]):
             cargo, abono = abono, None  # tratar como egreso
-        else:
-            # por defecto, ingreso
-            pass
+        # si no, queda como ingreso por defecto
 
     fields = parse_desc_fields(desc)
 
@@ -223,16 +274,21 @@ def parse_row_with_columns(row, col_desc, col_cargo, col_abono, col_fecha):
     signo = None
     if cargo is not None and cargo != 0:
         monto = cargo
-        signo = -1
-    if abono is not None and abono != 0:
+        signo = 1          # <- cargo ahora cuenta como INGRESO
+    if abono is not None and abono != 0 and monto is None:
         monto = abono
-        signo = 1
+        signo = -1         # <- abono ahora cuenta como EGRESO
 
-    # Sin columnas de monto: intentar desde descripción
-    if monto is None:
+    # IMPORTANTÍSIMO:
+    # Si el DF tiene columnas monetarias (ingresos/egresos), NO intentamos rescate desde la descripción.
+    if monto is None and not has_money_cols:
         m = AMOUNT_RX.findall(desc)
         if m:
             monto = to_float(m[-1])
+
+    # Si la fila no tiene fecha válida y tampoco monto, probablemente es encabezado/nota -> ignorar
+    if not fecha and monto is None and not desc:
+        return None
 
     return {
         "fecha": fecha,
@@ -250,10 +306,6 @@ def parse_row_with_columns(row, col_desc, col_cargo, col_abono, col_fecha):
     }
 
 def parse_single_text_cell(text: str):
-    """
-    Caso donde todo viene concatenado en una sola celda grande.
-    Se intenta cortar por fechas dd/mm/yyyy o dd-mm-yyyy y luego parsear.
-    """
     parts = re.split(r'(?=\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b)', text)
     out = []
     for p in parts:
@@ -300,8 +352,6 @@ class Command(BaseCommand):
         parser.add_argument("--out-json", help="Ruta para guardar el JSON de movimientos.")
         parser.add_argument("--debug", action="store_true",
                             help="Imprime columnas y primeras filas para diagnóstico.")
-
-        # Mapeo manual de columnas
         parser.add_argument("--col-fecha")
         parser.add_argument("--col-descripcion")
         parser.add_argument("--col-cargo")
@@ -365,7 +415,7 @@ class Command(BaseCommand):
         if debug or opts["mostrar_head"]:
             self.stdout.write(self.style.HTTP_INFO(f"\nColumnas detectadas: {list(df.columns)}"))
             self.stdout.write(self.style.HTTP_INFO("Primeras 3 filas crudas:"))
-            #print(df.head(3).to_string(index=False))
+            # print(df.head(3).to_string(index=False))
 
         if limite and limite > 0:
             df = df.iloc[:limite].copy()
@@ -381,51 +431,57 @@ class Command(BaseCommand):
                 movimientos.extend(parse_single_text_cell(str(txt)))
 
         else:
-            # Mapeo manual (si lo pasan por CLI)
+            # Override manual
             col_desc = opts.get("col_descripcion")
             col_cargo = opts.get("col_cargo")
             col_abono = opts.get("col_abono")
             col_fecha = opts.get("col_fecha")
 
-            # Si no está completo, detectar automáticamente
+            # Detección automática (con preferencias duras)
             if not (col_desc and (col_cargo or col_abono) and col_fecha):
-                auto_desc, auto_cargo, auto_abono, auto_fecha = detect_columns(df)
-                col_desc = col_desc or auto_desc
+                auto_desc, auto_cargo, auto_abono, auto_fecha, money_candidates = detect_columns(df)
+                col_desc  = col_desc  or auto_desc
                 col_cargo = col_cargo or auto_cargo
                 col_abono = col_abono or auto_abono
                 col_fecha = col_fecha or auto_fecha
+            else:
+                # si el usuario fuerza columnas, consideramos que hay columnas monetarias
+                money_candidates = [c for c in [col_abono, col_cargo] if c]
 
             if debug:
                 self.stdout.write(self.style.HTTP_INFO(
                     f"Usando columnas -> desc:{col_desc} | cargo:{col_cargo} | abono:{col_abono} | fecha:{col_fecha}"
                 ))
 
-            # Si la “descripción” viene muy vacía, concatenar columnas de texto
+            # Si la “descripción” viene muy vacía, concatenar SOLO columnas NO-monetarias ni de saldo
             try:
                 empty_ratio = df[col_desc].astype(str).str.strip().eq("").mean() if col_desc else 1.0
             except Exception:
                 empty_ratio = 1.0
             if empty_ratio > 0.5:
-                text_cols = [c for c in df.columns if df[c].dtype == object]
-                df["__desc_join__"] = df[text_cols].astype(str).agg(" | ".join, axis=1)
+                non_money_cols = [
+                    c for c in df.columns
+                    if score_money_col(df[c]) == 0 and not is_saldo_header(c)
+                ]
+                df["__desc_join__"] = df[non_money_cols].astype(str).agg(" | ".join, axis=1)
                 col_desc = "__desc_join__"
                 if debug:
-                    self.stdout.write(self.style.HTTP_INFO("Descripción débil: usando concatenación de columnas de texto (__desc_join__)"))
+                    self.stdout.write(self.style.HTTP_INFO(
+                        "Descripción débil: usando concatenación de columnas NO monetarias (__desc_join__)"
+                    ))
+
+            has_money_cols = bool([c for c in money_candidates if c])
 
             # Iterar filas
             for _, row in df.iterrows():
-                movimientos.append(
-                    parse_row_with_columns(row, col_desc, col_cargo, col_abono, col_fecha)
-                )
+                rec = parse_row_with_columns(row, col_desc, col_cargo, col_abono, col_fecha, has_money_cols)
+                if rec is not None:
+                    movimientos.append(rec)
 
-        # --- Salida en consola ---
         self.stdout.write(self.style.SUCCESS("\nMovimientos (lista de diccionarios):"))
-        #print(json.dumps(movimientos, ensure_ascii=False, indent=2))
 
-        # --- Guardar JSON si se pidió ---
         out_json_arg = opts.get("out_json")
         if out_json_arg is None or str(out_json_arg).strip() == "":
-            # ruta por defecto en tempdir con nombre según hoja/gid
             base = f"movimientos_{(sheet_name or gid or 'sheet')}.json"
             out_json_arg = str(Path(tempfile.gettempdir()) / base)
 
@@ -441,5 +497,5 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(f"\nTotal movimientos: {len(movimientos)}"))
 
 
-
-#python manage.py leer_google_sheet --por nombre --out-json ".\salidas\movimientos_2022.json" --debug
+# Ejemplo:
+# python manage.py leer_google_sheet --por nombre --out-json ".\salidas\movimientos_2025-11.json" --debug

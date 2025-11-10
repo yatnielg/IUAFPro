@@ -148,33 +148,150 @@ def desmarcar_bienvenida(modeladmin, request, queryset):
     )
     modeladmin.message_user(request, f"Se desmarcaron {updated} registros.")
 
+from .models import Grupo
+@admin.register(Grupo)
+class GrupoAdmin(admin.ModelAdmin):
+    list_display = ("programa", "codigo", "nombre", "activo")
+    list_filter = ("programa", "activo")
+    search_fields = ("codigo", "nombre", "programa__codigo", "programa__nombre")
+
+
+
+from django.utils.html import format_html
+
+# --- Filtro útil: ¿tiene grupo nuevo?
+class TieneGrupoNuevoFilter(admin.SimpleListFilter):
+    title = "Tiene grupo (nuevo)"
+    parameter_name = "tiene_grupo_nuevo"
+
+    def lookups(self, request, model_admin):
+        return (
+            ("si", "Sí"),
+            ("no", "No"),
+        )
+
+    def queryset(self, request, queryset):
+        v = self.value()
+        if v == "si":
+            return queryset.exclude(grupo_nuevo__isnull=True)
+        if v == "no":
+            return queryset.filter(grupo_nuevo__isnull=True)
+        return queryset
+
+
 @admin.register(InformacionEscolar)
 class InformacionEscolarAdmin(admin.ModelAdmin):
+    # -----------------------
+    # Presentación principal
+    # -----------------------
     list_display = (
-        "programa", "sede", "estatus_academico",
-        "estatus_administrativo", "precio_final",
+        "grupo_display",            # <- muestra el nuevo si existe; si no, el legacy
+        "programa", "sede",
+        "estatus_academico", "estatus_administrativo",
+        "precio_final",
         "bienvenida_enviada", "bienvenida_enviada_en", "bienvenida_enviada_por",
         "creado_en",
     )
+
+    # -----------------------
+    # Filtros
+    # -----------------------
     list_filter = (
-        "programa", "sede", "estatus_academico", "estatus_administrativo",
+        "programa", "sede",
+        "estatus_academico", "estatus_administrativo",
         "bienvenida_enviada",
+        "grupo_nuevo",              # por relación al nuevo modelo
+        TieneGrupoNuevoFilter,      # sí/no
     )
+
+    # -----------------------
+    # Búsquedas
+    # -----------------------
     search_fields = (
         "programa__codigo", "programa__nombre",
         "sede__nombre",
         "estatus_academico__nombre", "estatus_administrativo__nombre",
         "alumno__numero_estudiante", "alumno__nombre", "alumno__apellido_p", "alumno__apellido_m",
+        "grupo",                    # legacy
+        "grupo_nuevo__nombre",      # nuevo
+        "grupo_nuevo__codigo",      # nuevo
     )
+
+    # -----------------------
+    # Campos de solo lectura
+    # -----------------------
     readonly_fields = (
         "creado_en", "actualizado_en",
         "bienvenida_enviada", "bienvenida_enviada_en", "bienvenida_enviada_por",
+        "grupo_mostrado_preview",   # vista previa amigable
     )
+
+    # -----------------------
+    # Autocomplete y performance
+    # -----------------------
+    autocomplete_fields = ("programa", "financiamiento", "sede", "grupo_nuevo")
+    list_select_related = ("programa", "sede", "estatus_academico", "estatus_administrativo", "grupo_nuevo")
+
     date_hierarchy = "creado_en"
     ordering = ("-creado_en",)
 
-    # Mantén tus acciones previas y suma las nuevas
+    # Mantén tus acciones previas
     actions = [exportar_csv, borrar_todo_modelo, marcar_bienvenida, desmarcar_bienvenida]
+
+    # -----------------------
+    # Fieldsets (opcional, ordenado)
+    # -----------------------
+    fieldsets = (
+        ("Programa y sede", {
+            "fields": ("programa", "sede", "modalidad", "matricula")
+        }),
+        ("Grupo", {
+            "fields": (
+                "grupo_nuevo",            # nuevo (FK)
+                "grupo",                  # legacy (CharField)
+                "grupo_mostrado_preview", # solo lectura
+            ),
+            "description": "Si 'Grupo (nuevo)' está vacío, se mostrará el valor de 'Grupo' (legacy).",
+        }),
+        ("Finanzas", {
+            "fields": (
+                "financiamiento",
+                "precio_colegiatura", "monto_descuento", "precio_final",
+                "precio_inscripcion", "precio_reinscripcion", "precio_titulacion", "precio_equivalencia",
+                "meses_programa", "numero_reinscripciones",
+            )
+        }),
+        ("Fechas", {"fields": ("inicio_programa", "fin_programa", "fecha_alta")}),
+        ("Estatus", {"fields": ("estatus_academico", "estatus_administrativo", "requiere_datos_de_facturacion")}),
+        ("Sistema", {"fields": ("creado_en", "actualizado_en", "bienvenida_enviada", "bienvenida_enviada_en", "bienvenida_enviada_por")}),
+    )
+
+    # -----------------------
+    # Queryset optimizado
+    # -----------------------
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        return qs.select_related(
+            "programa", "sede", "estatus_academico", "estatus_administrativo", "grupo_nuevo"
+        )
+
+    # -----------------------
+    # Columnas y previews
+    # -----------------------
+    @admin.display(description="Grupo", ordering="grupo_nuevo__nombre")
+    def grupo_display(self, obj):
+        """
+        Lista: prioriza el nombre del grupo nuevo, si no hay muestra el legacy.
+        """
+        val = (obj.grupo_nuevo.nombre if getattr(obj, "grupo_nuevo_id", None) else None) or (obj.grupo or "")
+        # Tip visual: gris si es legacy
+        if obj.grupo_nuevo_id:
+            return val
+        return format_html('<span style="color:#888;">{}</span>', val or "—")
+
+    @admin.display(description="Grupo mostrado (preview)")
+    def grupo_mostrado_preview(self, obj):
+        return (obj.grupo_nuevo.nombre if getattr(obj, "grupo_nuevo_id", None) else None) or (obj.grupo or "")
 
 # =============================
 # ALUMNOS

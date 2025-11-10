@@ -510,6 +510,45 @@ class EstatusAdministrativo(BaseEstatus):
         verbose_name = "Estatus administrativo"
         verbose_name_plural = "Estatus administrativos"
 
+
+
+#############################################################################################
+class Grupo(models.Model):
+    """
+    Grupo académico asociado a un Programa.
+    """
+    programa = models.ForeignKey(
+        "Programa",
+        on_delete=models.CASCADE,
+        related_name="grupos",
+        verbose_name="Programa",
+        db_index=True,
+    )
+    codigo = models.SlugField(
+        "Código de grupo",
+        max_length=60,
+        help_text="Identificador corto (sin espacios). Ej.: a-2025-1",
+    )
+    nombre = models.CharField(
+        "Nombre visible",
+        max_length=120,
+        help_text="Etiqueta que verá el usuario. Ej.: A 2025-1 Vespertino",
+    )
+    activo = models.BooleanField(default=True)
+
+    class Meta:
+        verbose_name = "Grupo"
+        verbose_name_plural = "Grupos"
+        ordering = ["programa__codigo", "nombre"]
+        unique_together = [("programa", "codigo")]
+        indexes = [
+            models.Index(fields=["programa", "codigo"]),
+            models.Index(fields=["activo"]),
+        ]
+
+    def __str__(self):
+        return f"{self.programa.codigo} — {self.nombre}"
+
 # ============================================================
 # InformacionEscolar (plan) y documentos asociados
 # ============================================================
@@ -536,7 +575,23 @@ class InformacionEscolar(models.Model):
     creado_en = models.DateTimeField(auto_now_add=True)
     actualizado_en = models.DateTimeField(auto_now=True)
     fecha_alta = models.DateTimeField(null=True, blank=True, help_text="Fecha en que el alumno se dio de alta en el sistema")
-    grupo = models.CharField("Grupo", max_length=50, blank=True, null=True)
+    # NUEVO: vínculo al modelo Grupo
+    grupo_nuevo = models.ForeignKey(
+        "Grupo",
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="planes",
+        verbose_name="Grupo (nuevo)",
+        help_text="Selecciona un grupo del catálogo. Si está vacío se usará el campo 'Grupo' (LEGACY).",
+    )
+
+    # LEGACY (DEPRECATED): mantener mientras migras
+    grupo = models.CharField(
+        "Grupo",
+        max_length=50,
+        blank=True, null=True,
+        help_text="LEGACY / DEPRECADO: Se usará sólo si no hay 'Grupo (nuevo)'."
+    )
     modalidad = models.CharField("Modalidad", max_length=15, choices=MODALIDAD_OPCIONES, default="en_linea")
     matricula = models.CharField("Matrícula", max_length=64, null=True, blank=True)
 
@@ -622,6 +677,16 @@ class InformacionEscolar(models.Model):
     @property
     def fecha_ultima_actualizacion_docs(self):
         return self.documentos.aggregate(m=Max("actualizado_en"))["m"]
+    
+    @property
+    def grupo_mostrado(self) -> str:
+        """
+        Devuelve el nombre del Grupo nuevo si existe; en caso contrario,
+        devuelve el valor legacy del CharField 'grupo'.
+        """
+        if self.grupo_nuevo_id and self.grupo_nuevo:
+            return self.grupo_nuevo.nombre
+        return self.grupo or ""
 
 # ============================================================
 # Alumnos y pagos

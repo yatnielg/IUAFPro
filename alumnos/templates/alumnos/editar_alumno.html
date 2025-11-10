@@ -357,6 +357,16 @@
                 <label for="{{ form_info.fin_programa.id_for_label }}">{{ form_info.fin_programa.label }}</label>
                 {{ form_info.fin_programa }}
               </div>
+
+
+              
+              <div class="form-group col-md-4">
+                <label for="{{ form_info.grupo_nuevo.id_for_label }}">Grupo (nuevo)</label>
+                {{ form_info.grupo_nuevo }}
+                {% for error in form_info.grupo_nuevo.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
+              </div>
+
+
               <div class="form-group col-md-4">
                 <label for="{{ form_info.grupo.id_for_label }}">{{ form_info.grupo.label }}</label>
                 {{ form_info.grupo }}

@@ -146,7 +146,7 @@ from alumnos.permisos import (
     user_can_edit_estatus_administrativo,
 )
 
-from alumnos.models import Programa, Financiamiento
+from alumnos.models import Programa, Financiamiento, Grupo
 
 class InformacionEscolarForm(forms.ModelForm):
     inicio_programa = forms.DateField(
@@ -177,13 +177,15 @@ class InformacionEscolarForm(forms.ModelForm):
             "precio_titulacion",
             "precio_equivalencia",
             "numero_reinscripciones",
-            # Resto
+            # Ubicación / grupo
             "sede",
             "inicio_programa",
             "fin_programa",
+            "grupo_nuevo",
             "grupo",
             "modalidad",
             "matricula",
+            # Estatus
             "estatus_academico",
             "estatus_administrativo",
             "requiere_datos_de_facturacion",
@@ -196,6 +198,9 @@ class InformacionEscolarForm(forms.ModelForm):
             "estatus_academico": forms.Select(attrs={"class": "selectpicker", "data-style": "select-with-transition"}),
             "estatus_administrativo": forms.Select(attrs={"class": "selectpicker", "data-style": "select-with-transition"}),
             "requiere_datos_de_facturacion": forms.CheckboxInput(),
+
+            "grupo_nuevo": forms.Select(attrs={"class": "selectpicker", "data-style": "select-with-transition"}),  # 👈 NUEVO
+
 
             # Solo-lectura visual en template
             "monto_descuento": forms.NumberInput(attrs={"class": "form-control is-readonly-input is-readonly", "readonly": "readonly", "step": "0.01"}),
@@ -374,9 +379,26 @@ class InformacionEscolarForm(forms.ModelForm):
         if "estatus_administrativo" in self.fields and not can_admin:
             self.fields["estatus_administrativo"].disabled = True
 
+        programa = self._get_programa()
+        if "grupo_nuevo" in self.fields:
+            if programa:
+                qs = Grupo.objects.filter(programa=programa, activo=True).order_by("nombre")
+            else:
+                # Si no hay programa aún, no mostramos opciones
+                qs = Grupo.objects.none()
+
+            self.fields["grupo_nuevo"].queryset = qs
+            self.fields["grupo_nuevo"].empty_label = "— Selecciona un grupo —"
+            self.fields["grupo_nuevo"].label_from_instance = lambda g: g.nombre
+
     # -------------------- validación y cálculo --------------------
     def clean(self):
         cleaned = super().clean()
+        
+        programa = self._get_programa()
+        grupo_nuevo = cleaned.get("grupo_nuevo")
+        if grupo_nuevo and programa and grupo_nuevo.programa_id != programa.id:
+            self.add_error("grupo_nuevo", "El grupo seleccionado no pertenece al programa elegido.")
 
         # Defaults seguros si algún precio llega vacío
         for name, default in [

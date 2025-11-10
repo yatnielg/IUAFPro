@@ -54,7 +54,14 @@ INSTALLED_APPS = [
     "django.contrib.humanize",
     'alumnos',
     'cobros',
+    "academico",
+    "oauth2_provider",
+    
 ]
+
+
+
+
 
 SITE_ID = 1  # importante para allauth
 AUTHENTICATION_BACKENDS = [
@@ -63,6 +70,24 @@ AUTHENTICATION_BACKENDS = [
     # Backend de allauth
     "allauth.account.auth_backends.AuthenticationBackend",
 ]
+
+
+OAUTH2_PROVIDER = {
+    "OIDC_ENABLED": True,
+    # Debe ser la URL pública del issuer, sin barra final
+    "OIDC_ISS_ENDPOINT": "https://admin.campusiuaf.com",
+
+    # Define scopes, OIDC necesita 'openid' (y opcionalmente 'profile'/'email')
+    "SCOPES": {
+        "read": "Read access",
+        "write": "Write access",
+        "openid": "OpenID Connect scope",
+        "profile": "User profile",
+        "email": "User email",
+    },
+}
+
+
 
 # Dónde mandar después del login/logout
 LOGIN_REDIRECT_URL = "principal"   # o la ruta que quieras

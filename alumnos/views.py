@@ -711,6 +711,7 @@ def alumnos_detalle(request, pk):
         Alumno.objects.select_related(
             "pais", "estado", "informacionEscolar",
             "informacionEscolar__programa", "informacionEscolar__sede",
+             "informacionEscolar__grupo_nuevo",  # 👈 AÑADIR
         ),
         pk=pk,
     )
