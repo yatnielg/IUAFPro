@@ -79,9 +79,16 @@
           <tbody>
             {% for l in listados %}
             <tr>
-              <td class="align-middle">
-                <strong>{{ l.nombre }}</strong>
-              </td>
+
+            <td class="align-middle">
+              <a href="{% url 'academico:listado_detalle' l.pk %}"
+                class=" font-weight-bold text-decoration-none">
+                {{ l.nombre }}
+              </a>
+            </td>
+
+
+
               <td class="align-middle">
                 {% if l.programa %}<span class="badge badge-light">{{ l.programa.codigo }}</span>{% else %}<span class="text-muted">—</span>{% endif %}
               </td>
@@ -110,9 +117,13 @@
                   <a class="btn btn-outline-primary" href="{% url 'academico:listado_detalle' l.pk %}">
                     <i class="material-icons" style="font-size:18px;">open_in_new</i> Abrir
                   </a>
-                  <a class="btn btn-outline-secondary" href="{% url 'admin:academico_listadomaterias_change' l.pk %}" title="Editar en admin">
-                    <i class="material-icons" style="font-size:18px;">edit</i>
-                  </a>
+                  
+            
+                    <a class="btn btn-outline-secondary" href="{% url 'admin:academico_listadomaterias_change' l.pk %}" title="Editar en admin">
+                      <i class="material-icons" style="font-size:18px;">edit</i>
+                    </a>
+            
+
                 </div>
               </td>
             </tr>

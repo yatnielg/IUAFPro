@@ -150,5 +150,5 @@ class Calificacion(models.Model):
     def save(self, *args, **kwargs):
         # si hay nota, marca aprobado según umbral (ajusta umbral si es diferente)
         if self.nota is not None:
-            self.aprobado = float(self.nota) >= 60.0
+            self.aprobado = float(self.nota) >= 8.0
         super().save(*args, **kwargs)

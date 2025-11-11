@@ -621,9 +621,9 @@
             <div>
               {% if alumno.informacionEscolar %}
                 {% if alumno.informacionEscolar.requiere_datos_de_facturacion %}
-                  <span class="badge badge-danger">Sí</span>
+                  <span class="badge badge-success">Sí</span>
                 {% else %}
-                  <span class="badge badge-success">No</span>
+                  <span class="badge badge-danger">No</span>
                 {% endif %}
               {% else %}—{% endif %}
             </div>
@@ -633,6 +633,121 @@
     </div> <!-- /row detalles -->
   </div>
 </div>
+
+
+
+
+
+## ===================== CALIFICACIONES DEL ALUMNO ===================== ##
+{% if califs %}
+<div class="card mt-4">
+  <div class="card-header card-header-primary card-header-icon d-flex align-items-center">
+    <div class="card-icon"><i class="material-icons">grading</i></div>
+    <div>
+      <h4 class="card-title m-0">Calificaciones por materia</h4>
+      <p class="card-category m-0">
+        Registros: <strong>{{ califs|length }}</strong>
+      </p>
+    </div>
+  </div>
+
+  <div class="card-body">
+    <div class="table-responsive">
+      <table class="table table-hover">
+        <thead>
+          <tr>
+            <th>Programa</th>
+            <th>Listado</th>
+            <th>Código</th>
+            <th>Materia</th>
+            <th>Inicio</th>
+            <th>Fin</th>
+            <th class="text-right">Nota</th>
+            <th>Estado</th>
+            <th>Obs.</th>
+            <th class="text-right">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for c in califs %}
+          {# Agrupador visual opcional por listado #}
+          {% ifchanged c.item.listado.id %}
+            <tr class="table-active">
+              <td colspan="10">
+                <strong>{{ c.item.listado.programa.codigo }}</strong>
+                · {{ c.item.listado.nombre }}
+              </td>
+            </tr>
+          {% endifchanged %}
+
+          <tr>
+            <td>{{ c.item.listado.programa.codigo }}</td>
+            <td>{{ c.item.listado.nombre }}</td>
+            <td>{{ c.item.materia.codigo }}</td>
+            <td>{{ c.item.materia.nombre }}</td>
+            <td>{{ c.item.fecha_inicio|date:"d/m/Y" }}</td>
+            <td>{{ c.item.fecha_fin|date:"d/m/Y" }}</td>
+
+            <td class="text-right">
+              {% if c.nota is not None %}
+                {{ c.nota }}
+              {% else %} — {% endif %}
+            </td>
+
+            <td>
+              {% if c.nota is not None %}
+                {% if c.aprobado %}
+                  <span class="badge badge-success">Aprobado</span>
+                {% else %}
+                  <span class="badge badge-danger">No aprobado</span>
+                {% endif %}
+              {% else %}
+                <span class="badge badge-secondary">Sin nota</span>
+              {% endif %}
+            </td>
+
+            <td>
+              {% if c.observaciones %}
+                <span title="{{ c.observaciones }}">…</span>
+              {% else %} — {% endif %}
+            </td>
+
+            <td class="text-right">
+              <a class="btn btn-outline-primary btn-sm"
+                 href="{% url 'academico:calificaciones_item' c.item.pk %}">
+                <i class="material-icons align-middle" style="font-size:18px;line-height:1;">edit</i>
+                Capturar/editar
+              </a>
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="10" class="text-center text-muted">Sin calificaciones registradas.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% else %}
+<div class="card mt-4">
+  <div class="card-header card-header-primary card-header-icon d-flex align-items-center">
+    <div class="card-icon"><i class="material-icons">grading</i></div>
+    <h4 class="card-title m-0">Calificaciones por materia</h4>
+  </div>
+  <div class="card-body">
+    <div class="text-muted">Este alumno aún no tiene calificaciones capturadas.</div>
+  </div>
+</div>
+{% endif %}
+
+
+
+
+
+
+
+
+
 
 {% if can_view_pagos %}
 <!-- ===================== PAGOS DEL ALUMNO ===================== -->

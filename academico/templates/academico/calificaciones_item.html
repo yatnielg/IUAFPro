@@ -112,57 +112,48 @@
       </div>
 
       <form method="post">
-        {% csrf_token %}
+  {% csrf_token %}
+  {{ formset.management_form }}  {# <-- aquí, antes de la tabla #}
 
-        <div class="table-responsive material-datatables">
-          <table id="datatables-calif" class="table table-sm table-striped align-middle table-no-bordered table-hover" cellspacing="0" width="100%" style="width:100%">
-            <thead>
-              <tr>
-                <th style="width:140px;">No. Estudiante</th>
-                <th>Alumno</th>
-                <th style="width:120px;">Nota</th>
-                <th>Observaciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {{ formset.management_form }}
-              {% for form in formset %}
-                {% with cal=form.instance %}
-                <tr>
-                  {% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}
+  <div class="table-responsive material-datatables">
+    <table id="datatables-calif" class="table table-sm table-striped align-middle table-no-bordered table-hover" cellspacing="0" width="100%" style="width:100%">
+      <thead>
+        <tr>
+          <th style="width:140px;">No. Estudiante</th>
+          <th>Alumno</th>
+          <th style="width:120px;">Nota</th>
+          <th>Observaciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for form in formset %}
+          {% with cal=form.instance %}
+          <tr>
+            {% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}
+            <td>{{ cal.alumno.numero_estudiante }}</td>
+            <td>{{ cal.alumno.apellido_p }} {{ cal.alumno.apellido_m }}, {{ cal.alumno.nombre }}</td>
+            <td>
+              {{ form.nota }}
+              {% for e in form.nota.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+            </td>
+            <td>
+              {{ form.observaciones }}
+              {% for e in form.observaciones.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+            </td>
+          </tr>
+          {% endwith %}
+        {% empty %}
+          <tr><td colspan="4" class="text-center text-muted">No hay alumnos inscritos en este listado.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 
-                  {% if form.non_field_errors %}
-                    <td colspan="4">
-                      {% for e in form.non_field_errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
-                    </td>
-                  {% endif %}
+  <div class="calif-actions">
+    <button class="btn btn-primary" type="submit">Guardar calificaciones</button>
+  </div>
+</form>
 
-                  <td>{{ cal.alumno.numero_estudiante }}</td>
-                  <td>{{ cal.alumno.apellido_p }} {{ cal.alumno.apellido_m }}, {{ cal.alumno.nombre }}</td>
-                  <td>
-                    {{ form.nota }}
-                    {% for e in form.nota.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
-                  </td>
-                  <td>
-                    {{ form.observaciones }}
-                    {% for e in form.observaciones.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
-                  </td>
-                </tr>
-                {% endwith %}
-              {% empty %}
-                <tr>
-                  <td colspan="4" class="text-center text-muted">No hay alumnos inscritos en este listado.</td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-
-        <div class="calif-actions">
-          <button class="btn btn-primary" type="submit">Guardar calificaciones</button>
-        </div>
-
-      </form>
     </div>
   </div>
 
@@ -238,7 +229,13 @@
     $selObs.on('change', refiltrar);
     $notaMin.on('input', refiltrar);
     $notaMax.on('input', refiltrar);
-    $('#datatables-calif').on('input', 'input[name$="-nota"], textarea[name$="-observaciones"]', refiltrar);
+    // Redibuja solo cuando el campo pierde el foco o confirman con Enter
+    $('#datatables-calif').on(
+      'change',
+      'input[name$="-nota"], textarea[name$="-observaciones"]',
+      function(){ table.draw(false); }
+    );
+
 
     $('#clear-filters').on('click', function () {
       $selCaptura.val([]); $selObs.val([]); $notaMin.val(''); $notaMax.val('');

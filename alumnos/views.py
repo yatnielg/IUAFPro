@@ -704,6 +704,7 @@ def alumnos_lista(request):
 ###############################################################
 from .models import  ProgramaDocumentoRequisito, DocumentoAlumno
 from django.db.models import Max
+from academico.models import Calificacion
 
 @login_required
 def alumnos_detalle(request, pk):
@@ -915,13 +916,33 @@ def alumnos_detalle(request, pk):
     total_aplicado = sum(d['monto_aplicado'] for d in data) if data else 0
     total_restante = sum(d['monto_restante'] for d in data) if data else 0
 
- 
 
+    califs = (
+        Calificacion.objects
+        .filter(alumno=alumno)
+        .select_related(
+            "item",
+            "item__materia",
+            "item__listado",
+            "item__listado__programa",
+        )
+        .order_by(
+            "-item__listado__creado_en",   # listados más recientes primero
+            "item__fecha_inicio",
+            "item__materia__codigo",
+        )
+    )
+
+    print("[DEBUG] califs count =", califs.count())
+  
 
     return render(
         request,
         "alumnos/detalle.html",
         {
+             # Calificaciones
+            "califs": califs,
+            
             "alumno": alumno,
             "hoy": hoy,   
             # pagos/cargos
@@ -949,6 +970,9 @@ def alumnos_detalle(request, pk):
             'original': total_original,
             'aplicado': total_aplicado,
             'restante': total_restante,
+
+           
+        
             },
         },
     )

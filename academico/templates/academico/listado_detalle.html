@@ -1,3 +1,4 @@
+{# templates/academico/listado_detalle.html #}
 {% extends "panel/grafico.html" %}
 {% load static %}
 
@@ -5,10 +6,10 @@
 <div class="container-fluid">
 
   <div class="d-flex align-items-center justify-content-between mb-3">
-    <h4 class="mb-0">
+    <h4 class="mb-0 text-white">
       {{ listado.programa.codigo }} · {{ listado.nombre }}
     </h4>
-    <a class="btn btn-outline-secondary" href="{% url 'academico:listados_list' %}">&larr; Volver</a>
+    <a class="btn btn-outline-primary" href="{% url 'academico:listados_list' %}">&larr; Volver</a>
   </div>
 
   {% if listado.descripcion %}
@@ -18,9 +19,13 @@
   <div class="row">
     <div class="col-lg-7">
       <div class="card">
-        <div class="card-header card-header-primary">
-          <h5 class="card-title mb-0">Materias del listado</h5>
+        <div class="card-header card-header-primary card-header-icon d-flex align-items-center">
+          <div class="card-icon bg-gradient-purple">
+            <i class="material-icons">menu_book</i>
+          </div>
+          <h5 class="card-title mb-0 ml-2">Materias del listado</h5>
         </div>
+
         <div class="card-body">
           <div class="table-responsive">
             <table class="table table-sm table-striped">
@@ -61,9 +66,13 @@
 
     <div class="col-lg-5">
       <div class="card">
-        <div class="card-header card-header-primary">
-          <h5 class="card-title mb-0">Alumnos inscritos</h5>
+        <div class="card-header card-header-primary card-header-icon d-flex align-items-center">
+          <div class="card-icon bg-gradient-purple">
+            <i class="material-icons">groups</i>
+          </div>
+          <h5 class="card-title mb-0 ml-2">Alumnos inscritos</h5>
         </div>
+
         <div class="card-body">
           <ul class="list-group">
             {% for ins in inscripciones %}
