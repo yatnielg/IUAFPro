@@ -1,57 +1,133 @@
+{# templates/academico/listados_list.html #}
 {% extends "panel/grafico.html" %}
 {% load static %}
 
 {% block main_content %}
-<div class="container-fluid">
-  <div class="card">
-    <div class="card-header card-header-primary">
-      <h4 class="card-title mb-0">Listados de materias</h4>
-    </div>
-    <div class="card-body">
 
-      <form method="get" class="form-inline mb-3">
-        <div class="form-group mr-2">
-          <label class="mr-2">Programa</label>
-          <select name="programa" class="form-control">
-            <option value="">— Todos —</option>
+<div class="container-fluid">
+
+
+  <div class="card">
+
+
+<div class="card-header card-header-primary card-header-icon d-flex align-items-center">
+  <div class="card-icon bg-gradient-purple">
+    <i class="material-icons">school</i>
+  </div>
+
+  <h4 class="card-title mb-0 ml-2">Listados de materias</h4>
+</div>
+
+  <div class="card-header-actions ml-auto">
+    <a href="{% url 'admin:academico_listadomaterias_add' %}"
+       class="btn btn-sm btn-outline-warning d-inline-flex align-items-center">
+      <i class="material-icons mr-1" style="font-size:18px;line-height:1;">add</i>
+      Nuevo listado
+    </a>
+  </div>
+
+
+    <div class="card-body">
+      {# ---------- Toolbar / filtros (estilo similar a la vista de estudiantes) ---------- #}
+      <style>
+        .order-img{width:34px;height:34px;object-fit:cover;border-radius:5px;margin-right:2px;background:#f7f8fa;transition:transform .2s;cursor:pointer}
+        .order-img:hover{transform:scale(2.5) translateX(5px);z-index:2;box-shadow:0 4px 16px rgba(0,0,0,.18)}
+        .table-responsive{width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
+        .toolbar{ display:flex; flex-direction:column; align-items:flex-start; gap:.5rem; margin-bottom:.5rem; }
+        .filters-row{ display:flex; flex-wrap:wrap; gap:.5rem; width:100%; }
+        #filter-programa, #filter-estado { min-width:220px; max-width:280px; }
+        #clear-filters{ white-space:nowrap; }
+        .chip{display:inline-flex;align-items:center;gap:.35rem;padding:.15rem .5rem;border-radius:999px;font-size:.85rem;background:#f3f6fb}
+        .chip .material-icons{font-size:16px}
+      </style>
+
+      <div class="toolbar">
+        <div class="filters-row">
+          <select id="filter-programa" class="selectpicker" data-style="select-with-transition" multiple title="Programa" data-size="6">
             {% for p in programas %}
-              <option value="{{ p.codigo }}" {% if prog_code == p.codigo %}selected{% endif %}>
-                {{ p.codigo }} — {{ p.nombre }}
-              </option>
+              <option value="{{ p.codigo }}">{{ p.codigo }}</option>
             {% endfor %}
           </select>
+
+          <select id="filter-estado" class="selectpicker" data-style="select-with-transition" multiple title="Estado" data-size="5">
+            <option>Vigente</option>
+            <option>Próximo</option>
+            <option>Finalizado</option>
+            <option>Sin fechas</option>
+          </select>
+
+          <input id="global-search" type="text" class="form-control" placeholder="Buscar por nombre…"
+                 value="{{ q }}" style="min-width:260px;">
+
+          <button id="clear-filters" type="button" class="btn btn-sm btn-outline-warning">Limpiar</button>
         </div>
+      </div>
 
-        <div class="form-group mr-2">
-          <label class="mr-2">Buscar</label>
-          <input type="text" class="form-control" name="q" value="{{ q }}" placeholder="Nombre del listado...">
-        </div>
-
-        <button class="btn btn-primary">Filtrar</button>
-      </form>
-
-      <div class="table-responsive">
-        <table class="table table-striped table-hover">
+      {# ---------- Tabla ---------- #}
+      <div class="material-datatables table-responsive">
+        <table id="datatables" class="table table-striped table-no-bordered table-hover" cellspacing="0" width="100%" style="width:100%">
           <thead>
             <tr>
               <th>Nombre</th>
               <th>Programa</th>
               <th>Creado</th>
-              <th></th>
+              <th>Estado</th>
+              <th class="text-right">Resumen</th>
+              <th class="text-right">Acciones</th>
             </tr>
           </thead>
           <tbody>
             {% for l in listados %}
             <tr>
-              <td>{{ l.nombre }}</td>
-              <td>{{ l.programa.codigo }}</td>
-              <td>{{ l.creado_en|date:"d/m/Y H:i" }}</td>
-              <td class="text-right">
-                <a class="btn btn-sm btn-outline-primary" href="{% url 'academico:listado_detalle' l.pk %}">Abrir</a>
+              <td class="align-middle">
+                <strong>{{ l.nombre }}</strong>
+              </td>
+              <td class="align-middle">
+                {% if l.programa %}<span class="badge badge-light">{{ l.programa.codigo }}</span>{% else %}<span class="text-muted">—</span>{% endif %}
+              </td>
+              <td class="align-middle">{{ l.creado_en|date:"d/m/Y H:i" }}</td>
+              <td class="align-middle">
+                {% if l.estado == "Vigente" %}
+                  <span class="badge badge-success">Vigente</span>
+                {% elif l.estado == "Próximo" %}
+                  <span class="badge badge-info">Próximo</span>
+                {% elif l.estado == "Finalizado" %}
+                  <span class="badge badge-secondary">Finalizado</span>
+                {% else %}
+                  <span class="badge badge-light">Sin fechas</span>
+                {% endif %}
+              </td>
+              <td class="align-middle text-right">
+                <span class="chip mr-1" title="Materias">
+                  <i class="material-icons">menu_book</i>{{ l.items_count }}
+                </span>
+                <span class="chip" title="Alumnos inscritos">
+                  <i class="material-icons">groups</i>{{ l.inscritos_count }}
+                </span>
+              </td>
+              <td class="align-middle text-right">
+                <div class="btn-group btn-group-sm">
+                  <a class="btn btn-outline-primary" href="{% url 'academico:listado_detalle' l.pk %}">
+                    <i class="material-icons" style="font-size:18px;">open_in_new</i> Abrir
+                  </a>
+                  <a class="btn btn-outline-secondary" href="{% url 'admin:academico_listadomaterias_change' l.pk %}" title="Editar en admin">
+                    <i class="material-icons" style="font-size:18px;">edit</i>
+                  </a>
+                </div>
               </td>
             </tr>
             {% empty %}
-            <tr><td colspan="4" class="text-center text-muted">No hay listados.</td></tr>
+            <tr>
+              <td colspan="6" class="text-center py-5">
+                <div class="text-muted mb-2">
+                  <i class="material-icons" style="font-size:32px;">inventory_2</i>
+                </div>
+                <div class="mb-3">No hay listados que coincidan con el filtro.</div>
+                <a href="{% url 'admin:academico_listadomaterias_add' %}" class="btn btn-primary btn-sm">
+                  <i class="material-icons" style="font-size:18px;">add</i> Crear primer listado
+                </a>
+              </td>
+            </tr>
             {% endfor %}
           </tbody>
         </table>
@@ -60,4 +136,78 @@
     </div>
   </div>
 </div>
+
+{# ---------- JS: DataTables + filtros por columna (estilo “Estudiantes”) ---------- #}
+<script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+<script>
+  $(function () {
+    const table = $('#datatables').DataTable({
+      language: {
+        url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/es-ES.json',
+        emptyTable: 'Sin resultados'
+      },
+      order: [], // sin orden inicial, deja al usuario decidir
+      columnDefs: [
+        { orderable: true, targets: [0,1,2,3] },
+        { orderable: false, targets: [4,5] },
+        { searchable: true, targets: [0] },  // buscar por nombre
+        { searchable: false, targets: [4,5] }
+      ]
+    });
+
+    // Índices de columnas
+    const NOMBRE_COL_IDX  = 0;
+    const PROG_COL_IDX    = 1;
+    const CREADO_COL_IDX  = 2;
+    const ESTADO_COL_IDX  = 3;
+
+    // Selects
+    const $selPrograma = $('#filter-programa');
+    const $selEstado   = $('#filter-estado');
+    const $globalSearch = $('#global-search');
+
+    // Utilidades
+    const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+    function applyMultiSelectFilter($select, colIdx) {
+      const selected = $select.val();
+      if (selected && selected.length) {
+        const pattern = '^(' + selected.map(esc).join('|') + ')$';
+        table.column(colIdx).search(pattern, true, false);
+      } else {
+        table.column(colIdx).search('', true, false);
+      }
+    }
+
+    // Filtros
+    $selPrograma.on('change', function(){
+      applyMultiSelectFilter($selPrograma, PROG_COL_IDX);
+      table.draw();
+    });
+
+    $selEstado.on('change', function(){
+      applyMultiSelectFilter($selEstado, ESTADO_COL_IDX);
+      table.draw();
+    });
+
+    // Buscador global (por nombre principalmente)
+    $globalSearch.on('keyup change', function(){
+      table.search(this.value).draw();
+    });
+
+    // Botón limpiar
+    $('#clear-filters').on('click', function () {
+      $selPrograma.val([]);
+      $selEstado.val([]);
+      $globalSearch.val('');
+
+      applyMultiSelectFilter($selPrograma, PROG_COL_IDX);
+      applyMultiSelectFilter($selEstado,   ESTADO_COL_IDX);
+
+      table.search('').draw();
+    });
+  });
+</script>
+
 {% endblock %}

@@ -459,14 +459,15 @@
           </div>
 
 
-    <div class="col-sm-12 mb-3">
-      <div class="text-muted small">Grupo</div>
-      <div>
-        {% if alumno.informacionEscolar %}
-          {{ alumno.informacionEscolar.grupo_mostrado|default:"—" }}
-        {% else %}—{% endif %}
-      </div>
-    </div>
+        {# 👉 AQUI VA EL NUEVO BLOQUE DE GRUPO #}
+            <div class="col-sm-12 mb-3">
+              <div class="text-muted small">Grupo</div>
+              <div>
+                {% if alumno.informacionEscolar %}
+                  {{ alumno.informacionEscolar.grupo_mostrado|default:"—" }}
+                {% else %}—{% endif %}
+              </div>
+            </div>
 
 
 

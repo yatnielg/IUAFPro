@@ -1,23 +1,26 @@
 # academico/models.py
 from django.db import models
 from django.core.exceptions import ValidationError
-from django.utils import timezone
+from django.utils import timezone  # (no se usa directamente, pero puedes dejarlo)
 
-from alumnos.models import Programa, Alumno  # ya los tienes
+from alumnos.models import Programa, Alumno
+
 
 class Materia(models.Model):
     """
-    Catálogo de materias (única vez por materia). 
-    Si ya tienes un catálogo, podemos apuntar a ese.
+    Catálogo de materias por programa.
+    La combinación (programa, codigo) es única.
     """
-    codigo = models.CharField(max_length=32, unique=True)
+    programa = models.ForeignKey(Programa, on_delete=models.CASCADE, related_name="materias")
+    codigo = models.CharField(max_length=32)
     nombre = models.CharField(max_length=255)
 
     class Meta:
-        ordering = ["codigo"]
+        ordering = ["programa__codigo", "codigo"]
+        unique_together = [("programa", "codigo")]
 
     def __str__(self):
-        return f"{self.codigo} — {self.nombre}"
+        return f"{self.programa.codigo} · {self.codigo} — {self.nombre}"
 
 
 class ListadoMaterias(models.Model):
@@ -41,6 +44,7 @@ class ListadoMaterias(models.Model):
 class ListadoMateriaItem(models.Model):
     """
     Una materia dentro de un listado, con su ventana temporal.
+    Debe pertenecer al mismo programa que el listado.
     """
     listado = models.ForeignKey(ListadoMaterias, on_delete=models.CASCADE, related_name="items")
     materia = models.ForeignKey(Materia, on_delete=models.PROTECT, related_name="ofertas")
@@ -55,13 +59,19 @@ class ListadoMateriaItem(models.Model):
         return f"{self.listado} · {self.materia}"
 
     def clean(self):
+        # Validación de rango de fechas
         if self.fecha_inicio and self.fecha_fin and self.fecha_fin < self.fecha_inicio:
             raise ValidationError("La fecha de fin no puede ser menor a la de inicio.")
+
+        # Coherencia de programa entre el listado y la materia
+        if self.listado_id and self.materia_id:
+            if self.listado.programa_id != self.materia.programa_id:
+                raise ValidationError("La materia pertenece a un programa distinto al del listado.")
 
 
 class ListadoAlumno(models.Model):
     """
-    Relación de alumnos asignados a un listado. 
+    Relación de alumnos asignados a un listado.
     Validamos que el alumno pertenezca al MISMO programa del listado.
     """
     listado = models.ForeignKey(ListadoMaterias, on_delete=models.CASCADE, related_name="inscripciones")
@@ -81,6 +91,7 @@ class ListadoAlumno(models.Model):
             raise ValidationError("El alumno no tiene programa asignado.")
         if info.programa_id != self.listado.programa_id:
             raise ValidationError("El alumno debe pertenecer al mismo programa del listado.")
+
 
 class Calificacion(models.Model):
     """
@@ -107,9 +118,19 @@ class Calificacion(models.Model):
         ordering = ["item__fecha_inicio", "alumno__numero_estudiante"]
 
     def __str__(self):
-        return f"{self.item.listado.programa.codigo} · {self.item.materia.codigo} · {self.alumno.numero_estudiante} · {self.nota or '—'}"
+        prog = getattr(self.item.listado.programa, "codigo", "—") if self.item_id else "—"
+        mat = getattr(self.item.materia, "codigo", "—") if self.item_id else "—"
+        num = getattr(self.alumno, "numero_estudiante", "—") if self.alumno_id else "—"
+        nota = self.nota if self.nota is not None else "—"
+        return f"{prog} · {mat} · {num} · {nota}"
 
     def clean(self):
+        # Validaciones tempranas para evitar errores por relaciones nulas
+        if not self.item_id:
+            raise ValidationError("La calificación debe pertenecer a un item válido.")
+        if not self.alumno_id:
+            raise ValidationError("Debe seleccionar un alumno para la calificación.")
+
         # Validar pertenencia al mismo programa del listado
         info = getattr(self.alumno, "informacionEscolar", None)
         if not info or not info.programa_id:

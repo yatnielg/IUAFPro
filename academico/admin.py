@@ -1,7 +1,6 @@
 # academico/admin.py
 from django.contrib import admin
 from django.db import models
-from django.db.models import Q
 
 from alumnos.models import Alumno
 from .models import (
@@ -9,7 +8,7 @@ from .models import (
     ListadoMaterias,
     ListadoMateriaItem,
     ListadoAlumno,
-    Calificacion,   # <-- importa Calificacion
+    Calificacion,
 )
 
 # -----------------------------
@@ -17,9 +16,11 @@ from .models import (
 # -----------------------------
 @admin.register(Materia)
 class MateriaAdmin(admin.ModelAdmin):
-    list_display = ("codigo", "nombre")
-    search_fields = ("codigo", "nombre")
-    ordering = ("codigo",)
+    list_display = ("codigo", "nombre", "programa")
+    list_filter = ("programa",)
+    search_fields = ("codigo", "nombre", "programa__nombre", "programa__codigo")
+    ordering = ("programa__codigo", "codigo")
+    list_select_related = ("programa",)
 
 
 # -----------------------------
@@ -31,6 +32,29 @@ class ListadoMateriaItemInline(admin.TabularInline):
     autocomplete_fields = ("materia",)
     fields = ("materia", "fecha_inicio", "fecha_fin")
     ordering = ("fecha_inicio", "materia__codigo")
+
+    def get_formset(self, request, obj=None, **kwargs):
+        """
+        Limita 'materia' al programa del listado.
+        - En edición (obj != None): usa obj.programa.
+        - En alta (obj == None): intenta leer el programa del form (GET/POST).
+        """
+        FormSet = super().get_formset(request, obj, **kwargs)
+        qs = Materia.objects.none()
+
+        if obj:
+            qs = Materia.objects.filter(programa=obj.programa)
+        else:
+            prog_id = request.GET.get("programa") or request.POST.get("programa")
+            if prog_id:
+                qs = Materia.objects.filter(programa_id=prog_id)
+
+        FormSet.form.base_fields["materia"].queryset = qs
+        if not qs.exists():
+            FormSet.form.base_fields["materia"].help_text = (
+                "Seleccione un programa arriba y guarde para cargar materias de ese programa."
+            )
+        return FormSet
 
 
 class ListadoAlumnoInline(admin.TabularInline):
@@ -46,11 +70,13 @@ class ListadoAlumnoInline(admin.TabularInline):
 
     def get_formset(self, request, obj=None, **kwargs):
         """
-        Al tener `obj` (ListadoMaterias) limitamos los alumnos al mismo programa.
+        Con `obj` (ListadoMaterias) limitamos los alumnos al mismo programa.
         """
         FormSet = super().get_formset(request, obj, **kwargs)
         if obj:
-            base_qs = Alumno.objects.select_related("informacionEscolar", "informacionEscolar__programa")
+            base_qs = Alumno.objects.select_related(
+                "informacionEscolar", "informacionEscolar__programa"
+            )
             FormSet.form.base_fields["alumno"].queryset = base_qs.filter(
                 informacionEscolar__programa=obj.programa
             )
@@ -63,12 +89,13 @@ class ListadoAlumnoInline(admin.TabularInline):
 @admin.register(ListadoMaterias)
 class ListadoMateriasAdmin(admin.ModelAdmin):
     list_display = ("nombre", "programa", "items_count", "inscritos_count", "creado_en")
-    list_filter  = ("programa",)
+    list_filter = ("programa",)
     search_fields = ("nombre", "programa__codigo", "programa__nombre")
     date_hierarchy = "creado_en"
     ordering = ("-creado_en",)
     inlines = [ListadoMateriaItemInline, ListadoAlumnoInline]
     readonly_fields = ("creado_en",)
+    list_select_related = ("programa",)
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
@@ -79,10 +106,12 @@ class ListadoMateriasAdmin(admin.ModelAdmin):
 
     def items_count(self, obj):
         return getattr(obj, "_items_count", obj.items.count())
+
     items_count.short_description = "Materias"
 
     def inscritos_count(self, obj):
         return getattr(obj, "_inscritos_count", obj.inscripciones.count())
+
     inscritos_count.short_description = "Alumnos"
 
 
@@ -107,31 +136,60 @@ class CalificacionInline(admin.TabularInline):
             listado = obj.listado
             inscripciones = ListadoAlumno.objects.filter(listado=listado).only("alumno_id")
             alumnos_ids = [ins.alumno_id for ins in inscripciones]
-            base_qs = Alumno.objects.select_related("informacionEscolar", "informacionEscolar__programa")
+            base_qs = Alumno.objects.select_related(
+                "informacionEscolar", "informacionEscolar__programa"
+            )
             FormSet.form.base_fields["alumno"].queryset = base_qs.filter(pk__in=alumnos_ids)
         return FormSet
 
 
 # -----------------------------
-#  ListadoMateriaItem (único registro)
+#  ListadoMateriaItem (modelo propio)
 # -----------------------------
 @admin.register(ListadoMateriaItem)
 class ListadoMateriaItemAdmin(admin.ModelAdmin):
     list_display = ("listado", "materia", "fecha_inicio", "fecha_fin")
-    list_filter = ("listado__programa", "listado",)
+    list_filter = ("listado__programa", "listado")
     search_fields = ("listado__nombre", "materia__codigo", "materia__nombre")
     autocomplete_fields = ("listado", "materia")
     ordering = ("listado", "fecha_inicio", "materia__codigo")
     inlines = [CalificacionInline]
+    list_select_related = ("listado", "listado__programa", "materia", "materia__programa")
+
+    def get_form(self, request, obj=None, **kwargs):
+        """
+        En edición: filtra 'materia' por el programa del listado del obj.
+        En alta: si viene ?listado=<id> o en POST, filtra según ese listado.
+        """
+        form = super().get_form(request, obj, **kwargs)
+
+        qs = Materia.objects.none()
+        if obj and obj.listado_id:
+            qs = Materia.objects.filter(programa=obj.listado.programa)
+        else:
+            listado_id = request.GET.get("listado") or request.POST.get("listado")
+            if listado_id:
+                try:
+                    lst = ListadoMaterias.objects.select_related("programa").get(pk=listado_id)
+                    qs = Materia.objects.filter(programa=lst.programa)
+                except ListadoMaterias.DoesNotExist:
+                    pass
+
+        form.base_fields["materia"].queryset = qs
+        if not qs.exists():
+            form.base_fields["materia"].help_text = (
+                "Elija primero un listado (del cual se deduce el programa) para ver materias disponibles."
+            )
+        return form
 
 
 # -----------------------------
-#  ListadoAlumno (opcional)
+#  ListadoAlumno
 # -----------------------------
 @admin.register(ListadoAlumno)
 class ListadoAlumnoAdmin(admin.ModelAdmin):
     list_display = ("listado", "alumno", "programa_del_listado", "programa_del_alumno", "agregado_en")
-    list_filter = ("listado__programa", "listado",)
+    list_filter = ("listado__programa", "listado")
     search_fields = (
         "listado__nombre",
         "alumno__numero_estudiante",
@@ -142,28 +200,36 @@ class ListadoAlumnoAdmin(admin.ModelAdmin):
     autocomplete_fields = ("listado", "alumno")
     date_hierarchy = "agregado_en"
     ordering = ("-agregado_en",)
+    list_select_related = ("listado", "listado__programa", "alumno", "alumno__informacionEscolar", "alumno__informacionEscolar__programa")
 
     def programa_del_listado(self, obj):
         return obj.listado.programa
+
     programa_del_listado.short_description = "Programa (Listado)"
 
     def programa_del_alumno(self, obj):
         info = getattr(obj.alumno, "informacionEscolar", None)
         return getattr(info, "programa", None)
+
     programa_del_alumno.short_description = "Programa (Alumno)"
 
-    # academico/admin.py (extra)
-from .models import Calificacion
 
+# -----------------------------
+#  Calificacion
+# -----------------------------
 @admin.register(Calificacion)
 class CalificacionAdmin(admin.ModelAdmin):
     list_display = ("item", "alumno", "nota", "aprobado", "capturado_en")
-    list_filter  = ("item__listado__programa", "item__listado", "aprobado")
+    list_filter = ("item__listado__programa", "item__listado", "aprobado")
     search_fields = (
-        "item__materia__codigo", "item__materia__nombre",
+        "item__materia__codigo",
+        "item__materia__nombre",
         "item__listado__nombre",
-        "alumno__numero_estudiante", "alumno__nombre", "alumno__apellido_p", "alumno__apellido_m",
+        "alumno__numero_estudiante",
+        "alumno__nombre",
+        "alumno__apellido_p",
+        "alumno__apellido_m",
     )
     autocomplete_fields = ("item", "alumno")
     ordering = ("-capturado_en",)
-
+    list_select_related = ("item", "item__listado", "item__listado__programa", "item__materia", "alumno")
