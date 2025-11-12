@@ -202,7 +202,7 @@
     </a>
   {% elif m.conciliado and puede_deshacer %}
     <form method="post"
-          action="{% url 'mov_deshacer_conciliacion' m.pk %}"
+          action="{% url 'alumnos:mov_deshacer_conciliacion' m.pk %}"
           class="d-inline"
           onsubmit="return confirm('¿Seguro que deseas deshacer la conciliación y eliminar/invalidar los pagos generados?');">
       {% csrf_token %}

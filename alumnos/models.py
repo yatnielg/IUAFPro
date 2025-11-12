@@ -743,15 +743,27 @@ class Alumno(models.Model):
             return qs.none()
         if user.is_superuser:
             return qs
+        
+        # Si pertenece al grupo "admisiones", ve solo los que creó
         if user.groups.filter(name="admisiones").exists():
             return qs.filter(created_by=user)
+        
+        # Usuarios con perfil/sedes: pueden ver alumnos de sus sedes
+        # y, además, TODOS los que ellos mismos crearon.
         profile = getattr(user, "profile", None)
-        if not profile:
-            return qs.none()
-        sedes_ids = list(profile.sedes.values_list("id", flat=True))
-        if not sedes_ids:
-            return qs.none()
-        return qs.filter(informacionEscolar__sede_id__in=sedes_ids)
+
+        # Siempre permitir ver los creados por el usuario
+        condition = Q(created_by=user)
+
+        #if not profile:
+        #    return qs.none()
+        if profile:
+            sedes_ids = list(profile.sedes.values_list("id", flat=True))
+            if sedes_ids:
+                condition |= Q(informacionEscolar__sede_id__in=sedes_ids)
+
+        # Si no hay profile o no tiene sedes, igual verá los que creó
+        return qs.filter(condition).distinct()
 
     @property
     def programa_clave(self):

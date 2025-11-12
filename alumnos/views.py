@@ -708,6 +708,7 @@ from academico.models import Calificacion
 
 @login_required
 def alumnos_detalle(request, pk):
+    pago_total_mayor_a_cero = False
     alumno = get_object_or_404(
         Alumno.objects.select_related(
             "pais", "estado", "informacionEscolar",
@@ -717,6 +718,7 @@ def alumnos_detalle(request, pk):
         pk=pk,
     )
 
+
     # -------- Permisos de visualización del alumno --------
     hoy = timezone.now().date()
     user = request.user
@@ -725,12 +727,15 @@ def alumnos_detalle(request, pk):
         can_view = True
     elif user.groups.filter(name="admisiones").exists():
         can_view = (alumno.created_by_id == user.id)
+    elif  (alumno.created_by_id == user.id):
+        can_view = True                        
     else:
         profile = getattr(user, "profile", None)
         if profile:
             sede_id = getattr(getattr(alumno, "informacionEscolar", None), "sede_id", None)
             if sede_id and profile.sedes.filter(id=sede_id).exists():
                 can_view = True
+
     if not can_view:
         return HttpResponseForbidden("No tienes permiso para ver este alumno.")
 
@@ -939,7 +944,8 @@ def alumnos_detalle(request, pk):
     return render(
         request,
         "alumnos/detalle.html",
-        {
+        {   
+    
              # Calificaciones
             "califs": califs,
              "can_edit_status": can_edit_status,
@@ -3668,6 +3674,19 @@ def cargos_pendientes_todos(request):
     # Filtros opcionales (búsqueda sencilla)
     q = (request.GET.get("q") or "").strip()
 
+
+    # 👇 Permiso: solo superuser o grupo "pagos"
+    es_pagos = request.user.is_superuser or request.user.groups.filter(name="pagos").exists()
+    if not es_pagos:
+        # Renderiza la misma vista, pero sin datos
+        return render(
+            request,
+            "alumnos/cargos_pendientes_todos.html",
+            {"page_obj": [], "q": q, "hoy": hoy},
+        )
+
+
+
     cargos = (
         Cargo.objects
         .filter(pagado=False)
@@ -4802,6 +4821,7 @@ def boleta_calificaciones(request, pk):
             "ciudad": "México",            
             "telefono": "998 939 4481",
             "email": "cadministrativa@iuaf.edu.mx",
+            "campus": getattr(alumno.informacionEscolar, "sede", None),
         },
       
     }

@@ -71,7 +71,7 @@
             </a>
           </li>
 
-        <li class="nav-item {% if  request.resolver_match.url_name == 'documentos_lista' or request.resolver_match.url_name == 'formulario_agregar_categoria' %} active {% endif %}">
+        <li class="nav-item {% if  request.resolver_match.url_name == 'documentos_alumnos_lista' or request.resolver_match.url_name == 'formulario_agregar_categoria' %} active {% endif %}">
             {% if alertas_global.negocio or alertas_global.state or alertas_global.municipality or alertas_global.warehouses %}
                 <a class="nav-link" href="{% url 'alumnos:principal' %}">
             {% else %}

@@ -35,7 +35,7 @@
                   <th>Nombre</th>
                   <th>Inicio</th>
                   <th>Fin</th>
-                  <th>Califs</th>
+                 {% comment %}  <th>Califs</th> {% endcomment %}
                   <th></th>
                 </tr>
               </thead>
@@ -46,7 +46,7 @@
                   <td>{{ it.materia.nombre }}</td>
                   <td>{{ it.fecha_inicio|date:"d/m/Y" }}</td>
                   <td>{{ it.fecha_fin|date:"d/m/Y" }}</td>
-                  <td>{{ calif_por_item.it.id|default:0 }}</td>
+                 {% comment %}  <td>{{ calif_por_item.it.id|default:0 }}</td> {% endcomment %}
                   <td class="text-right">
                     <a class="btn btn-outline-info btn-sm"
                        href="{% url 'academico:calificaciones_item' it.pk %}">

@@ -639,6 +639,8 @@
 
 
 ## ===================== CALIFICACIONES DEL ALUMNO ===================== ##
+{% if can_edit_status %}
+
 {% if califs %}
 <div class="card mt-2">
   <div class="card-header card-header-primary card-header-icon d-flex align-items-center">
@@ -767,6 +769,7 @@
     <div class="text-muted">Este alumno aún no tiene calificaciones capturadas.</div>
   </div>
 </div>
+{% endif %}
 {% endif %}
 
 

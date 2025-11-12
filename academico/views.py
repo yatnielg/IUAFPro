@@ -25,6 +25,26 @@ def listados_list(request):
     """
     hoy = timezone.localdate()
 
+    # ---- Permisos: superuser o grupo 'editar_estatus_academico'
+    puede_ver = (
+        request.user.is_superuser
+        or request.user.groups.filter(name="editar_estatus_academico").exists()
+    )
+
+    if not puede_ver:
+        # Opcional: messages.info(request, "No tienes permisos para ver estos listados.")
+        return render(
+            request,
+            "academico/listados_list.html",
+            {
+                "listados": ListadoMaterias.objects.none(),
+                "programas": Programa.objects.none(),
+                "prog_code": (request.GET.get("programa") or "").strip(),
+                "q": (request.GET.get("q") or "").strip(),
+            },
+        )
+
+
     qs = (
         ListadoMaterias.objects
         .select_related("programa")
