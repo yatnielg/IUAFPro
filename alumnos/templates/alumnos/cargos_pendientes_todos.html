@@ -24,7 +24,7 @@
   </h1>
 
   <div class="btn-group">
-    <a class="btn btn-outline-secondary" href="{% url 'estudiantes' %}">
+    <a class="btn btn-outline-info" href="{% url 'alumnos:estudiantes' %}">
       <i class="material-icons align-middle">arrow_back</i> Volver
     </a>
   </div>
@@ -67,7 +67,7 @@
         {% for c in page_obj.object_list %}
         <tr class="{% if c.is_overdue %}{% endif %}">
           <td>
-            <a href="{% url 'alumnos_detalle' c.alumno.pk %}">
+            <a href="{% url 'alumnos:alumnos_detalle' c.alumno.pk %}">
               #{{ c.alumno.numero_estudiante }} — {{ c.alumno.nombre }} {{ c.alumno.apellido_p }} {{ c.alumno.apellido_m }}
             </a>
           </td>
@@ -94,7 +94,7 @@
           </td>
           <td class="text-right">
             <div class="btn-group">
-              <a class="btn btn-outline-primary btn-sm" href="{% url 'alumnos_detalle' c.alumno.pk %}">
+              <a class="btn btn-outline-info btn-sm" href="{% url 'alumnos:alumnos_detalle' c.alumno.pk %}">
                 Ver alumno
               </a>
 

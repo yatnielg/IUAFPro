@@ -686,7 +686,7 @@ class UploadInviteAdmin(admin.ModelAdmin):
 
     @admin.display(description="Ruta pública", ordering="token")
     def public_path(self, obj: UploadInvite):
-        url = reverse("public_upload", args=[obj.token])
+        url = reverse("alumnos:public_upload", args=[obj.token])
         return format_html('<code>{}</code>', url)
 
     @admin.display(description="Usos")

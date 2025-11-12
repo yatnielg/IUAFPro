@@ -65,7 +65,7 @@
                 <tr>
                   <!-- No. Estudiante -->
                   <td>
-                    <a href="{% url 'alumnos_detalle' a.pk %}" class="btn btn-link text-info btn-just-icon like" title="Ver ficha">
+                    <a href="{% url 'alumnos:alumnos_detalle' a.pk %}" class="btn btn-link text-info btn-just-icon like" title="Ver ficha">
                       {{ a.numero_estudiante }}
                     </a>
                   </td>
@@ -120,13 +120,13 @@
 
                   <!-- Acciones -->
                   <td class="text-right" style="min-width:120px">
-                    <a href="{% url 'alumnos_detalle' a.pk %}" class="btn btn-link text-info btn-just-icon like" title="Ver ficha">
+                    <a href="{% url 'alumnos:alumnos_detalle' a.pk %}" class="btn btn-link text-info btn-just-icon like" title="Ver ficha">
                       <i class="material-icons">visibility</i>
                     </a>
 
                     {% with p=request.user.profile %}
                       {% if request.user.is_superuser or p and p.puede_editar_todo %}
-                        <a href="{% url 'alumnos_documentos_editar' a.pk %}" class="btn btn-link text-secondary btn-just-icon edit" title="Subir/actualizar">
+                        <a href="{% url 'alumnos:alumnos_documentos_editar' a.pk %}" class="btn btn-link text-secondary btn-just-icon edit" title="Subir/actualizar">
                           <i class="material-icons">upload_file</i>
                         </a>
                       {% endif %}

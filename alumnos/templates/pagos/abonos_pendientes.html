@@ -20,7 +20,7 @@
      <td>{{ m.emisor_nombre|default:m.nombre_detectado|default:"—" }}</td>
      <td>{{ m.referencia_numerica|default:"—" }}</td>
      <td class="text-right">
-       <a class="btn btn-sm btn-outline-primary" href="{% url 'conciliar_movimiento' m.id %}">
+       <a class="btn btn-sm btn-outline-primary" href="{% url 'alumnos:conciliar_movimiento' m.id %}">
          Conciliar
        </a>
      </td>

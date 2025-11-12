@@ -55,7 +55,7 @@
     </h1>
 
     <div class="d-flex align-items-center">
-      <form method="post" action="{% url 'movimientos_banco_update' %}" id="run-update-form" class="mr-2">
+      <form method="post" action="{% url 'alumnos:movimientos_banco_update' %}" id="run-update-form" class="mr-2">
         {% csrf_token %}
         <button type="submit" class="btn btn-success btn-sm" id="run-update-btn">
           <i class="material-icons" style="vertical-align:middle">sync</i>
@@ -64,7 +64,7 @@
       </form>
 
        <!-- Abonos pendientes -->
-    <a href="{% url 'movimientos_abonos_pendientes' %}"
+    <a href="{% url 'alumnos:movimientos_abonos_pendientes' %}"
        class="btn btn-warning btn-sm mr-3"
        title="Ver abonos pendientes">
       <i class="material-icons" style="vertical-align:middle">playlist_add_check</i>
@@ -195,7 +195,7 @@
 
  {# Mostrar botones según grupo y estado #}
 {% if not m.conciliado and puede_conciliar %}
-    <a href="{% url 'conciliar_movimiento' m.pk %}"
+    <a href="{% url 'alumnos:conciliar_movimiento' m.pk %}"
        class="btn btn-sm btn-primary"
        title="Conciliar este movimiento">
       Conciliar

@@ -9,7 +9,7 @@
     <h4 class="mb-0 text-white">
       {{ listado.programa.codigo }} · {{ listado.nombre }}
     </h4>
-    <a class="btn btn-outline-primary" href="{% url 'academico:listados_list' %}">&larr; Volver</a>
+    <a class="btn btn-outline-info" href="{% url 'academico:listados_list' %}">&larr; Volver</a>
   </div>
 
   {% if listado.descripcion %}
@@ -48,7 +48,7 @@
                   <td>{{ it.fecha_fin|date:"d/m/Y" }}</td>
                   <td>{{ calif_por_item.it.id|default:0 }}</td>
                   <td class="text-right">
-                    <a class="btn btn-sm btn-outline-primary"
+                    <a class="btn btn-outline-info btn-sm"
                        href="{% url 'academico:calificaciones_item' it.pk %}">
                       Calificaciones
                     </a>
@@ -78,7 +78,11 @@
             {% for ins in inscripciones %}
               <li class="list-group-item d-flex justify-content-between align-items-center">
                 <span>
-                  <strong>{{ ins.alumno.numero_estudiante }}</strong>
+                  <strong>
+                    <a href="{% url 'alumnos:alumnos_detalle' ins.alumno.pk %}">
+                      {{ ins.alumno.numero_estudiante }}
+                    </a>
+                  </strong>
                   — {{ ins.alumno.apellido_p }} {{ ins.alumno.apellido_m }}, {{ ins.alumno.nombre }}
                 </span>
                 <span class="text-muted small">{{ ins.agregado_en|date:"d/m/Y H:i" }}</span>

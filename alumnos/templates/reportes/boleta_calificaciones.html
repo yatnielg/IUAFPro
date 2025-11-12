@@ -1,0 +1,341 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Boleta — {{ alumno.numero_estudiante }}</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<style>
+  /* ====== Tamaño de hoja y reset impresión ====== */
+  @page { size: A4; margin: 15mm; } /* cambia a letter si prefieres */
+  html, body { background: #fff; }
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 12px; color: #111; }
+
+  .sheet { max-width: 210mm; margin: 0 auto; background: #fff; }
+
+  /* ====== Tabla y badges ====== */
+  table { width: 100%; border-collapse: collapse; }
+  thead th {
+    background: #5e35b1; color: #fff; font-weight: 700;
+    padding: 8px; font-size: 12px; text-align: left;
+  }
+  tbody td {
+    border-bottom: 1px solid #eee;
+    padding: 7px 8px;
+    vertical-align: middle;
+  }
+  tbody tr:nth-child(odd) { background: #faf7ff; }
+  .text-right { text-align: right; }
+  .badge { display:inline-block; font-size:10px; padding:2px 6px; border-radius:999px; background:#eee; color:#333; }
+  .badge.ok{ background:#d1fae5; color:#065f46; }
+  .badge.err{ background:#fee2e2; color:#991b1b; }
+  .badge.muted{ background:#e5e7eb; color:#374151; }
+
+  .sign { display:grid; grid-template-columns:1fr 1fr; gap:30px; margin-top:18px; }
+  .sign .line { border-top:1px solid #888; height:1px; margin-top:48px; }
+  .footnote { margin-top:10px; font-size:10px; color:#666; }
+
+  /* ====== Botón imprimir (solo web) ====== */
+  .toolbar { margin: 10px 0 15px; }
+  @media print { .toolbar{ display:none; } .sheet{ box-shadow:none; } }
+
+  /* ====== BRAND BAND (encabezado morado) ====== */
+  .brandband{
+    margin: 10px 0 14px;
+    background: linear-gradient(90deg,#6f42c1,#8a63d2);
+    color:#fff;
+    border-radius:18px;
+    padding:14px 16px;
+    display:grid;
+    grid-template-columns: 92px 1fr auto;  /* + ancho logo */
+    align-items:center;
+    column-gap:20px;                        /* ← separa logo y texto */
+    box-shadow: 0 10px 28px rgba(2,6,23,.10);
+  }
+  .brandband .logo{
+    width:92px; height:92px; object-fit:contain; background:#fff;
+    border-radius:12px; padding:10px; border:1px solid rgba(255,255,255,.55);
+    flex-shrink:0;
+  }
+  .brandband .name{
+    font-weight:900; text-transform:uppercase; letter-spacing:.02em; margin:0 0 6px 0;
+    font-size:14px;
+  }
+  .brandband .tag{
+    border:1px solid rgba(255,255,255,.6);
+    padding:8px 12px; border-radius:999px; font-weight:800; white-space:nowrap;
+    background: rgba(255,255,255,.10);
+  }
+  .brandband .meta-card{
+    background: rgba(255,255,255,.10);
+    border: 1px solid rgba(255,255,255,.55);
+    border-radius: 10px;
+    padding: 10px 12px;
+    color:#fff; line-height:1.4;
+    max-width: 680px;                       /* limita ancho para no chocar con el botón */
+  }
+  .meta-grid{
+    display:grid;
+    grid-template-columns: auto 1fr auto;   /* RFC | valor | CCT */
+    column-gap: 10px; row-gap: 4px; align-items:baseline;
+  }
+  .meta-grid .k{ font-weight:800; opacity:.95; }
+  .meta-grid .v{ opacity:.95; }
+  .meta-addr{
+    margin-top:6px;
+    white-space:normal;
+    overflow-wrap:anywhere;
+  }
+  @media (max-width: 800px){
+    .brandband{ grid-template-columns:84px 1fr; column-gap:14px; }
+    .brandband .logo{ width:84px; height:84px; }
+    .brandband > .tag{ grid-column:1/-1; justify-self:end; margin-top:8px; }
+    .brandband .meta-card{ max-width:none; }
+    .meta-grid{ grid-template-columns:auto 1fr; }
+  }
+  @media print{ .brandband{ box-shadow:none; } }
+
+  /* ====== Caja meta (debajo del encabezado) ====== */
+  .meta {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px 10px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 8px 10px;
+    margin: 10px 0;
+  }
+  .meta .label { font-size:10px; color:#666; text-transform:uppercase; letter-spacing:.03em; }
+  .meta .value { font-weight:700; }
+
+
+/* MÁS ESPACIO ENTRE LOGO Y CONTENIDO */
+.brandband{
+  /* antes: grid-template-columns: 84px 1fr auto; gap:14px; padding:14px 16px; */
+  grid-template-columns: 110px 1fr auto;  /* columna del logo un poco más ancha */
+  gap: 22px;                               /* separación real entre columnas */
+  padding: 16px 18px;                       /* un poco más de aire interno */
+}
+
+/* el logo sigue igual de grande, pero ahora “flota” con más margen interior de la banda */
+.brandband .logo{
+  width: 84px;
+  height: 84px;
+  object-fit: contain;
+  background: #fff;
+  border-radius: 12px;
+  padding: 10px;
+  border: 1px solid rgba(255,255,255,.55);
+}
+
+/* separa ligeramente la “tarjeta” de datos del borde cercano al logo */
+.brandband .meta-card{
+  /* antes: margin-left: 6px; */
+  margin-left: 12px;
+}
+
+/* opcional: en pantallas chicas reduce un poco el gap para que no se rompa */
+@media (max-width: 800px){
+  .brandband{
+    grid-template-columns: 84px 1fr;
+    gap: 14px;
+  }
+  .brandband .meta-card{ margin-left: 8px; }
+}
+
+
+
+/* Firma centrada (un solo bloque) */
+.sign--single{
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  margin-top:18px;
+}
+
+.firma-wrap{
+  text-align:center;
+}
+
+.firma-wrap img{
+  /* tamaño “normal” y adaptable */
+  width:400px;          /* ajústalo a tu gusto: 160–220px suele verse bien */
+  max-width:40vw;       /* responsivo en pantallas pequeñas */
+  height:auto;
+  display:block;
+  margin:0 auto 6px auto;
+  object-fit:contain;
+}
+
+.firma-wrap .foot{
+  font-size:11px;
+  color:#555;
+}
+
+/* Un poco más pequeña al imprimir */
+@media print{
+  .firma-wrap img{ width:180px; }
+}
+
+
+</style>
+</head>
+<body>
+<div class="sheet">
+
+{% comment %}   {% if show_print_button %}
+  <div class="toolbar">
+    <button onclick="window.print()">Imprimir</button>
+  </div>
+  {% endif %} {% endcomment %}
+
+  <!-- ===== Brandband superior ===== -->
+  <div class="brandband">
+    <img class="logo" src="{% static 'iuaf/iuaf-logo3.png' %}" alt="IUAF">
+    <div>
+      <div class="name">INSTITUTO UNIVERSITARIO DE ALTA FORMACIÓN</div>
+
+      <div class="meta-card">
+        <div class="meta-grid">
+          <span class="k">R.F.C.</span>
+          <span class="v">{{ institucion.rfc|default:"—" }}</span>
+          <span class="k">CCT {{ institucion.cct|default:"—" }}</span>
+        </div>
+
+        <div class="meta-addr">
+          {{ institucion.direccion|default:"" }}{% if institucion.direccion %},{% endif %}<br>
+          {{ institucion.ciudad|default:"" }} · Tel. {{ institucion.telefono|default:"—" }} ·<br>
+          {{ institucion.email|default:"—" }}
+        </div>
+      </div>
+    </div>
+
+    <div><span class="tag">Boleta de Calificaciones</span></div>
+  </div>
+  <!-- ===== /Brandband ===== -->
+
+  <!-- ===== Datos del alumno / periodo ===== -->
+  <div class="meta">
+    <div>
+      <div class="label">Nombre del Estudiante</div>
+      <div class="value">{{ alumno.nombre }} {{ alumno.apellido_p }} {{ alumno.apellido_m }}</div>
+    </div>
+    <div>
+      <div class="label">No. Estudiante</div>
+      <div class="value">{{ alumno.numero_estudiante }}</div>
+    </div>
+    <div>
+      <div class="label">Programa</div>
+      <div class="value">
+        {% if programa %}{{ programa.codigo }} — {{ programa.nombre }}{% else %}—{% endif %}
+      </div>
+    </div>
+    <div>
+      <div class="label">R.V.O.E.</div>
+      <div class="value">{{ rvoe|default:"—" }}</div>
+    </div>
+
+    <div>
+      <div class="label">Periodo</div>
+      <div class="value">{{ periodo_txt }}</div>
+    </div>
+    <div>
+      <div class="label">Listado</div>
+      <div class="value">{% if listado %}{{ listado.nombre }}{% else %}—{% endif %}</div>
+    </div>
+    <div>
+      <div class="label">Sede</div>
+      <div class="value">{{ institucion.campus|default:"—" }}</div>
+    </div>
+    <div>
+      <div class="label">CURP</div>
+      <div class="value">{{ alumno.curp|default:"—" }}</div>
+    </div>
+  </div>
+
+  <!-- ===== Tabla de calificaciones ===== -->
+  <table>
+    <thead>
+      <tr>
+        <th style="width:18%">Código</th>
+        <th>Materia</th>
+        <th style="width:13%">Inicio</th>
+        <th style="width:13%">Fin</th>
+        <th style="width:13%" class="text-right">Calificación</th>
+        <th style="width:16%">Estado</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for f in filas %}
+      <tr>
+        <td>{{ f.codigo }}</td>
+        <td>{{ f.materia }}</td>
+        <td>{% if f.inicio %}{{ f.inicio|date:"d/m/Y" }}{% else %}—{% endif %}</td>
+        <td>{% if f.fin %}{{ f.fin|date:"d/m/Y" }}{% else %}—{% endif %}</td>
+        <td class="text-right">{% if f.nota is not None %}{{ f.nota|floatformat:1 }}{% else %}—{% endif %}</td>
+        <td>
+          {% if f.nota is not None %}
+            {% if f.aprobado %}
+              <span class="badge ok">Aprobado</span>
+            {% else %}
+              <span class="badge err">No aprobado</span>
+            {% endif %}
+          {% else %}
+            <span class="badge muted">Sin nota</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="6" style="text-align:center; color:#777;">No hay calificaciones para mostrar.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <!-- ===== Firmas ===== -->
+<div class="sign sign--single" style="margin-top:50px;">
+  <div class="firma-wrap">
+    <img src="{% static 'iuaf/firma-erika.png' %}" alt="Nombre y Firma">
+    <div class="foot">Emitido por Administración · {{ institucion.nombre }}</div>
+  </div>
+</div>
+
+
+  <div class="footnote">
+    Documento informativo para constancia de calificaciones del periodo seleccionado.
+  </div>
+</div>
+</body>
+
+
+<!-- 1) Librería (CDN) -->
+<!-- Librería html2pdf (bundle con html2canvas y jsPDF) -->
+<script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"></script>
+
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const root = document.querySelector('.sheet');
+  if (!root) return;
+
+  // Espera mínima para que carguen imágenes estáticas
+  setTimeout(() => {
+    const filename = `Boleta-{{ alumno.numero_estudiante }}.pdf`;
+
+    const opts = {
+      margin:       [10, 10, 10, 10],  // mm
+      filename,
+      image:        { type: 'jpeg', quality: 0.98 },
+      html2canvas:  { scale: 2, useCORS: true, dpi: 192, letterRendering: true },
+      jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
+      pagebreak:    { mode: ['css', 'legacy'] }
+    };
+
+    html2pdf().set(opts).from(root).save().catch(console.error);
+  }, 200);
+});
+</script>
+
+
+
+</html>

@@ -19,7 +19,7 @@
 <div class="content">
   <div class="toolbar">
     {% if request.user.is_staff %}
-      <a href="{% url 'pagos_diario_lista' %}" class="btn btn-primary btn-sm">
+      <a href="{% url 'alumnos:pagos_diario_lista' %}" class="btn btn-primary btn-sm">
         <i class="material-icons" style="vertical-align:middle">receipt_long</i>
         Pagos de Diario
       </a>
@@ -76,7 +76,7 @@
         <i class="material-icons" style="vertical-align:middle">search</i> Filtrar
       </button>
       {% if request.GET %}
-        <a class="btn btn-outline-primary btn-sm" href="{% url 'pagos_diario_lista' %}">Limpiar</a>
+        <a class="btn btn-outline-primary btn-sm" href="{% url 'alumnos:pagos_diario_lista' %}">Limpiar</a>
       {% endif %}
     </div>
   </div>
@@ -122,7 +122,7 @@
                     <td>{{ p.sede|default:"—" }}</td>
                     <td>
                       {% if p.alumno_id %}
-                        <a href="{% url 'alumnos_detalle' p.alumno_id %}">
+                        <a href="{% url 'alumnos:alumnos_detalle' p.alumno_id %}">
                           {{ p.alumno.numero_estudiante }} — {{ p.alumno.nombre }}
                         </a>
                       {% else %}
@@ -138,8 +138,8 @@
                       </a>
 
                       <!-- Descargar PDF -->
-                      <a href="{% url 'recibo_carta' p.pk %}"
-                         data-url="{% url 'recibo_carta' p.pk %}"
+                      <a href="{% url 'alumnos:recibo_carta' p.pk %}"
+                         data-url="{% url 'alumnos:recibo_carta' p.pk %}"
                          data-folio="{{ p.folio|default:p.pk }}"
                          data-alumno="{{ p.alumno.nombre|default:p.nombre|default:'' }}"
                          class="btn btn-link text-danger btn-just-icon descargar-recibo"
@@ -150,8 +150,8 @@
                       <!-- Enviar PDF por email -->
                       <a href="#"
                          class="btn btn-link text-success btn-just-icon enviar-recibo"
-                         data-html-url="{% url 'recibo_carta' p.pk %}"
-                         data-send-url="{% url 'enviar_recibo_con_pdf' p.pk %}"
+                         data-html-url="{% url 'alumnos:recibo_carta' p.pk %}"
+                         data-send-url="{% url 'alumnos:enviar_recibo_con_pdf' p.pk %}"
                          data-folio="{{ p.folio|default:p.pk }}"
                          data-alumno="{{ p.alumno.nombre|default:p.nombre|default:'' }}"
                          data-email="{{ p.alumno.email|default:p.alumno.email_institucional|default:'' }}"

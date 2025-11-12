@@ -25,12 +25,12 @@
 
   <div class="toolbar">
     {% if request.user.is_superuser %}
-      <a href="{% url 'alumnos_crear' %}" class="btn btn-primary btn-sm">
+      <a href="{% url 'alumnos:alumnos_crear' %}" class="btn btn-primary btn-sm">
         <i class="material-icons" style="vertical-align:middle">add</i>
         Agregar Nuevo Estudiante
       </a>
     {% elif p and p.puede_editar_todo %}
-      <a href="{% url 'alumnos_crear' %}" class="btn btn-primary btn-sm">
+      <a href="{% url 'alumnos:alumnos_crear' %}" class="btn btn-primary btn-sm">
         <i class="material-icons" style="vertical-align:middle">add</i>
         Agregar Nuevo Estudiante
       </a>
@@ -81,7 +81,7 @@
                 {% for a in alumnos %}
                 <tr>
                   <td>
-                    <a href="{% url 'alumnos_detalle' a.pk %}" class="btn btn-link text-info btn-just-icon like" title="Ver detalle">
+                    <a href="{% url 'alumnos:alumnos_detalle' a.pk %}" class="btn btn-link text-info btn-just-icon like" title="Ver detalle">
                       {{ a.numero_estudiante }}
                     </a>
                   </td>
@@ -132,7 +132,7 @@
                   {% if request.user.is_superuser or p and p.puede_editar_todo or p and p.puede_ver_todo %}
                   <td class="text-right">
                     {% if request.user.is_superuser or p and p.puede_ver_todo %}
-                      <a href="{% url 'alumnos_detalle' a.pk %}" class="btn btn-link text-info btn-just-icon like" title="Ver">
+                      <a href="{% url 'alumnos:alumnos_detalle' a.pk %}" class="btn btn-link text-info btn-just-icon like" title="Ver">
                         <i class="material-icons">visibility</i>
                       </a>
                     {% endif %}
@@ -140,7 +140,7 @@
                     {% if request.user.is_superuser or p and p.puede_editar_todo %}
                       {% can_edit_alumno request.user a as puede_editar %}
                       {% if puede_editar %}
-                        <a href="{% url 'alumnos_editar' a.pk %}" class="btn btn-link text-secondary btn-just-icon edit" title="Editar">
+                        <a href="{% url 'alumnos:alumnos_editar' a.pk %}" class="btn btn-link text-secondary btn-just-icon edit" title="Editar">
                           <i class="material-icons">edit</i>
                         </a>
                       {% endif %}

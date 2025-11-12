@@ -458,6 +458,11 @@ class Programa(models.Model):
     nombre = models.CharField("Nombre de Cursos", max_length=200)
     meses_programa = models.PositiveIntegerField("Meses Programa", validators=[MinValueValidator(1)])
 
+    rvoe_clave = models.CharField("R.V.O.E.", max_length=50, blank=True, db_index=True)
+    rvoe_fecha = models.DateField("Fecha R.V.O.E.", null=True, blank=True)
+    rvoe_emisor = models.CharField("Emisor R.V.O.E. (SEP/Estado)", max_length=120, blank=True)
+    rvoe_url = models.URLField("URL del acuerdo (opcional)", blank=True)
+
     colegiatura = models.DecimalField("Colegiatura", max_digits=12, decimal_places=2, validators=[MinValueValidator(Decimal("0"))])
     inscripcion = models.DecimalField("Inscripción", max_digits=12, decimal_places=2, validators=[MinValueValidator(Decimal("0"))])
     reinscripcion = models.DecimalField("Reinscripción", max_digits=12, decimal_places=2, validators=[MinValueValidator(Decimal("0"))])

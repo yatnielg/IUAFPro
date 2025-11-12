@@ -26,7 +26,7 @@
 
   <!-- Botón oculto pero presente en el DOM -->
   <a id="btn-guardar-pdf"
-     href="{% url 'alumno_carta_pdf' alumno.numero_estudiante %}"
+     href="{% url 'alumnos:alumno_carta_pdf' alumno.numero_estudiante %}"
      class="btn btn-success btn-sm"
      style="display:none;">
     Guardar PDF
@@ -46,7 +46,7 @@
       <button
         id="btnEnviarBienvenida"
         class="btn btn-outline-info btn-sm"
-        data-url="{% url 'enviar_bienvenida_estatica' alumno.pk %}">
+        data-url="{% url 'alumnos:enviar_bienvenida_estatica' alumno.pk %}">
         <i class="material-icons align-middle">outgoing_mail</i>
         Enviar bienvenida
       </button>
@@ -298,12 +298,12 @@
   </h1>
 
   <div class="btn-group">
-    <a class="btn btn-outline-primary mr-1" href="{% url 'estudiantes' %}">
+    <a class="btn btn-outline-primary mr-1" href="{% url 'alumnos:estudiantes' %}">
       <i class="material-icons align-middle">arrow_back</i> Volver
     </a>
 
     {% if request.user.is_superuser or request.user.profile and request.user.profile.puede_editar_todo %}
-    <a class="btn btn-primary" href="{% url 'alumnos_editar' alumno.pk %}">
+    <a class="btn btn-primary" href="{% url 'alumnos:alumnos_editar' alumno.pk %}">
       <i class="material-icons align-middle">edit</i> Editar
     </a>
     {% endif %}
@@ -433,7 +433,7 @@
                 {% if alumno.user.get_full_name %} ({{ alumno.user.get_full_name }}){% endif %}
               {% else %}
                 <span class="text-muted">Sin usuario</span>
-                — <a href="{% url 'alumnos_crear_usuario' alumno.pk %}" class="text-primary">Crear usuario</a>
+                — <a href="{% url 'alumnos:alumnos_crear_usuario' alumno.pk %}" class="text-primary">Crear usuario</a>
               {% endif %}
             </div>
           </div>
@@ -640,24 +640,48 @@
 
 ## ===================== CALIFICACIONES DEL ALUMNO ===================== ##
 {% if califs %}
-<div class="card mt-4">
+<div class="card mt-2">
   <div class="card-header card-header-primary card-header-icon d-flex align-items-center">
-    <div class="card-icon"><i class="material-icons">grading</i></div>
-    <div>
-      <h4 class="card-title m-0">Calificaciones por materia</h4>
-      <p class="card-category m-0">
-        Registros: <strong>{{ califs|length }}</strong>
-      </p>
-    </div>
+  <div class="card-icon"><i class="material-icons">grading</i></div>
+  <div>
+    <h4 class="card-title mt-2">Calificaciones por materia</h4>
+    <p class="card-category m-0">Registros: <strong>{{ califs|length }}</strong></p>
   </div>
+  <div class="ml-auto">
+  {% comment %}   <a class="btn btn-outline-primary btn-sm d-inline-flex align-items-center"
+       href="{% url 'alumno_boleta' alumno.pk %}">
+     
+      Boleta de calificaciones
+    </a>
+ {% endcomment %}
+
+{% comment %} <a class="btn btn-outline-primary btn-sm d-inline-flex align-items-center btn-boleta-pdf"
+   href="{% url 'alumno_boleta' alumno.pk %}"
+   data-url="{% url 'alumno_boleta' alumno.pk %}"
+   data-filename="Boleta-{{ alumno.numero_estudiante }}.pdf">
+  Boleta de calificaciones
+</a> {% endcomment %}
+
+<a class="btn btn-outline-info btn-sm d-inline-flex align-items-center"
+   id="btnBoleta"
+   href="{% url 'alumnos:alumno_boleta' alumno.pk %}">
+  Boleta de calificaciones
+</a>
+
+
+  </div>
+</div>
+
 
   <div class="card-body">
+
+
     <div class="table-responsive">
       <table class="table table-hover">
         <thead>
           <tr>
-            <th>Programa</th>
-            <th>Listado</th>
+    {% comment %}         <th>Programa</th>
+            <th>Listado</th> {% endcomment %}
             <th>Código</th>
             <th>Materia</th>
             <th>Inicio</th>
@@ -681,8 +705,8 @@
           {% endifchanged %}
 
           <tr>
-            <td>{{ c.item.listado.programa.codigo }}</td>
-            <td>{{ c.item.listado.nombre }}</td>
+         {% comment %}    <td>{{ c.item.listado.programa.codigo }}</td> {% endcomment %}
+       {% comment %}      <td>{{ c.item.listado.nombre }}</td> {% endcomment %}
             <td>{{ c.item.materia.codigo }}</td>
             <td>{{ c.item.materia.nombre }}</td>
             <td>{{ c.item.fecha_inicio|date:"d/m/Y" }}</td>
@@ -712,13 +736,18 @@
               {% else %} — {% endif %}
             </td>
 
+
             <td class="text-right">
-              <a class="btn btn-outline-primary btn-sm"
-                 href="{% url 'academico:calificaciones_item' c.item.pk %}">
-                <i class="material-icons align-middle" style="font-size:18px;line-height:1;">edit</i>
-                Capturar/editar
-              </a>
+          {% if can_edit_status %}
+            <a class="btn btn-outline-info btn-sm"
+              href="{% url 'academico:calificaciones_item' c.item.pk %}">
+              <i class="material-icons align-middle" style="font-size:18px;line-height:1;">edit</i>
+              editar
+            </a>
+          {% endif %}
+
             </td>
+
           </tr>
           {% empty %}
           <tr><td colspan="10" class="text-center text-muted">Sin calificaciones registradas.</td></tr>
@@ -771,16 +800,16 @@
 
   <div class="d-flex gap-2">
     {% if request.user.is_superuser %}
-      <a class="btn btn-outline-primary btn-sm"
+      <a class="btn btn-outline-info btn-sm"
          href="/admin/alumnos/pagodiario/?alumno__id__exact={{ alumno.id }}" target="_blank">
         Ver en Admin
       </a>
     {% endif %}
 
     {# 👉 Botón que abre el Estado de cuenta para este alumno #}
-<a class="btn btn-primary btn-sm d-inline-flex align-items-center descargar-estado-cuenta"
-   href="{% url 'estado_cuenta' alumno.numero_estudiante %}"
-   data-url="{% url 'estado_cuenta' alumno.numero_estudiante %}"
+<a class="btn btn-outline-info btn-sm d-inline-flex align-items-center descargar-estado-cuenta"
+   href="{% url 'alumnos:estado_cuenta' alumno.numero_estudiante %}"
+   data-url="{% url 'alumnos:estado_cuenta' alumno.numero_estudiante %}"
    target="_blank" rel="noopener"
    title="Generar PDF del estado de cuenta">
   <i class="material-icons align-middle me-1">picture_as_pdf</i>
@@ -831,8 +860,8 @@
   </a>  {% endcomment %}
  
 
-<a href="{% url 'recibo_carta' p.pk %}"
-   data-url="{% url 'recibo_carta' p.pk %}"
+<a href="{% url 'alumnos:recibo_carta' p.pk %}"
+   data-url="{% url 'alumnos:recibo_carta' p.pk %}"
    data-folio="{{ p.folio|default:p.pk }}"
    class="btn btn-outline-success btn-sm descargar-recibo d-inline-flex align-items-center"
    title="Generar recibo (PDF)">
@@ -882,8 +911,8 @@
       {% else %}
       <button
         id="btnGenerarCargos"
-        class="btn btn-outline-primary btn-sm d-inline-flex align-items-center"
-        data-url="{% url 'generar_cargos_mensuales' alumno.numero_estudiante %}"
+        class="btn btn-outline-info btn-sm d-inline-flex align-items-center"
+        data-url="{% url 'alumnos:generar_cargos_mensuales' alumno.numero_estudiante %}"
         title="Generar cargos mensuales (día 6 por {{ alumno.informacionEscolar.meses_programa|default:'0' }} meses)"
       >
         <i class="material-icons align-middle mr-1">playlist_add</i>
@@ -1033,7 +1062,7 @@
 
         <div class="d-flex justify-content-end mb-2">
           <a class="btn btn-outline-primary btn-sm"
-            href="{% url 'cargo_crear' alumno.pk %}?next={{ request.get_full_path|urlencode }}#pane-todos">
+            href="{% url 'alumnos:cargo_crear' alumno.pk %}?next={{ request.get_full_path|urlencode }}#pane-todos">
             <i class="material-icons align-middle">add</i>
             Añadir cargo
           </a>
@@ -1124,7 +1153,7 @@
  <td class="text-right">
       <div class="btn-group">
         <a class="btn btn-outline-primary btn-sm"
-           href="{% url 'cargo_editar' alumno.pk r.cargo_id %}?next={{ request.get_full_path|urlencode }}#pane-todos">
+           href="{% url 'alumnos:cargo_editar' alumno.pk r.cargo_id %}?next={{ request.get_full_path|urlencode }}#pane-todos">
           <i class="material-icons align-middle" style="font-size:18px;line-height:1;">edit</i>
           Editar
         </a>
@@ -1132,7 +1161,7 @@
    {% if not c.pagado %}
       <button type="button"
               class="btn btn-outline-danger btn-sm btn-eliminar-cargo"
-              data-url="{% url 'cargo_eliminar' alumno.pk r.cargo_id %}?next={{ request.get_full_path|urlencode }}#pane-todos"
+              data-url="{% url 'alumnos:cargo_eliminar' alumno.pk r.cargo_id %}?next={{ request.get_full_path|urlencode }}#pane-todos"
               title="Eliminar cargo">
         <i class="material-icons align-middle" style="font-size:18px;line-height:1;">delete_outline</i>
         Eliminar
@@ -1212,7 +1241,7 @@
 
     <div class="card-header-actions ml-auto mt-0">
       {% if alumno and alumno.pk %}
-        <a class="btn btn-outline-primary" href="{% url 'alumnos_documentos_pdf' alumno.pk %}" target="_blank" rel="noopener">
+        <a class="btn btn-outline-info btn-sm" href="{% url 'alumnos:alumnos_documentos_pdf' alumno.pk %}" target="_blank" rel="noopener">
           Unificar en PDF
         </a>
       {% endif %}
@@ -1289,7 +1318,7 @@
 
       <div class="text-right">
         {% if request.user.is_superuser or request.user.profile and request.user.profile.puede_editar_todo %}
-        <a class="btn btn-outline-info" href="{% url 'alumnos_documentos_editar' alumno.pk %}">
+        <a class="btn btn-outline-info" href="{% url 'alumnos:alumnos_documentos_editar' alumno.pk %}">
           <i class="material-icons align-middle">upload_file</i> Subir/actualizar documentos
         </a>
         {% endif %}
@@ -1678,7 +1707,19 @@ document.addEventListener('click', async (e) => {
 </script>
 
 
-
+<script>
+document.getElementById('btnBoleta')?.addEventListener('click', function(e){
+  e.preventDefault();
+  const url = new URL(this.href, location.href);
+  url.searchParams.set('autoclose','1'); // <- flag para que la boleta se autocierre
+  // Abre en una ventana/nueva pestaña creada por JS (esto permite window.close)
+  window.open(
+    url.href,
+    'boletaPDF',
+    'noopener,noreferrer,width=1000,height=800'
+  );
+});
+</script>
 
 
 {% endblock %}

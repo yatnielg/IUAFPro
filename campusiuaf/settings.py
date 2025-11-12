@@ -90,7 +90,7 @@ OAUTH2_PROVIDER = {
 
 
 # Dónde mandar después del login/logout
-LOGIN_REDIRECT_URL = "principal"   # o la ruta que quieras
+LOGIN_REDIRECT_URL = "alumnos:principal"   # o la ruta que quieras
 LOGOUT_REDIRECT_URL = "account_login"
 
 # Configuración típica de cuentas
@@ -126,7 +126,7 @@ ROOT_URLCONF = 'campusiuaf.urls'
 
 # Después (allauth):
 LOGIN_URL = "account_login"
-LOGIN_REDIRECT_URL = "principal"
+LOGIN_REDIRECT_URL = "alumnos:principal"
 LOGOUT_REDIRECT_URL = "account_login"
 
 

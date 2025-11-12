@@ -19,6 +19,7 @@ from alumnos import views as alumnos_views
 from . import views
 from django.views.decorators.csrf import csrf_exempt
 
+app_name = "alumnos"
 
 urlpatterns = [    
     path("", principal, name="principal"),
@@ -76,6 +77,9 @@ urlpatterns = [
     #path("alumnos/pagos/<int:pk>/enviar-recibo-email/", views.enviar_recibo_pago_email, name="enviar_recibo_pago_email"),
 
     path("alumnos/pagos/<int:pago_id>/enviar-recibo-con-pdf/", views.enviar_recibo_email_con_pdf, name="enviar_recibo_con_pdf"),
+
+
+    path("alumnos/<int:pk>/boleta/", views.boleta_calificaciones, name="alumno_boleta"),
 
 
 

@@ -10,7 +10,7 @@ GROUPS = [
     "documentos",
     "editar_estatus_academico",
     "editar_estatus_administrativo",
-    "pagos",
+    "pagos",    
 ]
 
 BANCOS_GROUPS = {"Conciliadores Bancarios", "Supervisores Bancarios"}

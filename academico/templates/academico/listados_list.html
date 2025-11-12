@@ -20,7 +20,7 @@
 
   <div class="card-header-actions ml-auto">
     <a href="{% url 'admin:academico_listadomaterias_add' %}"
-       class="btn btn-sm btn-outline-warning d-inline-flex align-items-center">
+       class="btn btn-outline-info btn-sm d-inline-flex align-items-center">
       <i class="material-icons mr-1" style="font-size:18px;line-height:1;">add</i>
       Nuevo listado
     </a>
@@ -81,10 +81,10 @@
             <tr>
 
             <td class="align-middle">
-              <a href="{% url 'academico:listado_detalle' l.pk %}"
-                class=" font-weight-bold text-decoration-none">
-                {{ l.nombre }}
-              </a>
+              <a class="font-weight-bold text-reset text-decoration-none"
+   href="{% url 'academico:listado_detalle' l.pk %}">
+  {{ l.nombre }}
+</a>
             </td>
 
 
@@ -114,16 +114,16 @@
               </td>
               <td class="align-middle text-right">
                 <div class="btn-group btn-group-sm">
-                  <a class="btn btn-outline-primary" href="{% url 'academico:listado_detalle' l.pk %}">
+                  <a class="btn btn-outline-info btn-sm" href="{% url 'academico:listado_detalle' l.pk %}">
                     <i class="material-icons" style="font-size:18px;">open_in_new</i> Abrir
                   </a>
-                  
-            
+
+                  {% if request.user.is_superuser %}
                     <a class="btn btn-outline-secondary" href="{% url 'admin:academico_listadomaterias_change' l.pk %}" title="Editar en admin">
                       <i class="material-icons" style="font-size:18px;">edit</i>
                     </a>
             
-
+                  {% endif %}
                 </div>
               </td>
             </tr>

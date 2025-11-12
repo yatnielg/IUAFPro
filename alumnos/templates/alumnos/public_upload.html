@@ -44,7 +44,7 @@
     </div>
 
     {% if request.user.is_authenticated %}
-      <a class="btn btn-outline-secondary" href="{% url 'alumnos_detalle' alumno.pk %}">
+      <a class="btn btn-outline-info" href="{% url 'alumnos:alumnos_detalle' alumno.pk %}">
         <i class="material-icons align-middle">arrow_back</i> Volver a ficha
       </a>
     {% endif %}

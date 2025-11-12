@@ -6,7 +6,10 @@ from django.conf.urls.static import static
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("accounts/", include("allauth.urls")),  # si usas allauth
-    path("", include("alumnos.urls")),
+
+    #path("", include("alumnos.urls")),
+    path("", include(("alumnos.urls", "alumnos"), namespace="alumnos")),
+    
     path('cobros/', include('cobros.urls')),
     path("academico/", include("academico.urls")),
 

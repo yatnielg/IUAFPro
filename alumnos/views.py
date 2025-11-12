@@ -100,7 +100,7 @@ def alumnos_crear(request):
 
             alumno.save()
             messages.success(request, "Alumno creado correctamente.")
-            return redirect("alumnos_detalle", pk=alumno.pk)
+            return redirect("alumnos:alumnos_detalle", pk=alumno.pk)
     else:
         form = AlumnoForm(crear=True, request=request)
 
@@ -223,7 +223,7 @@ def alumnos_editar(request, pk):
                     request,
                     "Asigna primero un Programa en Información Escolar para agregar documentos."
                 )
-                return redirect("alumnos_editar", pk=alumno.pk)
+                return redirect("alumnos:alumnos_editar", pk=alumno.pk)
 
             create_form = DocumentoAlumnoCreateForm(request.POST, request.FILES, info_escolar=info)
             form = AlumnoForm(instance=alumno, request=request)
@@ -243,7 +243,7 @@ def alumnos_editar(request, pk):
                 nuevo.info_escolar = info
                 nuevo.save()
                 messages.success(request, f"Documento '{nuevo.tipo.nombre}' subido correctamente.")
-                return redirect("alumnos_editar", pk=alumno.pk)
+                return redirect("alumnos:alumnos_editar", pk=alumno.pk)
 
             messages.error(request, "Revisa los errores al agregar el documento.")
             active_tab = "#pane-plan"
@@ -354,7 +354,7 @@ def alumnos_editar(request, pk):
                 else:
                     messages.success(request, "Alumno e información escolar actualizados correctamente.")
                     #return redirect("alumnos_editar", pk=alumno.pk)
-                    return redirect("alumnos_detalle", pk=alumno.pk) 
+                    return redirect("alumnos:alumnos_detalle", pk=alumno.pk)
 
             # Si hubo errores, decidir tab activo
             if not is_valid_info or (has_docs_in_post and not is_valid_formset):
@@ -933,7 +933,7 @@ def alumnos_detalle(request, pk):
         )
     )
 
-    print("[DEBUG] califs count =", califs.count())
+    can_edit_status = request.user.is_superuser or request.user.groups.filter(name='editar_estatus_academico').exists()
   
 
     return render(
@@ -942,6 +942,7 @@ def alumnos_detalle(request, pk):
         {
              # Calificaciones
             "califs": califs,
+             "can_edit_status": can_edit_status,
             
             "alumno": alumno,
             "hoy": hoy,   
@@ -984,7 +985,7 @@ def alumnos_crear11(request):
         form = AlumnoForm(request.POST)
         if form.is_valid():
             form.save()
-            return redirect(reverse("alumnos_lista"))
+            return redirect(reverse("alumnos:alumnos_lista"))
     else:
         form = AlumnoForm()
     return render(request, "alumnos/form.html", {"form": form, "modo": "Crear"})
@@ -997,7 +998,7 @@ def alumnos_editar11(request, pk):
         form = AlumnoForm(request.POST, instance=alumno)
         if form.is_valid():
             form.save()
-            return redirect(reverse("alumnos_detalle", args=[alumno.pk]))
+            return redirect(reverse("alumnos:alumnos_detalle", args=[alumno.pk]))
     else:
         form = AlumnoForm(instance=alumno)
     return render(request, "alumnos/form.html", {"form": form, "modo": "Editar"})
@@ -1033,7 +1034,7 @@ def alumnos_crear_usuario(request, pk):
     # Si ya tiene usuario vinculado, puedes redirigir o permitir reasignar
     if alumno.user:
         messages.info(request, "Este alumno ya tiene un usuario asignado.")
-        return redirect(reverse("alumnos_detalle", args=[alumno.pk]))
+        return redirect(reverse("alumnos:alumnos_detalle", args=[alumno.pk]))
 
     if request.method == "POST":
         form = CrearUsuarioAlumnoForm(request.POST)
@@ -1067,7 +1068,7 @@ def alumnos_crear_usuario(request, pk):
                     alumno.save(update_fields=["user"])
 
                     messages.success(request, "Usuario creado y vinculado correctamente.")
-                    return redirect(reverse("alumnos_detalle", args=[alumno.pk]))
+                    return redirect(reverse("alumnos:alumnos_detalle", args=[alumno.pk]))
     else:
         sugerido = alumno.numero_estudiante
         form = CrearUsuarioAlumnoForm(initial={
@@ -1156,7 +1157,7 @@ def documentos_alumno_editar(request, numero_estudiante):
                 obj.info_escolar = info
                 obj.save()
                 messages.success(request, "Documento agregado correctamente.")
-                return redirect("alumnos_documentos_editar", pk=alumno.pk)
+                return redirect("alumnos:alumnos_documentos_editar", pk=alumno.pk)
             else:
                 messages.error(request, "Revisa los errores del formulario de alta.")
         # B) Edición / eliminación
@@ -1180,7 +1181,7 @@ def documentos_alumno_editar(request, numero_estudiante):
                         inst.save()
 
                 messages.success(request, "Cambios guardados.")
-                return redirect("alumnos_documentos_editar", pk=alumno.pk)
+                return redirect("alumnos:alumnos_documentos_editar", pk=alumno.pk)
             else:
                 messages.error(request, "Revisa los errores de los documentos cargados.")
 
@@ -1433,7 +1434,7 @@ def alumnos_documentos_editar(request, pk):
                 nuevo.subido_por = request.user
                 nuevo.save()
                 messages.success(request, f"Documento '{nuevo.tipo.nombre}' subido correctamente.")
-                return redirect("alumnos_documentos_editar", pk=alumno.pk)
+                return redirect("alumnos:alumnos_documentos_editar", pk=alumno.pk)
             else:
                 messages.error(request, "Revisa los errores al agregar el documento.")
         else:
@@ -1460,7 +1461,7 @@ def alumnos_documentos_editar(request, pk):
                     inst.save()
 
                 messages.success(request, "Cambios guardados correctamente.")
-                return redirect("alumnos_documentos_editar", pk=alumno.pk)
+                return redirect("alumnos:alumnos_documentos_editar", pk=alumno.pk)
             else:
                 messages.error(request, "Revisa los errores del formulario de documentos.")
     else:
@@ -1596,8 +1597,8 @@ def crear_pago_de_cargo(request, cargo_id):
         )
 
     # 4) URLs absolutas de retorno
-    success_url = request.build_absolute_uri(reverse("clip_pago_exitoso", args=[orden.pk]))
-    cancel_url  = request.build_absolute_uri(reverse("clip_pago_cancelado", args=[orden.pk]))
+    success_url = request.build_absolute_uri(reverse("alumnos:clip_pago_exitoso", args=[orden.pk]))
+    cancel_url  = request.build_absolute_uri(reverse("alumnos:clip_pago_cancelado", args=[orden.pk]))
 
     # 5) Llamar a Clip (el cliente manda centavos y usa 'reference' internamente)
     client = ClipClient()
@@ -1743,7 +1744,7 @@ def enviar_sms(request):
     to = request.GET.get("to")  # '+52...'
     if not to:
         return HttpResponseBadRequest("Falta parámetro to")
-    callback = request.build_absolute_uri(reverse("twilio_status_callback"))
+    callback = request.build_absolute_uri(reverse("alumnos:twilio_status_callback"))
     # Si quieres forzar entorno: env="sandbox" o "prod"
     m = send_sms(to, "Hola desde Twilio SMS 🚀", env=None, status_callback=callback)
     return JsonResponse({"sid": m.sid, "status": m.status})
@@ -1753,7 +1754,7 @@ def enviar_wa(request):
     to = request.GET.get("to")
     if not to:
         return HttpResponseBadRequest("Falta parámetro to")
-    callback = request.build_absolute_uri(reverse("twilio_status_callback"))
+    callback = request.build_absolute_uri(reverse("alumnos:twilio_status_callback"))
     m = send_whatsapp(to, "Hola por WhatsApp 👋", env=None, status_callback=callback)
     return JsonResponse({"sid": m.sid, "status": m.status})
 
@@ -2200,7 +2201,7 @@ def run_movimientos_banco_update(request):
         print(f"[ERROR] No puedo escribir en {out_dir}: {e_probe}")
         traceback.print_exc()
         messages.error(request, f"No puedo escribir en {out_dir}: {e_probe}")
-        return redirect("movimientos_banco_lista")
+        return redirect("alumnos:movimientos_banco_lista")
 
     # Buffers de captura del management command
     stdout_buf = io.StringIO()
@@ -2227,7 +2228,7 @@ def run_movimientos_banco_update(request):
         print("--- STDERR (completo) ---")
         print(cmd_err if cmd_err else "(vacío)")
         messages.error(request, f"Error al ejecutar importación: {e_cmd}.")
-        return redirect("movimientos_banco_lista")
+        return redirect("alumnos:movimientos_banco_lista")
 
     # Imprimir lo que arrojó el comando (aunque no haya excepción)
     cmd_out = stdout_buf.getvalue()
@@ -2242,7 +2243,7 @@ def run_movimientos_banco_update(request):
     if not out_path.exists():
         print(f"[ERROR] El archivo no existe: {out_path}")
         messages.error(request, f"El comando no generó el archivo: {out_path}")
-        return redirect("movimientos_banco_lista")
+        return redirect("alumnos:movimientos_banco_lista")
 
     try:
         stat = out_path.stat()
@@ -2261,7 +2262,7 @@ def run_movimientos_banco_update(request):
         print(f"[ERROR] No pude leer/parsear el JSON ({out_path}): {e_json}")
         traceback.print_exc()
         messages.error(request, f"No pude leer el JSON ({out_path}): {e_json}")
-        return redirect("movimientos_banco_lista")
+        return redirect("alumnos:movimientos_banco_lista")
 
     # 4) Guardar/actualizar en DB
     _print_header("UPSERT en Base de Datos")
@@ -2290,7 +2291,7 @@ def run_movimientos_banco_update(request):
     _print_header("FIN importación de movimientos de banco")
     sys.stdout.flush()
     sys.stderr.flush()
-    return redirect("movimientos_banco_lista")
+    return redirect("alumnos:movimientos_banco_lista")
 
 ###########################################################################################
 from django.views.decorators.csrf import csrf_protect
@@ -2367,7 +2368,7 @@ def public_upload(request, token):
             except Exception:
                 pass
             messages.success(request, "Documento eliminado.")
-        return redirect("public_upload", token=invite.token)
+        return redirect("alumnos:public_upload", token=invite.token)
 
     # -------------------- SUBIDA NORMAL --------------------
     if request.method == "POST" and "delete" not in request.POST:
@@ -2388,7 +2389,7 @@ def public_upload(request, token):
             invite.save(update_fields=["uses"])
 
             messages.success(request, "¡Documento subido correctamente!")
-            return redirect("public_upload", token=invite.token)
+            return redirect("alumnos:public_upload", token=invite.token)
         else:
             messages.error(request, "Revisa los campos del formulario.")
     else:
@@ -2426,10 +2427,10 @@ def crear_enlace_subida(request, pk):
         created_by=request.user,
     )
     url = request.build_absolute_uri(
-        reverse("public_upload", args=[invite.token])
+        reverse("alumnos:public_upload", args=[invite.token])
     )
     messages.success(request, f"Enlace generado: {url}")
-    return redirect("alumnos_detalle", pk=alumno.pk)
+    return redirect("alumnos:alumnos_detalle", pk=alumno.pk)
 
 def generar_enlace_subida(request, pk):
     alumno = get_object_or_404(Alumno, pk=pk)
@@ -2441,10 +2442,10 @@ def generar_enlace_subida(request, pk):
         created_by=request.user if request.user.is_authenticated else None,
     )
     link = request.build_absolute_uri(
-        reverse("public_upload", args=[invite.token])
+        reverse("alumnos:public_upload", args=[invite.token])
     )
     messages.success(request, f"Enlace generado: {link}")
-    return redirect("alumnos_documentos_editar", pk=alumno.pk)
+    return redirect("alumnos:alumnos_documentos_editar", pk=alumno.pk)
 ################################################################
 @require_POST
 @login_required
@@ -2460,7 +2461,7 @@ def generar_enlace_subida_json(request, pk):
         max_uses=0,
         created_by=request.user,
     )
-    url = request.build_absolute_uri(reverse("public_upload", args=[invite.token]))
+    url = request.build_absolute_uri(reverse("alumnos:public_upload", args=[invite.token]))
     return JsonResponse({"ok": True, "url": url, "expires_at": expires.isoformat()})
 
 ################################################################
@@ -2633,7 +2634,7 @@ def conciliar_movimiento(request, mov_id):
                 mov.save(update_fields=["nombre_detectado_save","conciliado","conciliado_por","conciliado_en"])
 
             messages.success(request, f"✅ Conciliado. Se generaron {len(lineas_validas)} pagos.")
-            return redirect(reverse("movimientos_abonos_pendientes"))
+            return redirect(reverse("alumnos:movimientos_abonos_pendientes"))
 
         except Exception as e:
             print("❌ Error al conciliar:", e)
@@ -2709,7 +2710,7 @@ def deshacer_conciliacion(request, mov_id):
     mov = get_object_or_404(MovimientoBanco, pk=mov_id)
     ok, msg = mov.deshacer_conciliacion()
     messages.success(request, msg) if ok else messages.warning(request, msg)
-    return redirect("movimientos_abonos_pendientes")
+    return redirect("alumnos:movimientos_abonos_pendientes")
 
 
 ###########################################################################################
@@ -3757,7 +3758,7 @@ def cargo_crear(request, pk):
             # Redirección a donde venías (si trae ?next=...), o al detalle con la pestaña "todos".
             next_url = request.GET.get("next")
             if not next_url:
-                next_url = reverse("alumnos_detalle", args=[alumno.pk]) + "#pane-todos"
+                next_url = reverse("alumnos:alumnos_detalle", args=[alumno.pk]) + "#pane-todos"
             return redirect(next_url)
     else:
         form = CargoForm()
@@ -3815,7 +3816,7 @@ def cargo_editar(request, alumno_pk, cargo_id):
             messages.success(request, "Cargo actualizado correctamente.")
             next_url = request.GET.get("next")
             if not next_url:
-                next_url = reverse("alumnos_detalle", args=[alumno.pk]) + "#pane-todos"
+                next_url = reverse("alumnos:alumnos_detalle", args=[alumno.pk]) + "#pane-todos"
             return redirect(next_url)
     else:
         form = CargoForm(instance=cargo)
@@ -4126,13 +4127,13 @@ def enviar_bienvenida_estatica(request, alumno_id):
     if plan and getattr(plan, "bienvenida_enviada", False) and not force:
         _dbg("Bienvenida ya enviada previamente; abortando (sin force).")
         messages.info(request, "Este alumno ya tiene marcada la bienvenida como enviada. Usa ?force=1 para reenviar.")
-        return redirect("alumnos_detalle", pk=alumno.pk)
+        return redirect("alumnos:alumnos_detalle", pk=alumno.pk)
 
     to_email = (alumno.email or alumno.email_institucional or "").strip()
     if not to_email:
         _dbg("SIN correo destino.")
         messages.error(request, "El alumno no tiene correo.")
-        return redirect("alumnos_detalle", pk=alumno.pk)
+        return redirect("alumnos:alumnos_detalle", pk=alumno.pk)
 
     subject = "Bienvenida al Instituto Universitario de Alta Formación (IUAF)"
     ctx_mail = {
@@ -4326,7 +4327,7 @@ def enviar_bienvenida_estatica(request, alumno_id):
         messages.error(request, f"No se pudo enviar el correo: {e}")
 
     _dbg("== FIN enviar_bienvenida_estatica ==")
-    return redirect("alumnos_detalle", pk=alumno.pk)
+    return redirect("alumnos:alumnos_detalle", pk=alumno.pk)
 
 
 
@@ -4340,7 +4341,7 @@ def expediente_maestria_view(request, alumno_id):
 
     if not plan or not plan.programa_id:
         messages.error(request, "El alumno no tiene plan/programa asignado.")
-        return redirect("alumnos_detalle", pk=alumno.pk)
+        return redirect("alumnos:alumnos_detalle", pk=alumno.pk)
 
     # Requisitos activos del programa, incluyendo tipo (con orden/presentación/observaciones)
     reqs = (
@@ -4403,7 +4404,7 @@ def carta_inscripcion_view(request, alumno_id):
 
     if not plan or not plan.programa_id:
         messages.error(request, "El alumno no tiene plan/programa asignado.")
-        return redirect("alumnos_detalle", pk=alumno.pk)
+        return redirect("alumnos:alumnos_detalle", pk=alumno.pk)
 
     programa = plan.programa
 
@@ -4701,3 +4702,107 @@ def enviar_recibo_email_con_pdf(request, pago_id):
         return JsonResponse({"ok": True, "msg": f"Correo enviado a {to_email}."})
     else:
         return JsonResponse({"ok": False, "error": "El backend de correo no reportó envíos."}, status=500)
+
+###############################################################################################################
+from academico.models import Calificacion, ListadoMaterias
+from django.db.models import Max, Min
+
+@login_required
+def boleta_calificaciones(request, pk):
+    alumno = get_object_or_404(
+        Alumno.objects.select_related(
+            "informacionEscolar",
+            "informacionEscolar__programa",
+            "informacionEscolar__sede",
+        ),
+        pk=pk,
+    )
+
+    # Filtrar por listado específico (opcional)
+    listado_id = request.GET.get("listado")
+    califs_qs = (
+        Calificacion.objects
+        .filter(alumno=alumno)
+        .select_related(
+            "item",
+            "item__materia",
+            "item__listado",
+            "item__listado__programa",
+        )
+    )
+    if listado_id:
+        califs_qs = califs_qs.filter(item__listado_id=listado_id)
+
+    # Si no mandaron listado, usar el más reciente que tenga calif
+    if not listado_id:
+        last = (califs_qs
+                .aggregate(mx=Max("item__listado__creado_en"))["mx"])
+        if last:
+            califs_qs = califs_qs.filter(item__listado__creado_en=last)
+
+    califs = list(califs_qs.order_by("item__fecha_inicio", "item__materia__codigo"))
+
+    # Metadatos de cabecera
+    programa = None
+    listado = None
+    periodo_txt = "—"
+    rvoe = None
+
+    if califs:
+        listado = califs[0].item.listado
+        programa = listado.programa if listado else None
+        # período a partir del rango de fechas de las materias del listado
+        rango = califs_qs.aggregate(
+            inicio=Min("item__fecha_inicio"),
+            fin=Max("item__fecha_fin")
+        )
+        if rango["inicio"] and rango["fin"]:
+            # ejemplo: MAY–AGO 2025 (en español depende de locale)
+            periodo_txt = f"{rango['inicio']:%b %Y} – {rango['fin']:%b %Y}".upper()
+        rvoe = (getattr(programa, "rvoe_clave", "") or "").strip()
+        
+
+    # Filas para la tabla
+    filas = []
+    for c in califs:
+        filas.append({
+            "codigo": c.item.materia.codigo,
+            "materia": c.item.materia.nombre,
+            "inicio": c.item.fecha_inicio,
+            "fin": c.item.fecha_fin,
+            "nota": c.nota if c.nota is not None else 0.0,   # puedes dejar None si prefieres “—”
+            "aprobado": getattr(c, "aprobado", None),
+            "obs": c.observaciones or "",
+        })
+
+    ctx = {
+        "alumno": alumno,
+        "programa": programa,
+        "listado": listado,
+        "periodo_txt": periodo_txt,
+        "rvoe": rvoe,
+        "filas": filas,
+        "hoy": timezone.now(),
+        "institucion": {
+            "nombre": "IUAF",
+            "campus": getattr(alumno.informacionEscolar, "sede", None),
+            "ciudad": "Cancún, Quintana Roo",
+            "cct": "23PSU0064H",  # pon el real si lo tienes en BD
+        },
+        "firmante": {
+            "nombre": "RA. EN D. YASMIN CAM",  # placeholder
+            "cargo": "Directora General y de Servicios Escolares",
+        },
+        "show_print_button": True,  # para ocultarlo en impresión
+        "institucion": {
+            "nombre": "Instituto Universitario de Alta Formación",
+            "rfc": "IUAT0913LI2",
+            "cct": "23PSU0064H",
+            "direccion": "Blvd. Kukulkán Km 3.5, Plaza Nautilus Int. 53, Cancún, Q.R.",
+            "ciudad": "México",            
+            "telefono": "998 939 4481",
+            "email": "cadministrativa@iuaf.edu.mx",
+        },
+      
+    }
+    return render(request, "reportes/boleta_calificaciones.html", ctx)

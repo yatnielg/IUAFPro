@@ -660,7 +660,7 @@ if(!ok){
   const inputSexo=document.getElementById("{{ form.sexo.auto_id }}");
   const statusEl=document.getElementById("curpLookupStatus");
   const loadingEl=document.getElementById("curpLoading");
-  const url="{% url 'api_curp_lookup' %}";
+  const url="{% url 'alumnos:api_curp_lookup' %}";
   let countdownTimer=null;
 
   function showStatus(msg,isError=false){ if(!statusEl) return; statusEl.style.display="block"; statusEl.className="form-text "+(isError?"text-danger":"text-muted"); statusEl.textContent=msg; }
@@ -841,7 +841,7 @@ function setValueAndFloat(el,value){
   async function cargarFinanciamientos(programaId, keepSelectedId=null){
     setDisabled(selFinan, true);
 
-    const url = new URL("{% url 'api_financiamientos_list' %}", window.location.origin);
+    const url = new URL("{% url 'alumnos:api_financiamientos_list' %}", window.location.origin);
     if(programaId) url.searchParams.set("programa", programaId);
 
     try{

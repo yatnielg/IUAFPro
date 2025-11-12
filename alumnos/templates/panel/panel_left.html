@@ -50,7 +50,7 @@
         </div>
         <ul class="nav">
           <li class="nav-item {% if  request.resolver_match.url_name == 'principal'  %} active {% endif %}">
-            <a class="nav-link" href="{% url 'principal' %}">
+            <a class="nav-link" href="{% url 'alumnos:principal' %}">
               <i class="material-icons">dashboard</i>
               <p> Inicio </p>
             </a>
@@ -61,9 +61,9 @@
 
           <li class="nav-item {% if  request.resolver_match.url_name == 'estudiantes' or request.resolver_match.url_name == 'stockentry_panel' %} active {% endif %}">
            {% if alertas_global.negocio or alertas_global.state or alertas_global.municipality or alertas_global.warehouses or alertas_global.category %}
-              <a class="nav-link" href="{% url 'principal' %}">
+              <a class="nav-link" href="{% url 'alumnos:principal' %}">
             {% else %}
-              <a class="nav-link" href="{% url 'estudiantes' %}">
+              <a class="nav-link" href="{% url 'alumnos:estudiantes' %}">
            
           {% endif %} 
               <i class="material-icons">group</i>
@@ -73,9 +73,9 @@
 
         <li class="nav-item {% if  request.resolver_match.url_name == 'documentos_lista' or request.resolver_match.url_name == 'formulario_agregar_categoria' %} active {% endif %}">
             {% if alertas_global.negocio or alertas_global.state or alertas_global.municipality or alertas_global.warehouses %}
-                <a class="nav-link" href="{% url 'principal' %}">
+                <a class="nav-link" href="{% url 'alumnos:principal' %}">
             {% else %}
-              <a class="nav-link" href="{% url 'documentos_alumnos_lista' %}">
+              <a class="nav-link" href="{% url 'alumnos:documentos_alumnos_lista' %}">
             {% endif %}    
               <i class="material-icons">cloud_upload</i>
               <p> Subir Documentos </p>
@@ -83,14 +83,14 @@
           </li>
 
             <li class="nav-item {% if  request.resolver_match.url_name == 'pagos_diario_lista'  %} active {% endif %}">
-            <a class="nav-link" href="{% url 'pagos_diario_lista' %}">
+            <a class="nav-link" href="{% url 'alumnos:pagos_diario_lista' %}">
               <i class="material-icons">payment</i>
               <p> Pagos </p>
             </a>
           </li>
 
           <li class="nav-item {% if  request.resolver_match.url_name == 'cargos_pendientes_todos'  %} active {% endif %}">
-            <a class="nav-link" href="{% url 'cargos_pendientes_todos' %}">
+            <a class="nav-link" href="{% url 'alumnos:cargos_pendientes_todos' %}">
               <i class="material-icons">pending_actions</i>
               <p> Cargos Pendientes </p>
             </a>
@@ -102,7 +102,7 @@
 
 
          <li class="nav-item {% if  request.resolver_match.url_name == 'movimientos_banco_lista'  %} active {% endif %}">
-            <a class="nav-link" href=" {% url 'movimientos_banco_lista' %}">
+            <a class="nav-link" href=" {% url 'alumnos:movimientos_banco_lista' %}">
               <i class="material-icons">account_balance</i>
               <p> Movimientos de Banco </p>
             </a>
@@ -121,7 +121,7 @@
 
 
           <li class="nav-item {% if  request.resolver_match.url_name == 'config_panel'  %} active {% endif %}">
-            <a class="nav-link" href=" {% url 'config_panel' %}">
+            <a class="nav-link" href=" {% url 'alumnos:config_panel' %}">
               <i class="material-icons">settings</i>
               <p> Configuración </p>
             </a>
