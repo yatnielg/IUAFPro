@@ -90,7 +90,7 @@
 
 
               <td class="align-middle">
-                {% if l.programa %}<span class="badge badge-light">{{ l.programa.codigo }}</span>{% else %}<span class="text-muted">—</span>{% endif %}
+                {% if l.programa %}<span class="badge badge-light" title="{{ l.programa.nombre }}">{{ l.programa.codigo }}</span>{% else %}<span class="text-muted">—</span>{% endif %}
               </td>
               <td class="align-middle">{{ l.creado_en|date:"d/m/Y H:i" }}</td>
               <td class="align-middle">

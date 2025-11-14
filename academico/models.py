@@ -86,11 +86,15 @@ class ListadoAlumno(models.Model):
         return f"{self.listado} · {self.alumno.numero_estudiante}"
 
     def clean(self):
-        info = getattr(self.alumno, "informacionEscolar", None)
-        if not info or not info.programa_id:
-            raise ValidationError("El alumno no tiene programa asignado.")
-        if info.programa_id != self.listado.programa_id:
-            raise ValidationError("El alumno debe pertenecer al mismo programa del listado.")
+        """
+        Antes validabas que el alumno tuviera el mismo programa que el listado.
+        Ahora permites CUALQUIER alumno en CUALQUIER listado.
+        Si quieres, puedes dejar solo validaciones muy básicas.
+        """
+        if not self.alumno_id:
+            raise ValidationError("Debes seleccionar un alumno.")
+        if not self.listado_id:
+            raise ValidationError("Debes seleccionar un listado.")
 
 
 class Calificacion(models.Model):
@@ -125,18 +129,13 @@ class Calificacion(models.Model):
         return f"{prog} · {mat} · {num} · {nota}"
 
     def clean(self):
-        # Validaciones tempranas para evitar errores por relaciones nulas
+        # Validaciones básicas
         if not self.item_id:
             raise ValidationError("La calificación debe pertenecer a un item válido.")
         if not self.alumno_id:
             raise ValidationError("Debe seleccionar un alumno para la calificación.")
 
-        # Validar pertenencia al mismo programa del listado
-        info = getattr(self.alumno, "informacionEscolar", None)
-        if not info or not info.programa_id:
-            raise ValidationError("El alumno no tiene programa asignado.")
-        if info.programa_id != self.item.listado.programa_id:
-            raise ValidationError("El alumno debe pertenecer al mismo programa del listado de la materia.")
+        # Ya NO validamos el programa del alumno vs el programa del listado
 
         # Validar rango de nota si viene
         if self.nota is not None:
@@ -144,7 +143,7 @@ class Calificacion(models.Model):
                 v = float(self.nota)
             except Exception:
                 raise ValidationError("La nota debe ser numérica.")
-            if v < 0 or v > 100:
+            if v < 0 or v > 10:
                 raise ValidationError("La nota debe estar entre 0 y 100.")
 
     def save(self, *args, **kwargs):

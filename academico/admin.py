@@ -69,18 +69,14 @@ class ListadoAlumnoInline(admin.TabularInline):
     ordering = ("-agregado_en",)
 
     def get_formset(self, request, obj=None, **kwargs):
-        """
-        Con `obj` (ListadoMaterias) limitamos los alumnos al mismo programa.
-        """
-        FormSet = super().get_formset(request, obj, **kwargs)
-        if obj:
-            base_qs = Alumno.objects.select_related(
-                "informacionEscolar", "informacionEscolar__programa"
-            )
-            FormSet.form.base_fields["alumno"].queryset = base_qs.filter(
-                informacionEscolar__programa=obj.programa
-            )
-        return FormSet
+            """
+            Ahora permitimos seleccionar CUALQUIER alumno,
+            sin filtrar por programa.
+            """
+            FormSet = super().get_formset(request, obj, **kwargs)
+            # Si quieres, puedes afinar el queryset (ej. solo activos), pero sin filtrar por programa:
+            # FormSet.form.base_fields["alumno"].queryset = Alumno.objects.all()
+            return FormSet
 
 
 # -----------------------------
