@@ -186,7 +186,7 @@ class InformacionEscolarAdmin(admin.ModelAdmin):
     # -----------------------
     list_display = (
         "grupo_display",            # <- muestra el nuevo si existe; si no, el legacy
-        "programa", "sede",
+        "programa", "sede",        
         "estatus_academico", "estatus_administrativo",
         "precio_final",
         "bienvenida_enviada", "bienvenida_enviada_en", "bienvenida_enviada_por",
@@ -222,7 +222,7 @@ class InformacionEscolarAdmin(admin.ModelAdmin):
     # -----------------------
     readonly_fields = (
         "creado_en", "actualizado_en",
-        "bienvenida_enviada", "bienvenida_enviada_en", "bienvenida_enviada_por",
+       "bienvenida_enviada_en", "bienvenida_enviada_por",
         "grupo_mostrado_preview",   # vista previa amigable
     )
 

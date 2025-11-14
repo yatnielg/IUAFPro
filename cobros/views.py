@@ -401,7 +401,7 @@ def link_pago_cargo(request, cargo_id):
 
         # Monto válido
         try:
-            monto = Decimal(cargo.monto or 0)
+            monto = Decimal(cargo.monto or 0)            
         except InvalidOperation:
             return JsonResponse({"ok": False, "error": "Monto no numérico en el cargo."}, status=400)
         if monto <= 0:

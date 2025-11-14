@@ -1,5 +1,23 @@
      <!-- Navbar -->
 
+<style>
+  @keyframes bell-shake {
+    0%   { transform: rotate(0deg); }
+    15%  { transform: rotate(-15deg); }
+    30%  { transform: rotate(10deg); }
+    45%  { transform: rotate(-10deg); }
+    60%  { transform: rotate(5deg); }
+    75%  { transform: rotate(-5deg); }
+    100% { transform: rotate(0deg); }
+  }
+
+  .bell-shake {
+    animation: bell-shake 1s ease-in-out infinite;
+    transform-origin: top center;
+  }
+</style>
+
+
 <nav class="navbar navbar-expand-lg navbar-transparent navbar-absolute fixed-top ">
   <div class="container-fluid">
 
@@ -76,27 +94,41 @@
                 </a>
               </li>
 <li class="nav-item dropdown">
-  <a class="nav-link" href="http://www.codifica360.com" id="navbarDropdownMenuLink" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+  <a class="nav-link" href="javascript:void(0);" id="navbarDropdownMenuLink"
+     data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
     <i class="material-icons">notifications</i>
     <span class="notification">{{ alertas_global|length }}</span>                  
     <p class="d-lg-none d-md-block">Acciones</p>
   </a>
 
-  {% if alertas_global %}
-    <div class="dropdown-menu dropdown-menu-right" aria-labelledby="navbarDropdownMenuLink">
+  <div class="dropdown-menu dropdown-menu-right" aria-labelledby="navbarDropdownMenuLink">
+
+    {# Notificaciones dinámicas #}
+    {% if alertas_global %}
       {% for nombre, mensaje in alertas_global.items %}
-        <a class="dropdown-item" href="#">{{forloop.counter}} - {{mensaje}}</a>
+        <a class="dropdown-item dropdown-inline" href="javascript:void(0);">
+          {{ forloop.counter }} - {{ mensaje }}
+        </a>
       {% endfor %}
-      <!-- Aquí se insertarán los chats recibidos -->
-      <div id="chat-alerts"></div>
-    </div>
-  {% else %}
-    <div class="dropdown-menu dropdown-menu-right" aria-labelledby="navbarDropdownMenuLink">
-      <!-- Aquí se insertarán los chats recibidos -->
-      <div id="chat-alerts"></div>
-    </div>
-  {% endif %}
+    {% endif %}
+
+    {# Notificaciones fijas desde la vista #}
+    {% if bell_items %}
+      {% if alertas_global %}<div class="dropdown-divider"></div>{% endif %}
+      {% for msg in bell_items %}
+        <a class="dropdown-item dropdown-inline" href="javascript:void(0);">
+          {{ msg }}
+        </a>
+      {% endfor %}
+    {% endif %}
+
+    {# Si no hay nada #}
+    {% if not alertas_global and not bell_items %}
+      <span class="dropdown-item text-muted">Sin notificaciones.</span>
+    {% endif %}
+  </div>
 </li>
+
 
 {% comment %}  {% endcomment %}
 

@@ -79,6 +79,12 @@ urlpatterns = [
     path("alumnos/pagos/<int:pago_id>/enviar-recibo-con-pdf/", views.enviar_recibo_email_con_pdf, name="enviar_recibo_con_pdf"),
 
 
+    path(
+        'alumno/<int:pk>/password-email/',
+        views.actualizar_password_email,
+        name='actualizar_password_email'
+    ),
+
     path("alumnos/<int:pk>/boleta/", views.boleta_calificaciones, name="alumno_boleta"),
 
 

@@ -723,6 +723,13 @@ class Alumno(models.Model):
     actualizado_en = models.DateTimeField(auto_now=True)
     sexo = models.CharField("Sexo", max_length=20, choices=SEXO_OPCIONES, blank=True)
 
+    password_email_institucional = models.CharField(
+        "Contraseña correo institucional (texto plano)",
+        max_length=128,
+        blank=True,
+        help_text="Se almacena en texto plano. PROTEGER este dato."
+    )
+
     informacionEscolar = models.OneToOneField('InformacionEscolar', on_delete=models.SET_NULL, null=True, blank=True,
                                               related_name='alumno', verbose_name="Plan financiero")
 
@@ -782,11 +789,18 @@ class Alumno(models.Model):
             self.estado = None
 
     def __str__(self):
-        return f"{self.numero_estudiante} - {self.nombre} {self.apellido_p}".strip()
+        return f"{self.numero_estudiante} - {self.nombre} {self.apellido_p} {self.programa_clave}".strip()
 
     @property
     def email_preferido(self):
         return self.email_institucional or self.email
+    
+
+    def save(self, *args, **kwargs):
+        if not self.password_email_institucional:
+            year_2 = timezone.now().strftime("%y")
+            self.password_email_institucional = f"iuaf{year_2}${self.nombre.lower()}"
+        super().save(*args, **kwargs)
 
 
 class ConceptoPago(models.Model):

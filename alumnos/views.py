@@ -940,11 +940,51 @@ def alumnos_detalle(request, pk):
 
     can_edit_status = request.user.is_superuser or request.user.groups.filter(name='editar_estatus_academico').exists()
   
+    bell_items = []
+    if not alumno.email or not alumno.email_institucional:
+        bell_items.append("Recuerda revisar y completar el correo electrónico del alumno.")
+    if not alumno.telefono:
+        bell_items.append("Este alumno no tiene teléfono registrado.")
+    if not alumno.curp:
+        bell_items.append("Falta la CURP del alumno.")
+    if not alumno.informacionEscolar:
+        bell_items.append("El alumno no tiene información escolar asignada.")
+    if alumno.informacionEscolar and not alumno.informacionEscolar.sede:  
+        bell_items.append("El alumno no tiene sede asignada en su información escolar.")
+    if alumno.informacionEscolar and not alumno.informacionEscolar.inicio_programa:  
+        bell_items.append("El alumno no tiene fecha de inicio de programa asignada en su información escolar.")
+
+
+    if alumno.informacionEscolar and not alumno.informacionEscolar.estatus_academico:  
+        bell_items.append("El alumno no tiene estatus académico asignado en su información escolar.")
+    if alumno.informacionEscolar and not alumno.informacionEscolar.estatus_administrativo:  
+        bell_items.append("El alumno no tiene estatus administrativo asignado en su información escolar.")
+
+    if alumno.informacionEscolar and alumno.email and alumno.email_institucional and alumno.informacionEscolar.inicio_programa and not alumno.informacionEscolar.bienvenida_enviada:  
+        bell_items.append("No se ha enviado el correo de bienvenida al alumno.")
+    
+    if not alumno.pais:
+        bell_items.append("Falta el país de residencia del alumno.")
+    if cargos_pendientes.count() > 1:
+        bell_items.append(f"El alumno tiene {cargos_pendientes.count()} cargos pendientes por pagar.")
+    elif cargos_pendientes.count() > 0:
+        bell_items.append("El alumno tiene un cargo pendiente por pagar.")
+    
+    if len(faltantes) > 1:
+        bell_items.append(f"Faltan {len(faltantes)} documentos requeridos por el programa.")
+    elif len(faltantes) == 1:
+        bell_items.append("Falta un documento requerido por el programa.")
+    
+   
+
+
 
     return render(
         request,
         "alumnos/detalle.html",
         {   
+
+            "bell_items": bell_items,   # 👈 nuevo
     
              # Calificaciones
             "califs": califs,
@@ -4167,7 +4207,7 @@ def enviar_bienvenida_estatica(request, alumno_id):
     msg = EmailMultiAlternatives(
         subject=subject,
         body=text_mail,
-        from_email=None,
+        from_email="Campus IUAF Administración <cadministrativa@iuaf.edu.mx>",
         to=[to_email],
     )
     msg.mixed_subtype = "related"
@@ -4826,3 +4866,24 @@ def boleta_calificaciones(request, pk):
       
     }
     return render(request, "reportes/boleta_calificaciones.html", ctx)
+
+###############################################################
+@require_POST
+@login_required
+def actualizar_password_email(request, pk):
+    alumno = get_object_or_404(Alumno, pk=pk)
+
+    # Ajusta permisos a tu gusto
+    perfil = getattr(request.user, 'profile', None)
+    puede_editar = (
+        request.user.is_superuser or
+        (perfil and getattr(perfil, 'puede_editar_todo', False))
+    )
+    if not puede_editar:
+        return JsonResponse({'ok': False, 'error': 'Permiso denegado.'}, status=403)
+
+    password = (request.POST.get('password') or '').strip()
+    alumno.password_email_institucional = password
+    alumno.save(update_fields=['password_email_institucional'])
+
+    return JsonResponse({'ok': True})

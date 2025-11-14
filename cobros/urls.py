@@ -11,3 +11,20 @@ urlpatterns = [
     path("exito/", views.checkout_success, name="checkout_success"),
     path("cancelado/", views.checkout_cancel, name="checkout_cancel"),
 ]
+#https://admin.campusiuaf.com/cobros/webhooks/stripe/
+#whsec_6zSE3jD8FLIgTnjxUspTGQqC4ThvjXps
+
+""" Datos de destino
+ID del destino
+we_1SSpUXPYU8rbriDKVqPgICik
+Nombre
+playful-finesse
+URL del punto de conexión
+https://admin.campusiuaf.com/cobros/webhooks/stripe/
+Descripción
+campusiuaf
+Versión de API
+2025-10-29.clover
+Escuchando
+9 eventos
+Mostrar """

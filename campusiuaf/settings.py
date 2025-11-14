@@ -239,17 +239,24 @@ STATIC_ROOT = BASE_DIR / "staticfiles"      # /app/staticfiles (salida)
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 
-
-
-# Email (Gmail SMTP)
-EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
-EMAIL_HOST = "smtp.gmail.com"
-EMAIL_PORT = 587
-EMAIL_HOST_USER = "recibos@iuaf.edu.mx"
-EMAIL_HOST_PASSWORD = "estl jtbs jeyx lkkx"  # app password de 16 caracteres (con espacios, ok)
-EMAIL_USE_TLS = True
-DEFAULT_FROM_EMAIL = "CampusIUAF <recibos@iuaf.edu.mx>"
-
+if DEBUG:
+    # Email (Gmail SMTP)
+    EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+    EMAIL_HOST = "smtp.gmail.com"
+    EMAIL_PORT = 587
+    EMAIL_HOST_USER = "yatniel@gmail.com"
+    EMAIL_HOST_PASSWORD = "nswl rsga zyna cpte"  # app password de 16 caracteres (con espacios, ok)
+    EMAIL_USE_TLS = True
+    DEFAULT_FROM_EMAIL = "CampusIUAF <yatniel@gmail.com>"
+else:
+    # Email (Gmail SMTP)
+    EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+    EMAIL_HOST = "smtp.gmail.com"
+    EMAIL_PORT = 587
+    EMAIL_HOST_USER = "recibos@iuaf.edu.mx"
+    EMAIL_HOST_PASSWORD = "estl jtbs jeyx lkkx"  # app password de 16 caracteres (con espacios, ok)
+    EMAIL_USE_TLS = True
+    DEFAULT_FROM_EMAIL = "CampusIUAF <recibos@iuaf.edu.mx>"
 
 ##################################################################################
 # ======================
@@ -276,6 +283,7 @@ STRIPE_CONFIG = {
     "SUCCESS_URL": FRONTEND_SUCCESS_URL,
     "CANCEL_URL": FRONTEND_CANCEL_URL,
 }
+
 
 
 # Seguridad básica en prod (si ya estás detrás de HTTPS real)

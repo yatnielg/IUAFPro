@@ -38,7 +38,7 @@
 {% endif %}
 
 
-{% if pago_total_mayor_a_cero %}
+{% if  alumno.email_institucional and alumno.email and alumno.informacionEscolar and alumno.informacionEscolar.inicio_programa %}
 
 {% if alumno and alumno.pk %}
   {% with plan=alumno.informacionEscolar %}
@@ -59,7 +59,7 @@
         </span>
         <!-- Botón para reenviar manualmente -->
         {% if request.user.is_superuser %}
-        <a id="btnReenviarBienvenida" href="{% url 'enviar_bienvenida_estatica' alumno.pk %}?force=1"
+        <a id="btnReenviarBienvenida" href="{% url 'alumnos:enviar_bienvenida_estatica' alumno.pk %}?force=1"
            class="btn btn-outline-secondary btn-sm ms-2">
           Reenviar
         </a>
@@ -389,18 +389,167 @@
             <div class="text-muted small">Email personal</div>
             <div>
               {% if alumno.email %}
-                <a href="mailto:{{ alumno.email }}">{{ alumno.email }}</a>
+                <a href="mailto:{{ alumno.email }}" style="pointer-events: none; cursor: default; color: inherit;">{{ alumno.email }}</a>
               {% else %}—{% endif %}
             </div>
           </div>
-          <div class="col-sm-6 mb-3">
-            <div class="text-muted small">Email institucional</div>
-            <div>
-              {% if alumno.email_institucional %}
-                <a href="mailto:{{ alumno.email_institucional }}">{{ alumno.email_institucional }}</a>
-              {% else %}—{% endif %}
-            </div>
-          </div>
+
+
+
+<div class="col-sm-6 mb-3">
+  <div class="text-muted small">Email institucional</div>
+  <div>
+    {% if alumno.email_institucional %}
+      <a href="mailto:{{ alumno.email_institucional }}" style="pointer-events: none; cursor: default; color: inherit;">{{ alumno.email_institucional }}</a>
+
+      {% if alumno.password_email_institucional %}
+        <div class="mt-1 d-flex align-items-center">
+          <input
+            type="password"
+            class="form-control form-control-sm w-auto"
+            value="{{ alumno.password_email_institucional }}"
+            id="pwd-email-inst"
+            data-update-url="{% url 'alumnos:actualizar_password_email' alumno.pk %}"
+          >
+          <button
+            type="button"
+            class="btn btn-link btn-sm text-secondary ml-1 toggle-password"
+            data-target="#pwd-email-inst"
+            title="Mostrar/ocultar contraseña"
+          >
+            <i class="material-icons">visibility</i>
+          </button>
+        </div>
+        <small id="pwd-email-inst-status" class="text-muted"></small>
+      {% endif %}
+    {% else %}
+      —
+    {% endif %}
+  </div>
+</div>
+
+
+
+
+
+<script>
+(function(){
+  function getCookie(name){
+    const m = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+    return m ? m.pop() : '';
+  }
+
+  // Toggle mostrar/ocultar contraseña
+  document.addEventListener('click', function (e) {
+    const btn = e.target.closest('.toggle-password');
+    if (!btn) return;
+
+    const selector = btn.getAttribute('data-target');
+    if (!selector) return;
+
+    const input = document.querySelector(selector);
+    if (!input) return;
+
+    const icon = btn.querySelector('.material-icons');
+
+    if (input.type === 'password') {
+      input.type = 'text';
+      if (icon) icon.textContent = 'visibility_off';
+    } else {
+      input.type = 'password';
+      if (icon) icon.textContent = 'visibility';
+    }
+  });
+
+  const inputPwd = document.getElementById('pwd-email-inst');
+  if (!inputPwd) return;
+
+  const statusEl = document.getElementById('pwd-email-inst-status');
+  let originalValue = inputPwd.value;
+  let isSaving = false;
+
+  function setStatus(msg, kind){
+    if (!statusEl) return;
+    statusEl.textContent = msg || '';
+    statusEl.classList.remove('text-success','text-danger','text-muted');
+    if (kind === 'ok') statusEl.classList.add('text-success');
+    else if (kind === 'err') statusEl.classList.add('text-danger');
+    else statusEl.classList.add('text-muted');
+  }
+
+  async function savePassword(){
+    const newVal = inputPwd.value.trim();
+    if (newVal === originalValue) return; // nada cambió
+
+    if (!newVal) {
+      if (!confirm('La contraseña quedará vacía. ¿Continuar?')) {
+        inputPwd.value = originalValue;
+        return;
+      }
+    }
+
+    if (isSaving) return;
+    isSaving = true;
+    inputPwd.disabled = true;
+    setStatus('Guardando...', 'muted');
+
+    const url = inputPwd.dataset.updateUrl;
+    const csrftoken = getCookie('csrftoken');
+
+    try {
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-CSRFToken': csrftoken,
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: new URLSearchParams({ password: newVal })
+      });
+
+      if (!resp.ok) {
+        const txt = await resp.text().catch(()=> '');
+        throw new Error(txt || ('HTTP ' + resp.status));
+      }
+
+      let data = {};
+      try { data = await resp.json(); } catch(_){}
+      if (!data.ok) {
+        throw new Error(data.error || 'No se pudo actualizar la contraseña.');
+      }
+
+      originalValue = newVal;
+      setStatus('Contraseña actualizada.', 'ok');
+    } catch (err) {
+      console.error(err);
+      setStatus('Error al guardar: ' + err.message, 'err');
+    } finally {
+      isSaving = false;
+      inputPwd.disabled = false;
+    }
+  }
+
+  // Guardar al salir del campo (blur) o al presionar Enter
+  inputPwd.addEventListener('blur', function(){
+    savePassword();
+  });
+
+  inputPwd.addEventListener('keydown', function(e){
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      savePassword();
+    }
+  });
+})();
+</script>
+
+
+
+
+
+
+
+
 
           <div class="col-sm-6 mb-3">
             <div class="text-muted small">Teléfono</div>
@@ -1723,6 +1872,49 @@ document.getElementById('btnBoleta')?.addEventListener('click', function(e){
   );
 });
 </script>
+
+
+
+{% comment %}  {% endcomment %}
+
+
+
+
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const badge = document.querySelector('.notification');
+  if (!badge) return;
+
+  // Lo que viene del backend en alertas_global|length
+  const base = parseInt(badge.textContent, 10) || 0;
+
+  // Cantidad de mensajes adicionales (solo lectura)
+  const extras = {{ bell_items|length|default:0 }};
+  const total  = base + extras;
+
+  badge.textContent = total;
+
+  // Si hay notificaciones, mover la campanita
+  if (total > 0) {
+    const bellIcon = document.querySelector('#navbarDropdownMenuLink i.material-icons');
+    if (bellIcon) {
+      bellIcon.classList.add('bell-shake');
+    }
+  }
+});
+</script>
+
+
+
+
+
+
+
+
+
+
+
 
 
 {% endblock %}

@@ -52,7 +52,12 @@
             </td>
           </tr>
 
-    {% comment %}       <!-- ACCESOS (ejemplos; ajusta los valores que ya envías en tu imagen o contexto) -->
+
+
+
+
+
+          <!-- ACCESOS (ejemplos; ajusta los valores que ya envías en tu imagen o contexto) -->
           <tr>
             <td style="padding:4px 24px 0 24px;">
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc; border:1px solid #eef2f7; border-radius:10px;">
@@ -68,13 +73,17 @@
                       <strong>Plataforma:</strong> Classroom / IUAF
                     </div>
                     <!-- Si pasas contraseña/usuario en ctx, puedes mostrarlos aquí -->
-                    {# <div style="font-size:14px; color:#475467; margin-top:6px;"><strong>Contraseña:</strong> ******</div> #}
+                    <div style="font-size:14px; color:#475467; margin-top:6px;"><strong>Contraseña:</strong>{{ alumno.password_email_institucional }} </div> 
                   </td>
                 </tr>
               </table>
             </td>
           </tr>
- {% endcomment %}
+
+
+
+          
+
           <!-- CTA -->
           <tr>
             <td align="center" style="padding:18px 24px 0 24px;">
