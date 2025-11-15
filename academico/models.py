@@ -196,12 +196,16 @@ class Profesor(models.Model):
     email = models.EmailField("Correo electrónico", blank=True)
     email_institucional = models.EmailField("Correo institucional", blank=True)
     especialidad = models.CharField("Especialidad", max_length=150, blank=True)
+    lugar_de_trabajo = models.CharField("Lugar de trabajo", max_length=150, blank=True)
     ciudad = models.CharField("Ciudad", max_length=100, blank=True)
     curp = models.CharField("CURP", max_length=18, blank=True)
     rfc = models.CharField("RFC", max_length=13, blank=True)
     telefono = models.CharField(max_length=40, blank=True)
+    banco = models.CharField("Banco", max_length=100, blank=True)
+    clave_interbancaria = models.CharField("Clave interbancaria", max_length=50, blank=True)
+    tipo_De_deposito = models.CharField("Tipo de depósito", max_length=50, blank=True)    
     activo = models.BooleanField(default=True)
-
+    grado_academico = models.CharField("Grado académico", max_length=150, blank=True)
     creado_en = models.DateTimeField(auto_now_add=True)
     actualizado_en = models.DateTimeField(auto_now=True)
 

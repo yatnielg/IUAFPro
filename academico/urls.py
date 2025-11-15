@@ -11,4 +11,5 @@ urlpatterns = [
     path("materias-profesores/", views.materias_profesores_list, name="materias_profesores_list"),
 
     path("profesores/", views.profesores_list, name="profesores_list"),
+    path("profesores/<int:pk>/materias/", views.profesor_materias, name="profesor_materias"),
 ]

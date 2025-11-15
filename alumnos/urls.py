@@ -87,6 +87,12 @@ urlpatterns = [
 
     path("alumnos/<int:pk>/boleta/", views.boleta_calificaciones, name="alumno_boleta"),
 
+    path(
+        "alumnos/<int:pk>/pagos-diario/nuevo/",
+        views.pago_diario_crear,
+        name="pago_diario_crear",
+    ),
+
 
 
 ]

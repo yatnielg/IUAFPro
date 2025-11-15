@@ -15,6 +15,7 @@ from .models import (
     Calificacion,
     Materia,
     Profesor,
+    ProfesorMateria,
 )
 from .forms import CalificacionForm, CalificacionFormSet
 
@@ -289,5 +290,40 @@ def profesores_list(request):
             "profesores": qs,
             "ciudades": ciudades,
             "especialidades": especialidades,
+        },
+    )
+
+###################################################
+@login_required
+def profesor_materias(request, pk):
+    """
+    Detalle de un profesor: materias que imparte.
+    Muestra:
+    - Programa
+    - Código y nombre de la materia
+    - Si es titular o no
+    - En cuántos listados aparece la materia
+    """
+    profesor = get_object_or_404(
+        Profesor.objects.all(),
+        pk=pk,
+    )
+
+    asignaciones = (
+        ProfesorMateria.objects
+        .filter(profesor=profesor, activo=True)
+        .select_related("materia", "materia__programa")
+        .annotate(
+            num_listados=Count("materia__ofertas__listado", distinct=True),
+        )
+        .order_by("materia__programa__codigo", "materia__codigo")
+    )
+
+    return render(
+        request,
+        "academico/profesor_materias.html",
+        {
+            "profesor": profesor,
+            "asignaciones": asignaciones,
         },
     )

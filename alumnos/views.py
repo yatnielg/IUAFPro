@@ -4178,6 +4178,8 @@ def generar_carta_inscripcion_pdf(alumno, request) -> str | None:
 # =========================
 # Vista principal
 # =========================
+from django.core.mail import EmailMultiAlternatives, get_connection
+
 @login_required
 def enviar_bienvenida_estatica(request, alumno_id):
     _dbg(f"== INICIO enviar_bienvenida_estatica alumno_id={alumno_id} ==")
@@ -4187,11 +4189,15 @@ def enviar_bienvenida_estatica(request, alumno_id):
     force = request.GET.get("force") in ("1", "true", "True")
     _dbg(f"force={force}, alumno.email={alumno.email}, alumno.email_institucional={alumno.email_institucional}")
 
+    # Ya enviada y sin "force"
     if plan and getattr(plan, "bienvenida_enviada", False) and not force:
-        _dbg("Bienvenida ya enviada previamente; abortando (sin force).")
-        messages.info(request, "Este alumno ya tiene marcada la bienvenida como enviada. Usa ?force=1 para reenviar.")
+        messages.info(
+            request,
+            "Este alumno ya tiene marcada la bienvenida como enviada. Usa ?force=1 para reenviar."
+        )
         return redirect("alumnos:alumnos_detalle", pk=alumno.pk)
 
+    # Correo destino
     to_email = (alumno.email or alumno.email_institucional or "").strip()
     if not to_email:
         _dbg("SIN correo destino.")
@@ -4208,17 +4214,34 @@ def enviar_bienvenida_estatica(request, alumno_id):
     html_mail = render_to_string("emails/bienvenida_estatica.html", ctx_mail, request=request)
     text_mail = render_to_string("emails/bienvenida_estatica.txt", ctx_mail, request=request)
 
+    # ================ CONEXIÓN SMTP SIEMPRE COMO cadministrativa@iuaf.edu.mx ================
+    adm_connection = get_connection(
+        backend="django.core.mail.backends.smtp.EmailBackend",
+        host=settings.EMAIL_HOST,
+        port=settings.EMAIL_PORT,
+        username=settings.ADM_EMAIL_USER,
+        password=settings.ADM_EMAIL_PASSWORD,
+        use_tls=settings.EMAIL_USE_TLS,
+    )
+
+    from_email = getattr(
+        settings,
+        "WELCOME_FROM_EMAIL",
+        f"CampusIUAF Admisiones <{settings.ADM_EMAIL_USER}>"
+    )
+
     msg = EmailMultiAlternatives(
         subject=subject,
         body=text_mail,
-        from_email="Campus IUAF Administración <cadministrativa@iuaf.edu.mx>",
+        from_email=from_email,
         to=[to_email],
+        connection=adm_connection,   # 👈 SIEMPRE usa cadministrativa@iuaf.edu.mx
     )
     msg.mixed_subtype = "related"
     msg.attach_alternative(html_mail, "text/html")
     _dbg("EmailMultiAlternatives creado y HTML adjuntado.")
 
-    # Imágenes inline
+    # ================== Imágenes inline ==================
     logo_path = finders.find("iuaf/iuaf-logo3.png")
     _dbg(f"logo_path={logo_path}")
     if logo_path:
@@ -4230,7 +4253,7 @@ def enviar_bienvenida_estatica(request, alumno_id):
                 msg.attach(img)
             _dbg("Logo inline adjuntado.")
         except Exception as e:
-            _dbg(f"Error adjuntando logo: {e}\n{traceback.format_exc()}")
+            _dbg(f"Error adjuntando logo: {e}")
 
     hero_path = finders.find("iuaf/imagencorreo.png")
     _dbg(f"hero_path={hero_path}")
@@ -4243,11 +4266,10 @@ def enviar_bienvenida_estatica(request, alumno_id):
                 msg.attach(img)
             _dbg("Hero inline adjuntado.")
         except Exception as e:
-            _dbg(f"Error adjuntando hero: {e}\n{traceback.format_exc()}")
+            _dbg(f"Error adjuntando hero: {e}")
 
+    # ================== Adjuntos por programa ==================
     docs_attached = 0
-
-    # Adjuntos por PROGRAMA
     program_code = ""
     if plan and getattr(plan, "programa", None) and getattr(plan.programa, "codigo", None):
         program_code = (plan.programa.codigo or "").strip()
@@ -4259,13 +4281,11 @@ def enviar_bienvenida_estatica(request, alumno_id):
         _dbg(f"Adjuntando {len(files)} archivo(s) de '{rel_dir}'…")
         for abs_path, download_name, mime in files:
             try:
-                size = os.path.getsize(abs_path)
-                _dbg(f"Adjuntando '{download_name}' ({size} bytes, {mime})")
                 with open(abs_path, "rb") as f:
                     msg.attach(download_name, f.read(), mime)
                     docs_attached += 1
             except Exception as e:
-                _dbg(f"No se pudo adjuntar {download_name}: {e}\n{traceback.format_exc()}")
+                _dbg(f"No se pudo adjuntar {download_name}: {e}")
                 messages.warning(request, f"No se pudo adjuntar {download_name}: {e}")
 
     if program_code:
@@ -4277,97 +4297,10 @@ def enviar_bienvenida_estatica(request, alumno_id):
             messages.warning(request, f"No se encontraron documentos en: {rel_dir}")
             attach_dir(os.path.join("iuaf", "bienvenida", "comun"))
     else:
-        _dbg("Sin program_code; no se adjuntan docs específicos.")
-        messages.warning(request, "El alumno no tiene programa/código de programa; no se adjuntaron documentos específicos.")
+        _dbg("Sin program_code; usando solo 'comun'.")
+        attach_dir(os.path.join("iuaf", "bienvenida", "comun"))
 
-    # ========= Adjuntar CARTA desde STATIC_ROOT/staticfiles =========
-    def _safe_student_number(al):
-        sn = str(getattr(al, "numero_estudiante", "") or f"alumno_{al.pk}").strip()
-        return "".join(ch for ch in sn if ch.isalnum() or ch in ("-", "_"))
-
-    stored_path = None  # para evitar duplicados al buscar PDFs adicionales
-    try:
-        static_write_root = _static_write_root()  # <- usa STATIC_ROOT si existe
-        pdf_dir = static_write_root / "iuaf" / "bienvenida" / "pdf"
-        pdf_dir.mkdir(parents=True, exist_ok=True)
-        _dbg(f"pdf_dir={pdf_dir} (exists={pdf_dir.exists()})")
-
-        student_number = _safe_student_number(alumno)
-        stored_filename = f"{student_number}.pdf"
-        candidate_path = (pdf_dir / stored_filename).resolve()
-        _dbg(f"Buscando carta ya creada: {candidate_path}")
-        _dbg(f"exists={candidate_path.exists()}; size={candidate_path.stat().st_size if candidate_path.exists() else '—'}")
-
-        if candidate_path.exists():
-            try:
-                # Nombre “bonito” para el adjunto
-                def clean(s): return " ".join((s or "").split())
-                safe_name = "_".join(filter(None, [
-                    clean(getattr(alumno, "apellido_p", None)),
-                    clean(getattr(alumno, "apellido_m", None)),
-                    clean(getattr(alumno, "nombre", None)),
-                ])).replace(" ", "_") or str(alumno.pk)
-
-                attach_name = f"Carta_Inscripcion_{safe_name}.pdf"
-                with open(candidate_path, "rb") as f:
-                    msg.attach(attach_name, f.read(), "application/pdf")
-                docs_attached += 1
-                stored_path = str(candidate_path)  # para evitar duplicados luego
-                _dbg(f"Carta existente adjuntada como '{attach_name}'.")
-            except Exception as e:
-                _dbg(f"No se pudo adjuntar carta existente: {e}\n{traceback.format_exc()}")
-                messages.warning(request, f"No se pudo adjuntar carta existente: {e}")
-        else:
-            _dbg("No existe carta previa; se continuará sin generar ni adjuntar carta.")
-            messages.info(request, "No se adjuntó carta de inscripción porque no existe el PDF previo para este alumno.")
-    except Exception as e:
-        _dbg(f"ERROR comprobando/adjuntando carta existente: {e}\n{traceback.format_exc()}")
-        messages.warning(request, f"Error al verificar/adjuntar la carta existente: {e}")
-
-    # Adjuntar OTROS PDFs del alumno (que contengan el número) sin duplicar la carta
-    try:
-        static_write_root = _static_write_root()
-        pdf_dir = static_write_root / "iuaf" / "bienvenida" / "pdf"
-        student_number = _safe_student_number(alumno)
-
-        _dbg(f"Buscando PDFs adicionales en {pdf_dir} para student_number='{student_number}'")
-        if pdf_dir.exists():
-            names = os.listdir(pdf_dir)
-            _dbg(f"PDFs en carpeta: {names}")
-            for fname in names:
-                if not fname.lower().endswith(".pdf"):
-                    continue
-                if student_number not in fname:
-                    continue
-                fpath = (pdf_dir / fname).resolve()
-                # Evitar duplicar la carta ya adjuntada
-                if stored_path and os.path.normcase(str(fpath)) == os.path.normcase(stored_path):
-                    _dbg(f"Omitiendo (ya se adjuntó carta): {fname}")
-                    continue
-                try:
-                    size = os.path.getsize(fpath)
-                    _dbg(f"Adjuntando PDF adicional '{fname}' ({size} bytes).")
-                    with open(fpath, "rb") as f:
-                        msg.attach(fname, f.read(), "application/pdf")
-                        docs_attached += 1
-                except Exception as e:
-                    _dbg(f"No se pudo adjuntar PDF adicional '{fname}': {e}\n{traceback.format_exc()}")
-                    messages.warning(request, f"No se pudo adjuntar PDF adicional '{fname}': {e}")
-        else:
-            _dbg("No existe la carpeta de PDFs adicionales.")
-            messages.info(request, "No existe la carpeta static/iuaf/bienvenida/pdf para buscar PDFs adicionales.")
-    except Exception as e:
-        _dbg(f"ERROR buscando/adjuntando PDFs adicionales: {e}\n{traceback.format_exc()}")
-        messages.warning(request, f"Error al buscar/adjuntar PDFs adicionales del alumno: {e}")
-
-    # Resumen antes de enviar
-    try:
-        attach_count = len(getattr(msg, "attachments", []))
-    except Exception:
-        attach_count = "desconocido"
-    _dbg(f"Total adjuntos contados por msg.attachments: {attach_count} (docs_attached contador: {docs_attached})")
-
-    # Envío
+    # ================== Envío ==================
     try:
         _dbg("Enviando correo…")
         sent_count = msg.send()
@@ -4376,7 +4309,11 @@ def enviar_bienvenida_estatica(request, alumno_id):
             plan.bienvenida_enviada = True
             plan.bienvenida_enviada_en = timezone.now()
             plan.bienvenida_enviada_por = request.user
-            plan.save(update_fields=["bienvenida_enviada", "bienvenida_enviada_en", "bienvenida_enviada_por"])
+            plan.save(update_fields=[
+                "bienvenida_enviada",
+                "bienvenida_enviada_en",
+                "bienvenida_enviada_por",
+            ])
 
         if sent_count > 0:
             ok_msg = f"Correo de bienvenida enviado a {to_email}."
@@ -4386,14 +4323,11 @@ def enviar_bienvenida_estatica(request, alumno_id):
         else:
             messages.error(request, "El backend de correo no reportó envíos.")
     except Exception as e:
-        _dbg(f"ERROR en envío de correo: {e}\n{traceback.format_exc()}")
+        _dbg(f"ERROR en envío de correo: {e}")
         messages.error(request, f"No se pudo enviar el correo: {e}")
 
     _dbg("== FIN enviar_bienvenida_estatica ==")
     return redirect("alumnos:alumnos_detalle", pk=alumno.pk)
-
-
-
 
 #############################################################################################################################################
 
@@ -4891,3 +4825,77 @@ def actualizar_password_email(request, pk):
     alumno.save(update_fields=['password_email_institucional'])
 
     return JsonResponse({'ok': True})
+
+#################################################################
+from .forms import PagoDiarioForm
+@login_required
+def pago_diario_crear(request, pk):
+    alumno = get_object_or_404(Alumno, pk=pk)
+
+    if not user_can_view_pagos(request.user):
+        return HttpResponseForbidden("No tienes permiso para registrar pagos.")
+
+    next_url = request.GET.get(
+        "next",
+        reverse("alumnos:alumnos_detalle", args=[alumno.pk])
+    )
+
+    if request.method == "POST":
+        form = PagoDiarioForm(request.POST)
+        if form.is_valid():
+            obj = form.save(commit=False)
+            obj.alumno = alumno
+            obj.numero_alumno = alumno.numero_estudiante
+
+            info = getattr(alumno, "informacionEscolar", None)
+            if alumno.curp and not obj.curp:
+                obj.curp = alumno.curp
+
+            if info:
+                if info.programa and not obj.programa:
+                    obj.programa = getattr(info.programa, "codigo", str(info.programa))
+                if info.sede and not obj.sede:
+                    obj.sede = getattr(info.sede, "nombre", str(info.sede))
+
+            # concepto por defecto
+            if not obj.concepto:
+                obj.concepto = "COLEGIATURA"
+
+            # 👉 forma_pago por defecto
+            if not obj.forma_pago:
+                obj.forma_pago = "Pago manual"
+
+            if not obj.fecha:
+                obj.fecha = timezone.now().date()
+
+            obj.save()
+            messages.success(request, "Pago manual registrado correctamente.")
+            return redirect(next_url)
+    else:
+        info = getattr(alumno, "informacionEscolar", None)
+        initial = {
+            "fecha": timezone.now().date(),
+            "curp": alumno.curp,
+        }
+
+        if info:
+            if info.programa:
+                initial["programa"] = getattr(info.programa, "codigo", str(info.programa))
+            if info.sede:
+                initial["sede"] = getattr(info.sede, "nombre", str(info.sede))
+
+        # 👉 defaults
+        initial.setdefault("concepto", "COLEGIATURA")
+        initial.setdefault("forma_pago", "Pago manual")  # 👈 aquí
+
+        form = PagoDiarioForm(initial=initial)
+
+    return render(
+        request,
+        "alumnos/pago_diario_form.html",
+        {
+            "form": form,
+            "alumno": alumno,
+            "next": next_url,
+        },
+    )

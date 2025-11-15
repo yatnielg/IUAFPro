@@ -639,3 +639,56 @@ class CargoForm(forms.ModelForm):
                 self.fields["fecha_cargo"].initial = inst.fecha_cargo.strftime("%Y-%m-%d")
             if inst.fecha_vencimiento:
                 self.fields["fecha_vencimiento"].initial = inst.fecha_vencimiento.strftime("%Y-%m-%d")
+
+
+# forms.py
+from .models import PagoDiario  # ya lo tienes definido más arriba
+from django import forms
+from .forms import HTML5DateInput  # ya lo tienes definido arriba para CargoForm
+
+class PagoDiarioForm(forms.ModelForm):
+    # Aceptar tanto YYYY-MM-DD (navegador) como DD/MM/YYYY
+    fecha = forms.DateField(
+        widget=HTML5DateInput(),
+        input_formats=["%Y-%m-%d", "%d/%m/%Y"],
+        required=True,
+        label="Fecha del pago",
+    )
+
+    class Meta:
+        model = PagoDiario
+        fields = [
+            "fecha",
+            "monto",
+            "concepto",
+            "forma_pago",
+            "folio",
+            "pago_detalle",
+            "programa",
+            "sede",
+            "curp",
+            "grado",
+            "no_auto",
+            "emision",
+        ]
+        widgets = {
+            "monto": forms.NumberInput(attrs={"step": "0.01"}),
+            "concepto": forms.TextInput(),
+            "forma_pago": forms.TextInput(),
+            "folio": forms.TextInput(),
+            "pago_detalle": forms.Textarea(attrs={"rows": 2}),
+            "programa": forms.TextInput(),
+            "sede": forms.TextInput(),
+            "curp": forms.TextInput(),
+            "grado": forms.TextInput(),
+            "no_auto": forms.TextInput(),
+            "emision": forms.TextInput(),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # Añadir clase form-control a todos los campos
+        for f in self.fields.values():
+            css = f.widget.attrs.get("class", "")
+            f.widget.attrs["class"] = (css + " form-control").strip()

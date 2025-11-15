@@ -131,12 +131,18 @@
               data-especialidad="{{ p.especialidad|default_if_none:'' }}"
               data-activo="{% if p.activo %}1{% else %}0{% endif %}"
             >
-              <td>
-                <strong>{{ p.apellido_p }} {{ p.apellido_m }}, {{ p.nombre }}</strong><br>
-                {% if p.user %}
-                  <span class="badge badge-soft-secondary">Usuario: {{ p.user.username }}</span>
-                {% endif %}
-              </td>
+<td>
+  <strong>
+    <a href="{% url 'academico:profesor_materias' p.pk %}" class="text-white">
+      {{ p.nombre }} {{ p.apellido_p }} {{ p.apellido_m }}
+    </a>
+  </strong><br>
+  {% if p.user %}
+    <span class="badge badge-soft-secondary">Usuario: {{ p.user.username }}</span>
+  {% endif %}
+</td>
+
+
               <td>
                 {% if p.email %}
                   <div><i class="material-icons" style="font-size:16px;vertical-align:middle;">email</i> {{ p.email }}</div>
@@ -172,7 +178,7 @@
               <td class="text-right">
                 <div class="btn-group btn-group-sm">
                   {# Link directo al admin del profesor #}
-                  <a class="btn btn-outline-secondary"
+                  <a class="btn btn-outline-info"
                      href="{% url 'admin:academico_profesor_change' p.pk %}"
                      title="Editar en admin">
                     <i class="material-icons" style="font-size:18px;">edit</i>

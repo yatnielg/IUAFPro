@@ -404,13 +404,18 @@
 
       {% if alumno.password_email_institucional %}
         <div class="mt-1 d-flex align-items-center">
-          <input
-            type="password"
-            class="form-control form-control-sm w-auto"
-            value="{{ alumno.password_email_institucional }}"
-            id="pwd-email-inst"
-            data-update-url="{% url 'alumnos:actualizar_password_email' alumno.pk %}"
-          >
+<input
+  type="text"
+  id="pwd-email-inst"
+  value="{{ alumno.password_email_institucional }}"
+  data-update-url="{% url 'alumnos:actualizar_password_email' alumno.pk %}"
+  class="form-control form-control-sm w-auto"
+  style="display:none; -webkit-text-security: disc;"
+  autocomplete="off"
+/>
+
+
+
           <button
             type="button"
             class="btn btn-link btn-sm text-secondary ml-1 toggle-password"
@@ -439,7 +444,7 @@
     return m ? m.pop() : '';
   }
 
-  // Toggle mostrar/ocultar contraseña
+  // Toggle mostrar/ocultar contraseña + mostrar input si está oculto
   document.addEventListener('click', function (e) {
     const btn = e.target.closest('.toggle-password');
     if (!btn) return;
@@ -452,11 +457,35 @@
 
     const icon = btn.querySelector('.material-icons');
 
-    if (input.type === 'password') {
-      input.type = 'text';
+    // Si el input está oculto, mostrarlo primero.
+    if (input.style.display === 'none' || getComputedStyle(input).display === 'none') {
+      input.style.display = 'inline-block';   // o 'block'
+
+      // estado inicial: oculto
+      input.dataset.visible = '0';
+      input.style.webkitTextSecurity = 'disc';
+
+      if (icon) icon.textContent = 'visibility';
+
+      const statusEl = document.getElementById('pwd-email-inst-status');
+      if (statusEl) statusEl.style.display = 'block';
+
+      input.focus();
+      return; // detenemos aquí — no alternamos aún
+    }
+
+    // Alternar ver/ocultar usando -webkit-text-security
+    const visible = input.dataset.visible === '1';
+
+    if (!visible) {
+      // Mostrar texto
+      input.dataset.visible = '1';
+      input.style.webkitTextSecurity = 'none';
       if (icon) icon.textContent = 'visibility_off';
     } else {
-      input.type = 'password';
+      // Ocultar texto
+      input.dataset.visible = '0';
+      input.style.webkitTextSecurity = 'disc';
       if (icon) icon.textContent = 'visibility';
     }
   });
@@ -472,6 +501,7 @@
     if (!statusEl) return;
     statusEl.textContent = msg || '';
     statusEl.classList.remove('text-success','text-danger','text-muted');
+
     if (kind === 'ok') statusEl.classList.add('text-success');
     else if (kind === 'err') statusEl.classList.add('text-danger');
     else statusEl.classList.add('text-muted');
@@ -479,7 +509,7 @@
 
   async function savePassword(){
     const newVal = inputPwd.value.trim();
-    if (newVal === originalValue) return; // nada cambió
+    if (newVal === originalValue) return;
 
     if (!newVal) {
       if (!confirm('La contraseña quedará vacía. ¿Continuar?')) {
@@ -542,8 +572,6 @@
   });
 })();
 </script>
-
-
 
 
 
@@ -957,6 +985,16 @@
         Ver en Admin
       </a>
     {% endif %}
+
+  {% if request.user.is_superuser %}
+  {# 👉 NUEVO BOTÓN: agregar pago manual #}
+    <a class="btn btn-outline-info btn-sm"
+       href="{% url 'alumnos:pago_diario_crear' alumno.pk %}?next={{ request.get_full_path|urlencode }}">
+      <i class="material-icons align-middle mr-1">add</i>
+      Agregar pago manual
+    </a>
+  {% endif %}
+
 
     {# 👉 Botón que abre el Estado de cuenta para este alumno #}
 <a class="btn btn-outline-info btn-sm d-inline-flex align-items-center descargar-estado-cuenta"

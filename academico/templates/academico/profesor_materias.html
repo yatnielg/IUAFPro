@@ -1,0 +1,73 @@
+{% extends "panel/grafico.html" %}
+{% load static %}
+
+{% block main_content %}
+
+<div class="container-fluid">
+
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h4 class="text-white mb-0">
+      Materias del profesor:
+      {{ profesor.nombre }} {{ profesor.apellido_p }} {{ profesor.apellido_m }}
+    </h4>
+
+    <a href="{% url 'academico:profesores_list' %}" class="btn btn-outline-info">
+      &larr; Volver a profesores
+    </a>
+  </div>
+
+  <div class="card">
+    <div class="card-header card-header-primary card-header-icon d-flex align-items-center">
+      <div class="card-icon">
+        <i class="material-icons">school</i>
+      </div>
+      <h5 class="card-title mb-0">Materias que imparte</h5>
+    </div>
+
+    <div class="card-body">
+      <div class="table-responsive">
+        <table class="table table-sm table-striped align-middle">
+          <thead>
+            <tr>
+              <th>Programa</th>
+              <th>Código</th>
+              <th>Materia</th>
+              <th style="width:120px;">Rol</th>
+              <th style="width:150px;"># Listados</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for a in asignaciones %}
+              <tr>
+                <td>{{ a.materia.programa.codigo }} - {{ a.materia.programa.nombre }}</td>
+                <td>{{ a.materia.codigo }}</td>
+                <td>{{ a.materia.nombre }}</td>
+                <td>
+                  {% if a.es_titular %}
+                    <span class="badge badge-soft-success">Titular</span>
+                  {% else %}
+                    <span class="badge badge-soft-secondary">Docente</span>
+                  {% endif %}
+                </td>
+                <td>
+                  <span class="badge badge-soft-secondary">
+                    {{ a.num_listados }} listado{{ a.num_listados|pluralize }}
+                  </span>
+                </td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="5" class="text-center text-muted py-4">
+                  Este profesor aún no tiene materias asignadas.
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+{% endblock %}

@@ -83,8 +83,8 @@
                       {{ ins.alumno.numero_estudiante }}
                     </a>
                   </strong>
-                  — {{ ins.alumno.apellido_p }} {{ ins.alumno.apellido_m }}, {{ ins.alumno.nombre }}
-                </span>
+                  — {{ ins.alumno.nombre }}, {{ ins.alumno.apellido_p }} {{ ins.alumno.apellido_m }} - {{ ins.alumno.informacionEscolar.programa.codigo }}
+                </span>                 
                 <span class="text-muted small">{{ ins.agregado_en|date:"d/m/Y H:i" }}</span>
               </li>
             {% empty %}
