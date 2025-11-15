@@ -4,7 +4,8 @@ from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
-from django.db.models import Count, Min, Max, Case, When, Value, CharField
+from django.db.models import Count, Min, Max, Case, When, Value, CharField, Q
+
 
 from alumnos.models import Programa
 from .models import (
@@ -12,8 +13,11 @@ from .models import (
     ListadoMateriaItem,
     ListadoAlumno,
     Calificacion,
+    Materia,
+    Profesor,
 )
 from .forms import CalificacionForm, CalificacionFormSet
+
 
 
 # ---------- Listado con métricas y estado ----------
@@ -196,5 +200,94 @@ def calificaciones_item(request, pk):
             "listado": item.listado,
             "formset": formset,
             "inscripciones": inscripciones,
+        },
+    )
+
+
+@login_required
+def materias_profesores_list(request):
+    """
+    Lista de materias con:
+    - Programa
+    - Código y nombre
+    - Profesor titular (si hay)
+    - Número total de profesores asociados
+    - Número de listados donde aparece la materia
+    """
+    materias = (
+        Materia.objects
+        .select_related("programa")
+        .prefetch_related("asignaciones_profesor__profesor")
+        .annotate(
+            num_profesores=Count("asignaciones_profesor", distinct=True),
+            num_listados=Count("ofertas__listado", distinct=True),
+        )
+        .order_by("programa__codigo", "codigo")
+    )
+
+    # Para llenar un filtro de programas en el template
+    programas = (
+        materias.values_list("programa__codigo", "programa__nombre")
+        .distinct()
+        .order_by("programa__codigo")
+    )
+
+    return render(
+        request,
+        "academico/materias_profesores_list.html",
+        {
+            "materias": materias,
+            "programas": programas,
+        },
+    )
+###################################################################
+@login_required
+def profesores_list(request):
+    """
+    Listado de profesores con info útil:
+    - Nombre, emails, ciudad, especialidad
+    - # materias donde es titular
+    - # materias totales que imparte
+    """
+    qs = (
+        Profesor.objects
+        .annotate(
+            num_materias_total=Count(
+                "asignaciones",
+                filter=Q(asignaciones__activo=True),
+                distinct=True,
+            ),
+            num_materias_titular=Count(
+                "asignaciones",
+                filter=Q(asignaciones__activo=True, asignaciones__es_titular=True),
+                distinct=True,
+            ),
+        )
+        .order_by("apellido_p", "apellido_m", "nombre")
+    )
+
+    # Para llenar los filtros de la vista
+    ciudades = (
+        Profesor.objects
+        .exclude(ciudad="")
+        .values_list("ciudad", flat=True)
+        .distinct()
+        .order_by("ciudad")
+    )
+    especialidades = (
+        Profesor.objects
+        .exclude(especialidad="")
+        .values_list("especialidad", flat=True)
+        .distinct()
+        .order_by("especialidad")
+    )
+
+    return render(
+        request,
+        "academico/profesores_list.html",
+        {
+            "profesores": qs,
+            "ciudades": ciudades,
+            "especialidades": especialidades,
         },
     )

@@ -10,17 +10,32 @@
   <div class="card">
 
 
-<div class="card-header card-header-primary card-header-icon d-flex align-items-center">
-  <div class="card-icon bg-gradient-purple">
-    <i class="material-icons">school</i>
-  </div>
+    <div class="card-header card-header-primary card-header-icon d-flex align-items-center">
+        <div class="card-icon bg-gradient-purple">
+              <i class="material-icons">school</i>
+        </div>
 
-  <h4 class="card-title mb-0 ml-2">Listados de materias</h4>
-</div>
+        <h4 class="card-title mb-0 ml-2">Listados de materias</h4>
+    </div>
 
-  <div class="card-header-actions ml-auto">
+    <div class="card-header-actions ml-auto">
+
+    <a href="{% url 'academico:materias_profesores_list' %}"
+       class="btn btn-outline-light btn-sm d-inline-flex align-items-center mr-2">
+      <i class="material-icons mr-1" style="font-size:18px;line-height:1;">people</i>
+      Materias / profesores
+    </a>
+
+    <!-- 👇 NUEVO BOTÓN PROFESORES -->
+    <a href="{% url 'academico:profesores_list' %}"
+       class="btn btn-outline-light btn-sm d-inline-flex align-items-center mr-2">
+      <i class="material-icons mr-1" style="font-size:18px;line-height:1;">person</i>
+      Profesores
+    </a>
+    <!-- 👆 NUEVO BOTÓN PROFESORES -->
+
     <a href="{% url 'admin:academico_listadomaterias_add' %}"
-       class="btn btn-outline-info btn-sm d-inline-flex align-items-center">
+      class="btn btn-outline-info btn-sm d-inline-flex align-items-center">
       <i class="material-icons mr-1" style="font-size:18px;line-height:1;">add</i>
       Nuevo listado
     </a>
@@ -118,12 +133,12 @@
                     <i class="material-icons" style="font-size:18px;">open_in_new</i> Abrir
                   </a>
 
-                  {% if request.user.is_superuser %}
+                 {% comment %}  {% if request.user.is_superuser %} {% endcomment %}
                     <a class="btn btn-outline-secondary" href="{% url 'admin:academico_listadomaterias_change' l.pk %}" title="Editar en admin">
                       <i class="material-icons" style="font-size:18px;">edit</i>
                     </a>
             
-                  {% endif %}
+                 {% comment %}  {% endif %} {% endcomment %}
                 </div>
               </td>
             </tr>

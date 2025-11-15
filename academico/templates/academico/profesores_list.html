@@ -1,0 +1,256 @@
+{# templates/academico/profesores_list.html #}
+{% extends "panel/grafico.html" %}
+{% load static %}
+
+{% block main_content %}
+
+<style>
+  .order-img{width:34px;height:34px;object-fit:cover;border-radius:5px;margin-right:2px;background:#f7f8fa;transition:transform .2s;cursor:pointer}
+  .order-img:hover{transform:scale(2.5) translateX(5px);z-index:2;box-shadow:0 4px 16px rgba(0,0,0,.18)}
+  .table-responsive{width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
+
+  .toolbar{ display:flex; flex-direction:column; align-items:flex-start; gap:.5rem; margin-bottom:.5rem; }
+  .filters-row{ display:flex; flex-wrap:wrap; gap:.5rem; width:100%; }
+  .selectpicker, .range-input { min-width:220px; max-width:280px; }
+
+  .calif-wrap{ display:flex; flex-direction:column; gap:1rem; }
+  .calif-header{ display:flex; align-items:center; justify-content:space-between; gap:.75rem; flex-wrap:wrap; }
+  .calif-header h4{ margin:0; font-weight:600; color:#fff; }
+
+  .card { border-radius:12px; }
+  .card-header.card-header-primary{ display:flex; align-items:center; min-height:3.25rem; overflow:visible; }
+  .card-header .card-title{ margin:0; font-weight:600; color:#fff; }
+
+  .card-header.card-header-icon .card-icon{
+    display:flex; align-items:center; justify-content:center;
+    border-radius:8px; padding:14px;
+    margin-top:-20px; margin-left:15px;
+    position:relative; z-index:2;
+  }
+  .card-header.card-header-icon .card-icon i{ font-size:32px; line-height:1; color:#fff; }
+
+  .table.align-middle td, .table.align-middle th{ vertical-align:middle; }
+  .table-sm td, .table-sm th{ padding:.55rem .75rem; }
+
+  .table thead th{
+    position:sticky; top:0; z-index:2;
+    box-shadow: inset 0 -1px 0 rgba(0,0,0,.05);
+  }
+  .table.table-striped tbody tr:nth-of-type(odd){ background-color: rgba(0,0,0,.02); }
+
+  .table .badge{ font-size:.75rem; padding:.25rem .45rem; }
+  .badge-soft-success{ background:rgba(76,175,80,.12); color:#4caf50; }
+  .badge-soft-secondary{ background:rgba(158,158,158,.15); color:#b0bec5; }
+  .badge-soft-warning{ background:rgba(255,193,7,.15); color:#ffc107; }
+  .badge-soft-danger{ background:rgba(244,67,54,.10); color:#f44336; }
+
+  .dataTables_wrapper .dataTables_filter label{ color:#fff; }
+  .dataTables_wrapper .dataTables_filter input{
+    background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.2);
+    color:#fff; padding:.3rem .5rem; border-radius:.375rem;
+  }
+  .dataTables_wrapper .dataTables_info{ color:#fff; }
+  .dataTables_wrapper .dataTables_paginate .paginate_button{ color:#fff !important; }
+
+  ::placeholder{ color:rgba(255,255,255,.7); opacity:1; }
+
+  @media (max-width: 576px){
+    .table thead th:nth-child(1){ min-width:140px; }
+    .table thead th:nth-child(2){ min-width:180px; }
+    .table thead th:nth-child(3){ min-width:160px; }
+  }
+</style>
+
+<div class="container-fluid calif-wrap">
+
+  <div class="calif-header">
+    <h4 class="mb-0 text-white">Profesores y materias</h4>
+
+    {# Botón de volver (ajusta la URL si quieres ir a otra vista) #}
+    <a class="btn btn-outline-info" href="{% url 'academico:listados_list' %}">
+      &larr; Volver
+    </a>
+  </div>
+
+  <div class="card">
+    <div class="card-header card-header-primary card-header-icon">
+      <div class="card-icon"><i class="material-icons">person</i></div>
+      <h5 class="card-title mb-0">Listado de profesores</h5>
+    </div>
+
+    <div class="card-body">
+
+      <!-- ======= Toolbar / filtros ======= -->
+      <div class="toolbar">
+        <div class="filters-row">
+          <!-- Filtro por ciudad -->
+          <select id="filter-ciudad" class="selectpicker" data-style="select-with-transition" title="Ciudad">
+            <option value="">Todas las ciudades</option>
+            {% for c in ciudades %}
+              <option value="{{ c }}">{{ c }}</option>
+            {% endfor %}
+          </select>
+
+          <!-- Filtro por especialidad -->
+          <select id="filter-especialidad" class="selectpicker" data-style="select-with-transition" title="Especialidad">
+            <option value="">Todas las especialidades</option>
+            {% for e in especialidades %}
+              <option value="{{ e }}">{{ e }}</option>
+            {% endfor %}
+          </select>
+
+          <!-- Filtro por estado activo -->
+          <select id="filter-activo" class="selectpicker" data-style="select-with-transition" title="Estado">
+            <option value="">Todos</option>
+            <option value="1">Activos</option>
+            <option value="0">Inactivos</option>
+          </select>
+
+          <!-- Buscador rápido -->
+          <input id="filter-texto" type="text" class="form-control range-input" placeholder="Buscar por nombre/email...">
+        </div>
+      </div>
+
+      <div class="table-responsive material-datatables">
+        <table id="datatables-profesores" class="table table-sm table-striped align-middle table-no-bordered table-hover" cellspacing="0" width="100%" style="width:100%">
+          <thead>
+            <tr>
+              <th>Profesor</th>
+              <th>Contacto</th>
+              <th>Ciudad / Especialidad</th>
+              <th style="width:120px;">Materias titular</th>
+              <th style="width:120px;">Materias totales</th>
+              <th style="width:90px;">Estado</th>
+              <th style="width:120px;" class="text-right">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in profesores %}
+            <tr
+              data-ciudad="{{ p.ciudad|default_if_none:'' }}"
+              data-especialidad="{{ p.especialidad|default_if_none:'' }}"
+              data-activo="{% if p.activo %}1{% else %}0{% endif %}"
+            >
+              <td>
+                <strong>{{ p.apellido_p }} {{ p.apellido_m }}, {{ p.nombre }}</strong><br>
+                {% if p.user %}
+                  <span class="badge badge-soft-secondary">Usuario: {{ p.user.username }}</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if p.email %}
+                  <div><i class="material-icons" style="font-size:16px;vertical-align:middle;">email</i> {{ p.email }}</div>
+                {% endif %}
+                {% if p.email_institucional %}
+                  <div><i class="material-icons" style="font-size:16px;vertical-align:middle;">alternate_email</i> {{ p.email_institucional }}</div>
+                {% endif %}
+                {% if p.telefono %}
+                  <div><i class="material-icons" style="font-size:16px;vertical-align:middle;">phone</i> {{ p.telefono }}</div>
+                {% endif %}
+              </td>
+              <td>
+                {% if p.ciudad %}
+                  <span class="badge badge-soft-warning">{{ p.ciudad }}</span>
+                {% endif %}
+                {% if p.especialidad %}
+                  <span class="badge badge-soft-secondary">{{ p.especialidad }}</span>
+                {% endif %}
+              </td>
+              <td>
+                <span class="badge badge-soft-success">{{ p.num_materias_titular }}</span>
+              </td>
+              <td>
+                <span class="badge badge-soft-secondary">{{ p.num_materias_total }}</span>
+              </td>
+              <td>
+                {% if p.activo %}
+                  <span class="badge badge-soft-success">Activo</span>
+                {% else %}
+                  <span class="badge badge-soft-danger">Inactivo</span>
+                {% endif %}
+              </td>
+              <td class="text-right">
+                <div class="btn-group btn-group-sm">
+                  {# Link directo al admin del profesor #}
+                  <a class="btn btn-outline-secondary"
+                     href="{% url 'admin:academico_profesor_change' p.pk %}"
+                     title="Editar en admin">
+                    <i class="material-icons" style="font-size:18px;">edit</i>
+                  </a>
+                </div>
+              </td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="7" class="text-center text-muted py-4">
+                <i class="material-icons" style="font-size:32px;">person_off</i><br>
+                No hay profesores registrados.
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<!-- ======= DataTables ======= -->
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
+<script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+
+<script>
+  $(function () {
+    const table = $('#datatables-profesores').DataTable({
+      language: { url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/es-ES.json', emptyTable: 'Sin resultados' },
+      order: [[0, 'asc']],
+      paging: true,
+      pageLength: 25,
+      autoWidth: false
+    });
+
+    const $selCiudad       = $('#filter-ciudad');
+    const $selEspecialidad = $('#filter-especialidad');
+    const $selActivo       = $('#filter-activo');
+    const $txtFiltro       = $('#filter-texto');
+
+    // Filtro custom por ciudad / especialidad / activo
+    $.fn.dataTable.ext.search.push(function(settings, data, dataIndex) {
+      if (settings.nTable.id !== 'datatables-profesores') return true;
+
+      const row       = table.row(dataIndex).node();
+      const $row      = $(row);
+      const ciudadRow = ($row.data('ciudad') || '').toString();
+      const espRow    = ($row.data('especialidad') || '').toString();
+      const activoRow = ($row.data('activo') || '').toString();
+
+      const ciudadSel = $selCiudad.val() || '';
+      const espSel    = $selEspecialidad.val() || '';
+      const activoSel = $selActivo.val() || '';
+
+      if (ciudadSel && ciudadRow !== ciudadSel) return false;
+      if (espSel && espRow !== espSel) return false;
+      if (activoSel && activoRow !== activoSel) return false;
+
+      return true;
+    });
+
+    function refiltrar(){
+      table.draw();
+    }
+
+    $selCiudad.on('change', refiltrar);
+    $selEspecialidad.on('change', refiltrar);
+    $selActivo.on('change', refiltrar);
+
+    // Búsqueda por texto (nombre/email)
+    $txtFiltro.on('input', function(){
+      table.search(this.value).draw();
+    });
+  });
+</script>
+
+{% endblock %}

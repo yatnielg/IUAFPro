@@ -370,14 +370,14 @@
             <div class="text-muted small">Fecha de nacimiento</div>
             <div>{% if alumno.fecha_nacimiento %}{{ alumno.fecha_nacimiento|date:"d/m/Y" }}{% else %}—{% endif %}</div>
           </div>
-          <div class="col-sm-4 mb-3">
+          {% comment %} <div class="col-sm-4 mb-3">
             <div class="text-muted small">Fecha de alta</div>
             <div>
               {% if alumno.informacionEscolar and alumno.informacionEscolar.fecha_alta %}
                 {{ alumno.informacionEscolar.fecha_alta|date:"d/m/Y H:i" }}
               {% else %}—{% endif %}
             </div>
-          </div>
+          </div> {% endcomment %}
         </div>
       </div>
 
@@ -1171,7 +1171,7 @@
         &nbsp;WhatsApp
       </button>
 
-{% if request.user.is_superuser %}
+
   {# 👉 NUEVO: Stripe (genera link Stripe y arma el mensaje) #}
   <button type="button"
           class="btn btn-outline-success btn-sm btn-whatsapp2-cargo d-inline-flex align-items-center"
@@ -1182,7 +1182,7 @@
     <span class="material-icons align-middle" style="font-size:18px;line-height:1;">send</span>
     &nbsp;Stripe
   </button>
-{% endif %}
+
     {% else %}
       <button type="button" class="btn btn-secondary btn-sm" disabled title="Sin teléfono">
         <span class="material-icons align-middle" style="font-size:18px;line-height:1;">chat</span>

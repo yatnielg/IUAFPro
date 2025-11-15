@@ -121,6 +121,8 @@
         <tr>
           <th style="width:140px;">No. Estudiante</th>
           <th>Alumno</th>
+          <th style="width:150px;">Profesor</th>
+          <th style="width:130px;">Fecha</th>
           <th style="width:120px;">Nota</th>
           <th>Observaciones</th>
         </tr>
@@ -132,6 +134,19 @@
             {% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}
             <td>{{ cal.alumno.numero_estudiante }}</td>
             <td>{{ cal.alumno.apellido_p }} {{ cal.alumno.apellido_m }}, {{ cal.alumno.nombre }}</td>
+
+            <td>
+              {{ form.profesor }}
+              {% for e in form.profesor.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+            </td>
+<td>
+  {{ form.fecha }}
+  {% for e in form.fecha.errors %}
+    <div class="text-danger small">{{ e }}</div>
+  {% endfor %}
+</td>
+
+
             <td>
               {{ form.nota }}
               {% for e in form.nota.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
@@ -244,5 +259,26 @@
     });
   });
 </script>
+
+<script>
+  document.querySelectorAll('input[name$="-nota"]').forEach(function(i){
+  i.type='number'; i.step='0.01'; i.min='0'; i.max='10'; i.inputMode='decimal';
+  i.classList.add('form-control');
+});
+
+document.querySelectorAll('textarea[name$="-observaciones"]').forEach(function(t){
+  t.classList.add('form-control');
+});
+
+document.querySelectorAll('select[name$="-profesor"]').forEach(function(s){
+  s.classList.add('form-control');
+});
+
+document.querySelectorAll('input[name$="-fecha"]').forEach(function(i){
+  i.type='date';
+  i.classList.add('form-control');
+});
+</script>
+
 
 {% endblock %}

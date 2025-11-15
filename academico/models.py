@@ -2,8 +2,10 @@
 from django.db import models
 from django.core.exceptions import ValidationError
 from django.utils import timezone  # (no se usa directamente, pero puedes dejarlo)
+from django.conf import settings
 
 from alumnos.models import Programa, Alumno
+from django.db.models import Q
 
 
 class Materia(models.Model):
@@ -15,12 +17,31 @@ class Materia(models.Model):
     codigo = models.CharField(max_length=32)
     nombre = models.CharField(max_length=255)
 
+    # 👇 NUEVO: relación con profesores
+    profesores = models.ManyToManyField(
+        "Profesor",
+        through="ProfesorMateria",
+        related_name="materias",
+        blank=True,
+    )
+
     class Meta:
         ordering = ["programa__codigo", "codigo"]
         unique_together = [("programa", "codigo")]
 
     def __str__(self):
         return f"{self.programa.codigo} · {self.codigo} — {self.nombre}"
+    
+    @property
+    def profesor_titular(self):
+        """
+        Devuelve el profesor marcado como titular (o None si no hay).
+        """
+        asignacion = self.asignaciones_profesor.filter(
+            es_titular=True,
+            activo=True,
+        ).select_related("profesor").first()
+        return asignacion.profesor if asignacion else None
 
 
 class ListadoMaterias(models.Model):
@@ -110,6 +131,8 @@ class Calificacion(models.Model):
     nota = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     aprobado = models.BooleanField(default=False)
     observaciones = models.TextField(blank=True)
+    profesor = models.ForeignKey("Profesor", on_delete=models.SET_NULL, null=True, blank=True, related_name="calificaciones")
+    fecha = models.DateField(null=True, blank=True)
 
     capturado_en = models.DateTimeField(auto_now_add=True)
     actualizado_en = models.DateTimeField(auto_now=True)
@@ -151,3 +174,99 @@ class Calificacion(models.Model):
         if self.nota is not None:
             self.aprobado = float(self.nota) >= 8.0
         super().save(*args, **kwargs)
+
+######################################################
+
+class Profesor(models.Model):
+    """
+    Catálogo de profesores / docentes.
+    Opcionalmente ligado a un usuario del sistema.
+    """
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="perfil_profesor",
+        help_text="Usuario del sistema asociado (opcional)."
+    )
+    nombre = models.CharField("Nombre(s)", max_length=120)
+    apellido_p = models.CharField("Apellido paterno", max_length=120, blank=True)
+    apellido_m = models.CharField("Apellido materno", max_length=120, blank=True)
+    email = models.EmailField("Correo electrónico", blank=True)
+    email_institucional = models.EmailField("Correo institucional", blank=True)
+    especialidad = models.CharField("Especialidad", max_length=150, blank=True)
+    ciudad = models.CharField("Ciudad", max_length=100, blank=True)
+    curp = models.CharField("CURP", max_length=18, blank=True)
+    rfc = models.CharField("RFC", max_length=13, blank=True)
+    telefono = models.CharField(max_length=40, blank=True)
+    activo = models.BooleanField(default=True)
+
+    creado_en = models.DateTimeField(auto_now_add=True)
+    actualizado_en = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Profesor"
+        verbose_name_plural = "Profesores"
+        ordering = ["apellido_p", "apellido_m", "nombre"]
+        indexes = [
+            models.Index(fields=["apellido_p", "apellido_m", "nombre"]),
+            models.Index(fields=["activo"]),
+        ]
+
+    def __str__(self):
+        partes = [self.nombre, self.apellido_p, self.apellido_m]
+        return " ".join(p for p in partes if p).strip()
+    
+    @property
+    def materias_titular(self):
+        from .models import Materia  # evitar import circular en tiempo de carga
+        return Materia.objects.filter(
+            asignaciones_profesor__profesor=self,
+            asignaciones_profesor__es_titular=True,
+            asignaciones_profesor__activo=True,
+        )
+
+    
+
+class ProfesorMateria(models.Model):
+    """
+    Relación Profesor–Materia:
+    - Un profesor puede impartir varias materias.
+    - Una materia puede tener varios profesores.
+    - 'es_titular' marca quién es el profesor titular en esa materia.
+    """
+    profesor = models.ForeignKey(
+        Profesor,
+        on_delete=models.CASCADE,
+        related_name="asignaciones",
+    )
+    materia = models.ForeignKey(
+        Materia,
+        on_delete=models.CASCADE,
+        related_name="asignaciones_profesor",
+    )
+    es_titular = models.BooleanField("Es titular", default=False)
+    activo = models.BooleanField(default=True)
+
+    class Meta:
+        verbose_name = "Asignación de profesor a materia"
+        verbose_name_plural = "Asignaciones de profesor a materia"
+        unique_together = [("profesor", "materia")]
+        # Solo un titular por materia (a nivel BD)
+        constraints = [
+            models.UniqueConstraint(
+                fields=["materia"],
+                condition=Q(es_titular=True),
+                name="uniq_titular_por_materia",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["materia"]),
+            models.Index(fields=["profesor"]),
+            models.Index(fields=["es_titular"]),
+        ]
+
+    def __str__(self):
+        rol = "Titular" if self.es_titular else "Docente"
+        return f"{self.materia} — {self.profesor} ({rol})"

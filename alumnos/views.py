@@ -975,7 +975,11 @@ def alumnos_detalle(request, pk):
     elif len(faltantes) == 1:
         bell_items.append("Falta un documento requerido por el programa.")
     
-   
+    if alumno.informacionEscolar and ((alumno.informacionEscolar.grupo_nuevo is None and alumno.informacionEscolar.grupo is None)):
+        bell_items.append("El alumno no tiene un grupo asignado en su información escolar.")
+    
+    if alumno.informacionEscolar and alumno.informacionEscolar.matricula is None:
+        bell_items.append("El alumno no tiene matrícula asignada en su información escolar.")
 
 
 

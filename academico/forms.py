@@ -1,25 +1,18 @@
 # academico/forms.py
 from django import forms
-from .models import Calificacion
+from .models import Calificacion, Profesor
+
 
 class CalificacionForm(forms.ModelForm):
-    """
-    Form para capturar calificaciones:
-    - Acepta coma o punto como separador decimal.
-    - Permite dejar la nota vacía (None).
-    - Valida rango 0..100.
-    - Aplica estilos de Bootstrap a inputs
-      y estilos de 'selectpicker' automáticamente a cualquier Select/SelectMultiple.
-    """
     class Meta:
         model = Calificacion
-        fields = ("nota", "observaciones")
+        fields = ("nota", "observaciones", "profesor", "fecha")
         widgets = {
             "nota": forms.NumberInput(
                 attrs={
                     "step": "0.01",
                     "min": "0",
-                    "max": "100",
+                    "max": "10",
                     "inputmode": "decimal",
                     "class": "form-control text-end",
                 }
@@ -30,20 +23,40 @@ class CalificacionForm(forms.ModelForm):
                     "class": "form-control",
                 }
             ),
+            "profesor": forms.Select(
+                attrs={
+                    "class": "form-control",
+                }
+            ),
+            "fecha": forms.DateInput(
+                format="%Y-%m-%d",     # 👈 IMPORTANTE: formato HTML5
+                attrs={
+                    "type": "date",
+                    "class": "form-control",
+                }
+            ),
         }
 
+        
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        # Aplica selectpicker a todos los selects del form (por si agregas 'programa', etc.)
+        # Solo profesores activos
+        self.fields["profesor"].queryset = Profesor.objects.filter(activo=True)
+
+        # Aseguramos formatos que acepta el campo fecha
+        self.fields["fecha"].input_formats = ["%Y-%m-%d", "%d/%m/%Y"]
+
+        # Aplica selectpicker a todos los selects
         for name, field in self.fields.items():
             widget = field.widget
             if isinstance(widget, (forms.Select, forms.SelectMultiple)):
-                # Conserva clases existentes y añade selectpicker
                 base_class = widget.attrs.get("class", "")
                 widget.attrs["class"] = (base_class + " selectpicker").strip()
                 widget.attrs.setdefault("data-style", "select-with-transition")
-                widget.attrs.setdefault("data-size", "5")  # opcional
+                widget.attrs.setdefault("data-size", "5")
+
+
 
     def clean_nota(self):
         v = self.cleaned_data.get("nota")
@@ -56,20 +69,22 @@ class CalificacionForm(forms.ModelForm):
                 v = float(s)
             except Exception:
                 raise forms.ValidationError(
-                    "La nota debe ser numérica (usa 80.5 o 80,5)."
+                    "La nota debe ser numérica (usa 8.5 o 8,5)."
                 )
         if v is None:
             return None
-        if v < 0 or v > 100:
-            raise forms.ValidationError("La nota debe estar entre 0 y 100.")
+        if v < 0 or v > 10:
+            raise forms.ValidationError("La nota debe estar entre 0 y 10.")
         return v
 
 
 # Formset listo para la vista (sin extra, sin delete)
+# academico/forms.py
 CalificacionFormSet = forms.modelformset_factory(
     Calificacion,
     form=CalificacionForm,
-    fields=("nota", "observaciones"),
+    fields=("nota", "observaciones", "profesor", "fecha"),
     extra=0,
     can_delete=False,
 )
+

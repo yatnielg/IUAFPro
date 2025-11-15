@@ -9,11 +9,26 @@ from .models import (
     ListadoMateriaItem,
     ListadoAlumno,
     Calificacion,
+    ProfesorMateria,
 )
 
 # -----------------------------
 #  Materia
 # -----------------------------
+
+
+
+class ProfesorMateriaInline(admin.TabularInline):
+    model = ProfesorMateria
+    extra = 1
+    autocomplete_fields = ("profesor",)
+    fields = ("profesor", "es_titular", "activo")
+    ordering = ("profesor__apellido_p", "profesor__apellido_m", "profesor__nombre")
+
+
+
+
+
 @admin.register(Materia)
 class MateriaAdmin(admin.ModelAdmin):
     list_display = ("codigo", "nombre", "programa")
@@ -21,6 +36,16 @@ class MateriaAdmin(admin.ModelAdmin):
     search_fields = ("codigo", "nombre", "programa__nombre", "programa__codigo")
     ordering = ("programa__codigo", "codigo")
     list_select_related = ("programa",)
+    inlines = [ProfesorMateriaInline]   # 👈 aquí
+
+
+class ProfesorMateriaInlineForProfesor(admin.TabularInline):
+    model = ProfesorMateria
+    extra = 1
+    autocomplete_fields = ("materia",)
+    fields = ("materia", "es_titular", "activo")
+    ordering = ("materia__programa__codigo", "materia__codigo")
+
 
 
 # -----------------------------
@@ -117,8 +142,8 @@ class ListadoMateriasAdmin(admin.ModelAdmin):
 class CalificacionInline(admin.TabularInline):
     model = Calificacion
     extra = 0
-    autocomplete_fields = ("alumno",)
-    fields = ("alumno", "nota", "aprobado", "observaciones", "capturado_en", "actualizado_en")
+    autocomplete_fields = ("alumno", "profesor")
+    fields = ("alumno", "profesor", "nota", "aprobado", "observaciones", "fecha", "capturado_en", "actualizado_en")
     readonly_fields = ("aprobado", "capturado_en", "actualizado_en")
     ordering = ("alumno__numero_estudiante",)
 
@@ -215,8 +240,13 @@ class ListadoAlumnoAdmin(admin.ModelAdmin):
 # -----------------------------
 @admin.register(Calificacion)
 class CalificacionAdmin(admin.ModelAdmin):
-    list_display = ("item", "alumno", "nota", "aprobado", "capturado_en")
-    list_filter = ("item__listado__programa", "item__listado", "aprobado")
+    list_display = ("item", "alumno", "profesor", "nota", "aprobado", "fecha", "capturado_en")
+    list_filter = (
+        "item__listado__programa",
+        "item__listado",
+        "profesor",
+        "aprobado",
+    )
     search_fields = (
         "item__materia__codigo",
         "item__materia__nombre",
@@ -225,7 +255,58 @@ class CalificacionAdmin(admin.ModelAdmin):
         "alumno__nombre",
         "alumno__apellido_p",
         "alumno__apellido_m",
+        "profesor__nombre",
+        "profesor__apellido_p",
+        "profesor__apellido_m",
     )
-    autocomplete_fields = ("item", "alumno")
+    autocomplete_fields = ("item", "alumno", "profesor")
     ordering = ("-capturado_en",)
-    list_select_related = ("item", "item__listado", "item__listado__programa", "item__materia", "alumno")
+    list_select_related = (
+        "item",
+        "item__listado",
+        "item__listado__programa",
+        "item__materia",
+        "alumno",
+        "profesor",
+    )
+
+
+
+from .models import Profesor
+
+
+@admin.register(Profesor)
+class ProfesorAdmin(admin.ModelAdmin):
+    list_display = (
+        "nombre_completo",
+        "email",
+        "email_institucional",
+        "telefono",
+        "especialidad",
+        "ciudad",
+        "activo",
+        "creado_en",
+    )
+    list_filter = ("activo", "ciudad", "especialidad")
+    search_fields = (
+        "nombre",
+        "apellido_p",
+        "apellido_m",
+        "email",
+        "email_institucional",
+        "curp",
+        "rfc",
+        "user__username",
+        "user__email",
+    )
+    autocomplete_fields = ("user",)
+    readonly_fields = ("creado_en", "actualizado_en")
+    ordering = ("apellido_p", "apellido_m", "nombre")
+    list_select_related = ("user",)
+    inlines = [ProfesorMateriaInlineForProfesor]
+
+    def nombre_completo(self, obj):
+        return str(obj)
+
+    nombre_completo.short_description = "Profesor"
+
