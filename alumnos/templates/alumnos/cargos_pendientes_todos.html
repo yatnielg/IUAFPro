@@ -67,8 +67,8 @@
         {% for c in page_obj.object_list %}
         <tr class="{% if c.is_overdue %}{% endif %}">
           <td>
-            <a href="{% url 'alumnos:alumnos_detalle' c.alumno.pk %}">
-              #{{ c.alumno.numero_estudiante }} — {{ c.alumno.nombre }} {{ c.alumno.apellido_p }} {{ c.alumno.apellido_m }}
+            <a class="text-light text-body-secondary text-body-tertiary" href="{% url 'alumnos:alumnos_detalle' c.alumno.pk %}">
+              {{ c.alumno.numero_estudiante }} — {{ c.alumno.nombre }} {{ c.alumno.apellido_p }} {{ c.alumno.apellido_m }}
             </a>
           </td>
           <td>{{ c.concepto.nombre }}</td>

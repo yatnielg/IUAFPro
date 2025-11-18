@@ -55,6 +55,7 @@ INSTALLED_APPS = [
     'alumnos',
     'cobros',
     "academico",
+    "lms",
     "oauth2_provider",
     
 ]

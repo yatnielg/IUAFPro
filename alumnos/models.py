@@ -597,6 +597,12 @@ class InformacionEscolar(models.Model):
         blank=True, null=True,
         help_text="LEGACY / DEPRECADO: Se usará sólo si no hay 'Grupo (nuevo)'."
     )
+    grupo_oficial = models.CharField(
+        "Grupo oficial",
+        max_length=50,
+        blank=True, null=True,
+        help_text="Grupo oficial asignado al alumno."
+    )
     modalidad = models.CharField("Modalidad", max_length=15, choices=MODALIDAD_OPCIONES, default="en_linea")
     matricula = models.CharField("Matrícula", max_length=64, null=True, blank=True)
 

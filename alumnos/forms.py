@@ -183,6 +183,7 @@ class InformacionEscolarForm(forms.ModelForm):
             "fin_programa",
             "grupo_nuevo",
             "grupo",
+            "grupo_oficial",   # 👈 AÑADIDO
             "modalidad",
             "matricula",
             # Estatus
