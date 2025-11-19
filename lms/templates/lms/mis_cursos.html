@@ -1,0 +1,46 @@
+{% extends "panel/grafico.html" %}
+
+{% block main_content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="h4 text-white mb-0">
+    <i class="material-icons align-middle mr-1">menu_book</i>
+    Mis cursos
+  </h1>
+</div>
+
+<div class="card">
+  <div class="card-header card-header-primary card-header-icon">
+    <div class="card-icon"><i class="material-icons">school</i></div>
+    <h4 class="card-title">Cursos asignados</h4>
+  </div>
+  <div class="card-body">
+    {% if cursos %}
+      <div class="row">
+        {% for c in cursos %}
+          <div class="col-md-6 mb-3">
+            <div class="card">
+              <div class="card-body">
+                <h5 class="card-title mb-1">{{ c.codigo }} — {{ c.nombre }}</h5>
+                <p class="card-category text-muted mb-2">
+                  Programa: {{ c.programa.codigo }} — {{ c.programa.nombre }}
+                  {% if c.grupo %}<br>Grupo: {{ c.grupo.nombre }}{% endif %}
+                </p>
+                <p class="card-text small text-muted">
+                  {{ c.descripcion|default:"Sin descripción."|truncatechars:140 }}
+                </p>
+                <a href="{% url 'lms:curso_detalle' c.pk %}" class="btn btn-outline-info btn-sm">
+                  Entrar al curso
+                </a>
+              </div>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="text-muted m-0">
+        No tienes cursos asignados todavía.
+      </p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,124 @@
+{# lms/templates/lms/actividad_detalle.html #}
+{% extends "panel/grafico.html" %}
+
+{% block main_content %}
+<div class="col-md-10 mx-auto mt-4">
+  <div class="card">
+    <div class="card-header card-header-primary card-header-icon">
+      <div class="card-icon">
+        <i class="material-icons">
+          {% if actividad.tipo == "quiz" %}quiz{% else %}assignment{% endif %}
+        </i>
+      </div>
+      <h4 class="card-title mb-0">
+        {{ actividad.titulo }}
+      </h4>
+      <p class="card-category">
+        Curso: {{ curso.nombre }}
+      </p>
+    </div>
+
+    <div class="card-body">
+
+      {% if messages %}
+        {% for message in messages %}
+          <div class="alert alert-{{ message.tags }} mt-2">
+            {{ message }}
+          </div>
+        {% endfor %}
+      {% endif %}
+
+      {# ===================== TAREA NORMAL ===================== #}
+      {% if actividad.tipo != "quiz" %}
+        <h5 class="font-weight-bold">Instrucciones</h5>
+        <p>{{ actividad.instrucciones|linebreaks }}</p>
+
+        <hr>
+
+        <form method="post" enctype="multipart/form-data">
+          {% csrf_token %}
+
+          <div class="form-group">
+            <label>Archivo</label>
+            {{ form.archivo }}
+            {% if form.archivo.errors %}
+              <div class="text-danger small">{{ form.archivo.errors }}</div>
+            {% endif %}
+          </div>
+
+          <div class="form-group">
+            <label>Respuesta</label>
+            {{ form.texto_respuesta }}
+            {% if form.texto_respuesta.errors %}
+              <div class="text-danger small">{{ form.texto_respuesta.errors }}</div>
+            {% endif %}
+          </div>
+
+          <button type="submit" class="btn btn-primary">
+            <i class="material-icons align-middle">send</i>
+            <span class="align-middle">Enviar</span>
+          </button>
+        </form>
+
+        {% if entrega %}
+          <hr>
+          <h5 class="font-weight-bold">Último envío</h5>
+          <p><strong>Fecha de envío:</strong> {{ entrega.enviado_en }}</p>
+
+          {% if entrega.calificacion %}
+            <p><strong>Calificación:</strong> {{ entrega.calificacion }}</p>
+          {% endif %}
+
+          {% if entrega.retroalimentacion_docente %}
+            <p><strong>Retroalimentación del docente:</strong></p>
+            <p>{{ entrega.retroalimentacion_docente|linebreaks }}</p>
+          {% endif %}
+        {% endif %}
+
+      {# ===================== QUIZ ===================== #}
+      {% else %}
+        <h5 class="font-weight-bold">Quiz</h5>
+        <p>{{ actividad.instrucciones|linebreaks }}</p>
+
+        {% if intento and intento.calificacion_obtenida %}
+          <div class="alert alert-info">
+            <strong>Tu calificación:</strong> {{ intento.calificacion_obtenida }}
+            {% if intento.completado_en %}
+              <br><small>Completado el {{ intento.completado_en }}</small>
+            {% endif %}
+          </div>
+        {% endif %}
+
+        <form method="post">
+          {% csrf_token %}
+
+          {% for field in form %}
+            <div class="mb-4">
+              <label class="font-weight-bold d-block mb-2">
+                {{ forloop.counter }}. {{ field.label }}
+              </label>
+
+              {# Django se encarga de pintar radios o textarea según el tipo #}
+              {{ field }}
+
+              {% if field.help_text %}
+                <small class="form-text text-muted">{{ field.help_text }}</small>
+              {% endif %}
+
+              {% if field.errors %}
+                <div class="text-danger small mt-1">{{ field.errors }}</div>
+              {% endif %}
+            </div>
+          {% endfor %}
+
+          <button type="submit" class="btn btn-primary">
+            <i class="material-icons align-middle">save</i>
+            <span class="align-middle">Guardar respuestas</span>
+          </button>
+        </form>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+{% endblock %}

@@ -20,15 +20,22 @@
 
     <div class="card-header-actions ml-auto">
 
+    <a href="{% url 'lms:cursos_todos' %}"
+       class="btn btn-outline-info btn-sm d-inline-flex align-items-center mr-2">
+      <i class="material-icons mr-1" style="font-size:18px;line-height:1;">people</i>
+      Cursos
+    </a>
+
+
     <a href="{% url 'academico:materias_profesores_list' %}"
-       class="btn btn-outline-light btn-sm d-inline-flex align-items-center mr-2">
+       class="btn btn-outline-info btn-sm d-inline-flex align-items-center mr-2">
       <i class="material-icons mr-1" style="font-size:18px;line-height:1;">people</i>
       Materias / profesores
     </a>
 
     <!-- 👇 NUEVO BOTÓN PROFESORES -->
     <a href="{% url 'academico:profesores_list' %}"
-       class="btn btn-outline-light btn-sm d-inline-flex align-items-center mr-2">
+       class="btn btn-outline-info btn-sm d-inline-flex align-items-center mr-2">
       <i class="material-icons mr-1" style="font-size:18px;line-height:1;">person</i>
       Profesores
     </a>
@@ -134,7 +141,7 @@
                   </a>
 
                  {% comment %}  {% if request.user.is_superuser %} {% endcomment %}
-                    <a class="btn btn-outline-secondary" href="{% url 'admin:academico_listadomaterias_change' l.pk %}" title="Editar en admin">
+                    <a class="btn btn-outline-warning" href="{% url 'admin:academico_listadomaterias_change' l.pk %}" title="Editar en admin">
                       <i class="material-icons" style="font-size:18px;">edit</i>
                     </a>
             

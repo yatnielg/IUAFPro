@@ -16,6 +16,8 @@ urlpatterns = [
     # OAuth2 clásico (authorize, token, revoke, introspect, etc.)
     path("o/", include(("oauth2_provider.urls", "oauth2_provider"), namespace="oauth2_provider")),
 
+    path("lms/", include("lms.urls", namespace="lms")),
+
     
 ]
 if settings.DEBUG:

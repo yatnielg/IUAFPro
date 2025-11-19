@@ -109,7 +109,7 @@
           </li>
 
 
-          <li class="nav-item {% if  request.resolver_match.url_name == 'listados_list' or request.resolver_match.url_name == 'listado_detalle' or request.resolver_match.url_name == 'calificaciones_item'  %} active {% endif %}">
+          <li class="nav-item {% if  request.resolver_match.url_name == 'listados_list' or request.resolver_match.url_name == 'listado_detalle' or request.resolver_match.url_name == 'calificaciones_item' or request.resolver_match.url_name == 'cursos_todos' or request.resolver_match.url_name == 'profesores_list' or request.resolver_match.url_name == 'materias_profesores_list'  %} active {% endif %}">
             <a class="nav-link" href=" {% url 'academico:listados_list' %}">
               <i class="material-icons">school</i>
               <p>Académico</p>

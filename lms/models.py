@@ -111,3 +111,96 @@ class AlertaAcademica(models.Model):
     mensaje = models.TextField()
     creada_en = models.DateTimeField(auto_now_add=True)
     atendida = models.BooleanField(default=False)
+#################################################################################
+class Pregunta(models.Model):
+    TIPO_CHOICES = (
+        ("opcion_multiple", "Opción múltiple"),
+        ("abierta", "Respuesta abierta"),
+    )
+
+    actividad = models.ForeignKey(
+        Actividad,
+        on_delete=models.CASCADE,
+        related_name="preguntas",
+    )
+    texto = models.TextField()
+    tipo = models.CharField(
+        max_length=20,
+        choices=TIPO_CHOICES,
+        default="opcion_multiple",
+    )
+    orden = models.PositiveIntegerField(default=1)
+    puntaje = models.DecimalField(max_digits=5, decimal_places=2, default=1)
+
+    class Meta:
+        ordering = ["orden"]
+
+    def __str__(self):
+        return f"{self.actividad.titulo} - {self.orden}. {self.texto[:50]}..."
+
+
+class OpcionPregunta(models.Model):
+    pregunta = models.ForeignKey(
+        Pregunta,
+        on_delete=models.CASCADE,
+        related_name="opciones",
+    )
+    texto = models.CharField(max_length=255)
+    es_correcta = models.BooleanField(default=False)
+
+    def __str__(self):
+        return f"{self.pregunta.id} - {self.texto[:50]}{' (✓)' if self.es_correcta else ''}"
+
+
+class IntentoQuiz(models.Model):
+    """
+    Un intento de un alumno para una Actividad tipo QUIZ.
+    """
+    actividad = models.ForeignKey(
+        Actividad,
+        on_delete=models.CASCADE,
+        related_name="intentos",
+    )
+    alumno = models.ForeignKey(
+        Alumno,
+        on_delete=models.CASCADE,
+        related_name="intentos_quiz",
+    )
+    iniciado_en = models.DateTimeField(auto_now_add=True)
+    completado_en = models.DateTimeField(null=True, blank=True)
+    calificacion_obtenida = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
+
+    class Meta:
+        unique_together = ("actividad", "alumno")  # un intento por ahora
+
+    def __str__(self):
+        return f"Quiz {self.actividad_id} - {self.alumno} ({self.calificacion_obtenida})"
+
+
+class RespuestaPregunta(models.Model):
+    intento = models.ForeignKey(
+        IntentoQuiz,
+        on_delete=models.CASCADE,
+        related_name="respuestas",
+    )
+    pregunta = models.ForeignKey(
+        Pregunta,
+        on_delete=models.CASCADE,
+        related_name="respuestas",
+    )
+    opcion = models.ForeignKey(
+        OpcionPregunta,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="respuestas",
+    )
+    texto_respuesta = models.TextField(blank=True)
+
+    def __str__(self):
+        return f"Resp {self.pregunta_id} - intento {self.intento_id}"

@@ -1,0 +1,137 @@
+{# lms/templates/lms/actividad_respuestas.html #}
+{% extends "panel/grafico.html" %}
+
+{% block main_content %}
+<div class="col-md-11 mx-auto mt-4">
+  <div class="card">
+    <div class="card-header card-header-primary card-header-icon">
+      <div class="card-icon">
+        <i class="material-icons">
+          {% if actividad.tipo == "quiz" %}quiz{% else %}assignment_turned_in{% endif %}
+        </i>
+      </div>
+      <h4 class="card-title mb-0">
+        Respuestas – {{ actividad.titulo }}
+      </h4>
+      <p class="card-category">
+        Curso: {{ curso.nombre }}{% if curso.grupo %} • Grupo: {{ curso.grupo }}{% endif %}
+      </p>
+    </div>
+
+    <div class="card-body">
+
+      {% if actividad.tipo != "quiz" %}
+        {# ===================== TAREA NORMAL ===================== #}
+        <h5 class="font-weight-bold mb-3">Entregas de los alumnos</h5>
+
+        {% if entregas %}
+          <div class="table-responsive">
+            <table class="table table-striped table-hover">
+              <thead>
+                <tr>
+                  <th>Alumno</th>
+                  <th>Fecha de envío</th>
+                  <th>Archivo</th>
+                  <th>Texto</th>
+                  <th>Calificación</th>
+                  <th>Retroalimentación</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for e in entregas %}
+                  <tr>
+                    <td>{{ e.alumno }}</td>
+                    <td>{{ e.enviado_en }}</td>
+                    <td>
+                      {% if e.archivo %}
+                        <a href="{{ e.archivo.url }}" target="_blank">Ver archivo</a>
+                      {% else %}
+                        —
+                      {% endif %}
+                    </td>
+                    <td style="max-width:300px;white-space:pre-wrap;">
+                      {{ e.texto_respuesta|default:"—" }}
+                    </td>
+                    <td>
+                      {% if e.calificacion != None %}
+                        {{ e.calificacion }}
+                      {% else %}
+                        —
+                      {% endif %}
+                    </td>
+                    <td style="max-width:250px;white-space:pre-wrap;">
+                      {{ e.retroalimentacion_docente|default:"—" }}
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <p class="text-muted">Aún no hay entregas registradas para esta actividad.</p>
+        {% endif %}
+
+      {% else %}
+        {# ===================== QUIZ ===================== #}
+        <h5 class="font-weight-bold mb-3">Intentos de quiz</h5>
+
+        {% if intentos %}
+          {% for intento in intentos %}
+            <div class="card mb-3" style="background:#131722;">
+              <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                  <div>
+                    <strong>Alumno:</strong> {{ intento.alumno }}<br>
+                    <small>
+                      Iniciado: {{ intento.iniciado_en }}{% if intento.completado_en %}
+                      • Completado: {{ intento.completado_en }}{% endif %}
+                    </small>
+                  </div>
+                  <div class="text-right">
+                    <span class="badge badge-info" style="font-size:0.9rem;">
+                      Calificación: {{ intento.calificacion_obtenida|default:"—" }}
+                    </span>
+                  </div>
+                </div>
+
+                <hr>
+
+                {% for r in intento.respuestas.all %}
+                  <div class="mb-2">
+                    <p class="mb-1">
+                      <strong>{{ forloop.counter }}. {{ r.pregunta.texto }}</strong>
+                    </p>
+
+                    {% if r.pregunta.tipo == "opcion_multiple" %}
+                      {% if r.opcion %}
+                        <p class="mb-0">
+                          Respuesta marcada:
+                          <span class="{% if r.opcion.es_correcta %}text-success{% else %}text-danger{% endif %}">
+                            {{ r.opcion.texto }}
+                            {% if r.opcion.es_correcta %}(correcta){% else %}(incorrecta){% endif %}
+                          </span>
+                        </p>
+                      {% else %}
+                        <p class="text-muted mb-0">Sin respuesta seleccionada.</p>
+                      {% endif %}
+                    {% else %}
+                      <p class="mb-0" style="white-space:pre-wrap;">
+                        {{ r.texto_respuesta|default:"(sin respuesta)" }}
+                      </p>
+                    {% endif %}
+                  </div>
+                  {% if not forloop.last %}
+                    <hr class="mt-2 mb-2">
+                  {% endif %}
+                {% endfor %}
+              </div>
+            </div>
+          {% endfor %}
+        {% else %}
+          <p class="text-muted">Aún no hay intentos registrados para este quiz.</p>
+        {% endif %}
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}
