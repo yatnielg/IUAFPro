@@ -19,6 +19,26 @@ class Curso(models.Model):
         related_name="cursos_docente"
     )
 
+    # 🔹 NUEVO: imagen / portada del curso
+    portada = models.ImageField(
+        "Imagen del curso",
+        upload_to="lms/cursos_portadas/",
+        null=True,
+        blank=True,
+    )
+
+     # 🔹 NUEVOS CAMPOS
+    fecha_inicio = models.DateField(
+        "Fecha de inicio",
+        null=True,
+        blank=True,
+    )
+    fecha_fin = models.DateField(
+        "Fecha de finalización",
+        null=True,
+        blank=True,
+    )
+
     activo = models.BooleanField(default=True)
 
     def __str__(self):
@@ -43,6 +63,7 @@ class Leccion(models.Model):
     contenido_html = models.TextField(blank=True)  # aquí puedes meter texto enriquecido
     archivo = models.FileField(upload_to="lms/lecciones/", blank=True, null=True)
     url_video = models.URLField(blank=True)
+    embed_video = models.TextField(blank=True)  # 👈 nuevo campo para el iframe
 
     orden = models.PositiveIntegerField(default=1)
 

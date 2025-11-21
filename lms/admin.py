@@ -67,7 +67,7 @@ class RespuestaPreguntaInline(admin.TabularInline):
 
 @admin.register(Curso)
 class CursoAdmin(admin.ModelAdmin):
-    list_display = ("codigo", "nombre", "programa", "grupo", "docente", "activo")
+    list_display = ("codigo", "nombre", "programa", "grupo", "docente", "fecha_inicio", "fecha_fin", "activo")
     list_filter = ("activo", "programa", "grupo")
     search_fields = ("codigo", "nombre", "descripcion", "programa__nombre")
     inlines = [ModuloInline]

@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+{% load static %}
+      {% include "panel/head.html" %}      
+<body class="dark-edition ">  
+
+
+
+<style>
+
+
+/* Botones flotantes (base) */
+.fab {
+  position: fixed;
+  right: 20px;               /* separación del borde derecho */
+  z-index: 9999;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  font-size: 26px;
+  color: #fff;
+  box-shadow: 0 6px 16px rgba(0,0,0,0.35);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
+  opacity: 0.95;
+}
+
+/* WhatsApp: el de arriba */
+.fab-whatsapp {
+  bottom: 90px;              /* más alto */
+  background-color: #25D366;
+}
+
+/* Correo: el de abajo */
+.fab-mail {
+  bottom: 24px;              /* más cerca del borde inferior */
+  background-color: #0d6efd; /* azul tipo botón Bootstrap */
+}
+
+/* Efecto hover */
+.fab:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 22px rgba(0,0,0,0.45);
+  opacity: 1;
+}
+
+</style>
+
+
+
+
+<div id="page-loader-overlay">
+  <div class="loader-spinner"></div>
+</div>
+  <div class="wrapper ">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+<!-- FABs -->
+<a href="https://wa.me/5219989394481?text=Hola%20IUAF%2C%20quiero%20informaci%C3%B3n."
+   class="fab fab-whatsapp"
+   aria-label="WhatsApp"
+   title="Escríbenos por WhatsApp"
+   target="_blank" rel="noopener">
+  <i class="bi bi-whatsapp"></i>
+</a>
+
+<a href="mailto:academico@iuaf.edu.mx"
+   class="fab fab-mail"
+   aria-label="Enviar correo"
+   title="Enviar correo">
+  <i class="bi bi-envelope-fill"></i>
+</a>
+
+
+
+
+    <div class="sidebar" data-color="purple" data-background-color="default" data-image="">
+        {% include "panel/panel_left_curso.html" %}
+    </div>
+    <div class="main-panel">
+        {% include "panel/panel_top_curso.html" %}
+      <div class="content">
+        <div class="content">
+          <div class="container-fluid">
+            {% block main_content %}
+
+            {% endblock main_content %}
+          </div>
+        </div>
+      </div>
+        {% include "panel/footer.html" %}
+    </div>
+  </div>
+{% comment %}   {% include "panel/engrane.html" %} {% endcomment %}
+  {% include "panel/js.html" %}
+</body>
+
+
+
+
+<style>
+#page-loader-overlay {
+  position: fixed;
+  top: 0; left: 0; width: 100vw; height: 100vh;
+  background: rgba(0,0,0,0.35); /* Puedes ajustar la opacidad */
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 1;
+  transition: opacity 0.7s cubic-bezier(.4,0,.2,1); /* Animación suave */
+  pointer-events: all;
+}
+
+/* Ocultar con animación */
+#page-loader-overlay.fade-out {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Spinner opcional */
+.loader-spinner {
+  border: 5px solid #f3f3f3;
+  border-top: 5px solid #3bb77e;
+  border-radius: 50%;
+  width: 46px;
+  height: 46px;
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  0% { transform: rotate(0deg);}
+  100% { transform: rotate(360deg);}
+}
+</style>
+
+
+<script>
+  window.addEventListener('load', function() {
+  var overlay = document.getElementById('page-loader-overlay');
+  overlay.classList.add('fade-out');
+  setTimeout(function() {
+    overlay.style.display = 'none';
+  }, 800); // Debe ser un poco mayor que el transition del CSS
+});
+</script>
+
+
+
+
+
+
+
+
+</html>

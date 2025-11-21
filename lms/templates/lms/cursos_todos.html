@@ -10,22 +10,34 @@
   {% endfor %}
 {% endif %}
 
-<div class="d-flex align-items-center justify-content-between mb-3">
-  <h1 class="h4 m-0">
-    <i class="material-icons text-light" style="vertical-align:middle">menu_book</i>
-    <span class="text-light"> Administración de Cursos</span>
-  </h1>
-
-  <a class="btn btn-primary btn-sm" href="#">
-    <i class="material-icons" style="vertical-align:middle">add</i>
-    + Crear curso
-  </a>
-</div>
-
 <div class="card">
+  {# === HEADER CON ICONO IGUAL QUE EN DETALLE DEL CURSO === #}
+  <div class="card-header card-header-primary card-header-icon d-flex justify-content-between align-items-center">
+    <div class="card-icon">
+      <i class="material-icons">menu_book</i>
+    </div>
+
+    <h4 class="card-title mb-0 flex-grow-1">
+      Administración de Cursos
+    </h4>
+
+    <div class="d-flex gap-2">
+      {# 🔹 Botón que lleva a mis-cursos #}
+      <a class="btn btn-outline-light btn-sm" href="{% url 'lms:mis_cursos' %}">
+        <i class="material-icons align-middle" style="font-size:18px;">person</i>
+        <span class="align-middle">Ver mis cursos</span>
+      </a>
+
+      {# Botón crear curso (placeholder) #}
+      <a class="btn btn-primary btn-sm" href="#">
+        <i class="material-icons align-middle" style="font-size:18px;">add</i>
+        <span class="align-middle">+ Crear curso</span>
+      </a>
+    </div>
+  </div>
+
   <div class="card-body">
-    
-    {# BUSCADOR (opcional, si quieres agregarlo) #}
+    {# BUSCADOR #}
     <form method="get" class="row g-2 mb-3">
       <div class="col-sm-8 col-md-6">
         <input name="q"
@@ -52,7 +64,12 @@
             <th>Curso</th>
             <th>Grupo</th>
             <th>Docente</th>
+            <th>Alumnos</th>
+            <th>Inicio</th>
+            <th>Fin</th>
             <th>Módulos</th>
+            <th>Lecciones</th>
+            <th>Cuestionarios</th>
             <th class="text-end">Acciones</th>
           </tr>
         </thead>
@@ -62,11 +79,27 @@
           <tr>
             <td>{{ curso.programa.codigo }}</td>
 
-            <td>
-              <strong>{{ curso.codigo }}</strong>
-            </td>
+            <td><strong>{{ curso.codigo }}</strong></td>
 
-            <td>{{ curso.nombre }}</td>
+            {# ======= CURSO CON FOTICO (portada) ======= #}
+            <td>
+              <div class="d-flex align-items-center">
+                {% if curso.portada %}
+                  <img src="{{ curso.portada.url }}"
+                       alt="{{ curso.nombre }}"
+                       class="rounded-circle me-2"
+                       style="width:40px; height:40px; object-fit:cover;">
+                {% else %}
+                  {# Placeholder con iniciales si no tiene portada #}
+                  <div class="rounded-circle bg-light border me-2 d-flex justify-content-center align-items-center"
+                       style="width:40px; height:40px; font-size:0.75rem;">
+                    {{ curso.nombre|slice:":2"|upper }}
+                  </div>
+                {% endif %}
+                <span>{{ curso.nombre }}</span>
+              </div>
+            </td>
+            {# ======= FIN CURSO CON FOTICO ======= #}
 
             <td>
               {% if curso.grupo %}
@@ -84,7 +117,31 @@
               {% endif %}
             </td>
 
-            <td>{{ curso.modulos.count }}</td>
+            <td>
+              {{ curso.num_alumnos|default:"0" }}
+            </td>
+
+            <td>
+              {% if curso.fecha_inicio %}
+                {{ curso.fecha_inicio }}
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+
+            <td>
+              {% if curso.fecha_fin %}
+                {{ curso.fecha_fin }}
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+
+            <td>{{ curso.num_modulos|default:"0" }}</td>
+
+            <td>{{ curso.num_lecciones|default:"0" }}</td>
+
+            <td>{{ curso.num_quizzes|default:"0" }}</td>
 
             <td class="text-end">
               <a href="{% url 'lms:curso_detalle' curso.pk %}" class="btn btn-sm btn-outline-info">
@@ -97,14 +154,16 @@
           </tr>
           {% empty %}
           <tr>
-            <td colspan="7" class="text-center text-muted py-4">No hay cursos registrados</td>
+            <td colspan="12" class="text-center text-muted py-4">
+              No hay cursos registrados
+            </td>
           </tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
 
-    {# PAGINACIÓN (si decides implementarla) #}
+    {# PAGINACIÓN (solo si usas Paginator en la vista) #}
     {% if cursos.paginator %}
     <nav aria-label="Paginación" class="mt-3">
       <ul class="pagination justify-content-center">
@@ -132,7 +191,6 @@
       </ul>
     </nav>
     {% endif %}
-
   </div>
 </div>
 

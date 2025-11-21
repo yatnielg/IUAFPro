@@ -1,0 +1,92 @@
+{% extends "panel/grafico.html" %}
+{% block main_content %}
+<h3 class="text-white">Enviar correo masivo a alumnos</h3>
+
+{% if messages %}
+  {% for message in messages %}
+    <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+  {% endfor %}
+{% endif %}
+
+<form method="post" enctype="multipart/form-data">
+  {% csrf_token %}
+  <div class="mb-3">
+    <label class="form-label text-white">
+      Números de estudiante (separados por coma, espacio o salto de línea)
+    </label>
+    <textarea name="numeros" class="form-control" rows="4"></textarea>
+  </div>
+
+  <div class="mb-3">
+    <label class="form-label text-white">Asunto</label>
+    <input type="text"
+           name="subject"
+           class="form-control"
+           value="Beca y financiamiento especial para tu Doctorado en IUAF">
+  </div>
+
+  <div class="mb-3">
+    <label class="form-label text-white">Cuerpo del correo</label>
+    <textarea name="body" class="form-control" rows="18">
+Estimado(a) {nombre} {apellido_p} {apellido_m} ,
+
+Para esta casa de estudios es un gran honor contar con tu experiencia y tu confianza como egresado(a) de {programa}. 
+
+En el marco de nuestro octavo aniversario, deseamos nuevamente estar en contacto contigo y ofrecerte una beca con financiamiento especial para continuar tu preparación académica.
+
+Nuestros Doctorados en Derecho o en Innovación, Administración y Políticas Públicas te permiten profesionalizar tus habilidades y crecer de forma integral.
+
+La beca consiste en financiar a 24 meses de pago los 20 módulos de curso, reduciendo la colegiatura de 320 USD a 165 USD por mes, o 658 USD por cuatrimestre, durante 6 cuatrimestres.
+
+Al finalizar, el proceso de titulación tiene un costo de derechos, incluyendo apostilla, de 1,980 USD.
+
+Del programa de Doctorado que elijas, congelaremos las cuotas y absorberemos los incrementos anuales en el año en que egreses.
+
+La alta formación, para nosotros, es un compromiso que se lleva de la mano de la comunicación entre todos: estudiante, docente y escuela.
+
+Bienvenido(a) a IUAF INFINITO.
+
+Recibe un cordial saludo,
+
+IUAF México
+    </textarea>
+    <small class="text-muted">
+      Variables disponibles:
+      <code>{nombre}</code>,
+      <code>{apellido_p}</code>,
+      <code>{apellido_m}</code>,
+      <code>{numero}</code>,
+      <code>{programa}</code>
+    </small>
+  </div>
+
+  <div class="mb-3">
+    <label class="form-label text-white">
+      Carpeta de adjuntos dentro de /static (opcional)
+    </label>
+    <input type="text"
+           name="carpeta"
+           class="form-control"
+           placeholder="ej. iuaf/doctorado">
+    <small class="text-muted">
+      Se adjuntarán todos los archivos de esa carpeta (ej. folleto del doctorado, calendario, etc.).
+    </small>
+  </div>
+
+  <div class="mb-3">
+    <label class="form-label text-white">
+      Adjuntos desde tu computadora (opcional)
+    </label>
+    <input type="file"
+           name="adjuntos"
+           class="form-control"
+           multiple>
+    <small class="text-muted">
+      Puedes seleccionar uno o varios archivos (mantén presionada Ctrl o Shift).
+      Estos se adjuntarán a todos los correos.
+    </small>
+  </div>
+
+  <button class="btn btn-primary" type="submit">Enviar correos</button>
+</form>
+{% endblock %}

@@ -93,6 +93,9 @@ urlpatterns = [
         name="pago_diario_crear",
     ),
 
+    path("alumnos/correos/masivo/", views.enviar_correo_masivo_view, name="enviar_correo_masivo"),
+    
+
 
 
 ]

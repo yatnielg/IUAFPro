@@ -10,6 +10,8 @@ from .forms import EntregaForm
 
 from django.http import HttpResponseForbidden
 
+from django.db.models import Count, Q
+import random
 
 from django.contrib.admin.views.decorators import staff_member_required
 
@@ -31,33 +33,79 @@ def _get_alumno_from_user(user):
     )
 
 
+from django.db.models import Count, Q, Case, When, IntegerField
+from django.utils import timezone
+import random
+
 @login_required
 def mis_cursos(request):
     alumno = _get_alumno_from_user(request.user)
     cursos = Curso.objects.filter(activo=True)
+    alumno_random = random.randint(326, 645)  # (ahora mismo no se usa)
 
     info = getattr(alumno, "informacionEscolar", None) if alumno else None
 
     # Filtrar por grupo_nuevo (FK a Grupo) y opcionalmente por programa
     if info and info.grupo_nuevo_id:
         cursos = cursos.filter(
-            programa=info.programa,      # opcional pero recomendable
+            programa=info.programa,
             grupo=info.grupo_nuevo,
         )
     else:
-        # Si no hay info o no tiene grupo_nuevo, puedes:
-        # - mostrar cero cursos
-        # - o filtrar solo por programa si quieres:
         if info and info.programa_id:
             cursos = cursos.filter(programa=info.programa)
         else:
             cursos = Curso.objects.none()
 
+    # Fecha de hoy (para lógica de terminado / disponible)
+    hoy = timezone.now().date()
+
+    # Anotar contadores
+    cursos = cursos.annotate(
+        total_lecciones=Count("modulos__lecciones", distinct=True),
+        total_quizzes=Count(
+            "modulos__lecciones__actividades",
+            filter=Q(modulos__lecciones__actividades__tipo="quiz"),
+            distinct=True,
+        ),
+        total_estudiantes=Count("accesos__alumno", distinct=True) + 355,  # demo
+    )
+
+    # 👇 Marcar cursos terminados y ordenar: primero activos / en curso / futuros,
+    # luego los finalizados
+    cursos = cursos.annotate(
+        terminado=Case(
+            When(fecha_fin__lt=hoy, then=1),
+            default=0,
+            output_field=IntegerField(),
+        )
+    ).order_by("terminado", "fecha_inicio", "nombre")
+
+    # Calcular si el curso está disponible según fechas
+    for c in cursos:
+        disponible = True
+
+        if c.fecha_inicio and c.fecha_inicio > hoy:
+            disponible = False
+        if c.fecha_fin and c.fecha_fin < hoy:
+            disponible = False
+
+        c.disponible = disponible
+
+        # días para que inicie (solo si aún no inicia)
+        if c.fecha_inicio and c.fecha_inicio > hoy:
+            c.dias_para_inicio = (c.fecha_inicio - hoy).days
+        else:
+            c.dias_para_inicio = None
+
     context = {
         "alumno": alumno,
         "cursos": cursos,
+        "hoy": hoy,
     }
     return render(request, "lms/mis_cursos.html", context)
+
+############################################################################
 
 
 @login_required
@@ -271,15 +319,36 @@ def cursos_todos(request):
     """
     Lista TODOS los cursos para administración global.
     """
+    q = request.GET.get("q", "").strip()
+
     cursos = (
         Curso.objects
         .select_related("programa", "grupo", "docente")
-        .prefetch_related("modulos")
+        .prefetch_related("modulos__lecciones__actividades")
+        .annotate(
+            num_alumnos=Count("accesos", distinct=True),
+            num_modulos=Count("modulos", distinct=True),
+            num_lecciones=Count("modulos__lecciones", distinct=True),
+            num_quizzes=Count(
+                "modulos__lecciones__actividades",
+                filter=Q(modulos__lecciones__actividades__tipo="quiz"),
+                distinct=True,
+            ),
+        )
         .order_by("programa__codigo", "nombre")
     )
 
+    if q:
+        cursos = cursos.filter(
+            Q(codigo__icontains=q) |
+            Q(nombre__icontains=q) |
+            Q(docente__first_name__icontains=q) |
+            Q(docente__last_name__icontains=q)
+        )
+
     context = {
         "cursos": cursos,
+        "q": q,
         "es_docente": True,  # para reusar templates que revisan esto
     }
     return render(request, "lms/cursos_todos.html", context)

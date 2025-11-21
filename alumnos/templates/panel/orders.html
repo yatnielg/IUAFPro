@@ -40,13 +40,21 @@
       <select id="filter-programa" class="selectpicker" data-style="select-with-transition" multiple title="Programa" data-size="5"></select>
       <select id="filter-admin"    class="selectpicker" data-style="select-with-transition" multiple title="Estatus Administrativo" data-size="5"></select>
       <select id="filter-acad"     class="selectpicker" data-style="select-with-transition" multiple title="Estatus Académico" data-size="5"></select>
-      <select id="filter-sede"     class="selectpicker" data-style="select-with-transition" multiple title="Sede" data-size="5"></select>
-      <!-- NUEVO filtro por Activo -->
+      <select id="filter-sede"     class="selectpicker" data-style="select-with-transition" multiple title="Sede" data-size="5"></select>    
       <select id="filter-activo"   class="selectpicker" data-style="select-with-transition" multiple title="Activo" data-size="5">
         <option>Activo</option>
         <option>Inactivo</option>
       </select>
       <button id="clear-filters" type="button" class="btn btn-sm btn-outline-warning">Limpiar</button>
+
+    <!-- NUEVO: copiar números de estudiante -->
+    <button id="copy-numeros" type="button" class="btn btn-sm btn-outline-info">
+      Copiar números filtrados
+    </button>
+
+
+
+
     </div>
   </div>
 
@@ -194,6 +202,7 @@
       $select.empty();
       Array.from(set).sort().forEach(v => $select.append(new Option(v, v)));
     }
+
     populateUnique(PROG_COL_IDX,  $selProg);
     populateUnique(ADMIN_COL_IDX, $selAdmin);
     populateUnique(ACAD_COL_IDX,  $selAcad);
@@ -201,6 +210,7 @@
     // Para "Activo" ya pusimos opciones fijas (Activo/Inactivo), no hace falta poblar
 
     const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
     function applyFilter($select, colIdx) {
       const selected = $select.val();
       if (selected && selected.length) {
@@ -218,7 +228,12 @@
     $selActivo.on('change', function(){ applyFilter($selActivo, ACTIVO_COL_IDX); table.draw(); });
 
     $('#clear-filters').on('click', function () {
-      $selProg.val([]); $selAdmin.val([]); $selAcad.val([]); $selSede.val([]); $selActivo.val([]);
+      $selProg.val([]);
+      $selAdmin.val([]);
+      $selAcad.val([]);
+      $selSede.val([]);
+      $selActivo.val([]);
+
       applyFilter($selProg,   PROG_COL_IDX);
       applyFilter($selAdmin,  ADMIN_COL_IDX);
       applyFilter($selAcad,   ACAD_COL_IDX);
@@ -226,8 +241,66 @@
       applyFilter($selActivo, ACTIVO_COL_IDX);
       table.draw();
     });
+
+    // ===========================
+    // BOTÓN: Copiar números filtrados
+    // ===========================
+    $('#copy-numeros').on('click', function () {
+      const numeros = [];
+
+      // Recorremos SOLO las filas filtradas (search:'applied')
+      table.rows({ search: 'applied' }).every(function () {
+        const cell = this.cell(this.index(), 0).node(); // Columna 0 = No (número estudiante)
+        const txt = $(cell).text().trim();
+        if (txt) {
+          numeros.push(txt);
+        }
+      });
+
+      if (!numeros.length) {
+        alert('No hay estudiantes en el resultado actual.');
+        return;
+      }
+
+      // Aquí decides el formato: coma o salto de línea
+      // const texto = numeros.join(',');
+      const texto = numeros.join(',');
+
+      // Intentar API moderna del portapapeles
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(texto)
+          .then(() => {
+            alert('Se copiaron ' + numeros.length + ' números de estudiante al portapapeles.');
+          })
+          .catch(() => {
+            copiarConFallback(texto, numeros.length);
+          });
+      } else {
+        copiarConFallback(texto, numeros.length);
+      }
+    });
+
+    // Función de respaldo usando un textarea oculto
+    function copiarConFallback(texto, count) {
+      const $temp = $('<textarea>');
+      $('body').append($temp);
+      $temp.val(texto).select();
+      try {
+        document.execCommand('copy');
+        alert('Se copiaron ' + count + ' números de estudiante al portapapeles.');
+      } catch (e) {
+        alert('No se pudo copiar automáticamente. Puedes seleccionarlos y copiarlos manualmente:\n\n' + texto);
+      }
+      $temp.remove();
+    }
+
   });
 </script>
+
+
+
+
+
 
 </body>
 </html>

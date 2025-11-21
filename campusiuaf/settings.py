@@ -55,7 +55,7 @@ INSTALLED_APPS = [
     'alumnos',
     'cobros',
     "academico",
-    "lms",
+    "lms",    
     "oauth2_provider",
     
 ]
@@ -298,3 +298,7 @@ STRIPE_CONFIG = {
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
+
+
+MASIVO_HEADER_URL = "https://admin.campusiuaf.com/static/iuaf/doctorado-header3.png"
+MASIVO_DOCTORADO_CTA_URL = "https://https://admin.campusiuaf.com/doctorados"

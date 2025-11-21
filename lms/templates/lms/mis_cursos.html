@@ -1,6 +1,19 @@
-{% extends "panel/grafico.html" %}
+{% extends "panel/basecurso.html" %}
+{% load static %}
 
 {% block main_content %}
+
+{# --- Estilos para la animación al pasar el mouse --- #}
+<style>
+  .course-card {
+    transition: transform 0.18s ease, box-shadow 0.18s ease;
+  }
+  .course-card:hover {
+    transform: translateY(-6px);
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.35);
+  }
+</style>
+
 <div class="d-flex justify-content-between align-items-center mb-3">
   <h1 class="h4 text-white mb-0">
     <i class="material-icons align-middle mr-1">menu_book</i>
@@ -13,24 +26,102 @@
     <div class="card-icon"><i class="material-icons">school</i></div>
     <h4 class="card-title">Cursos asignados</h4>
   </div>
+
   <div class="card-body">
     {% if cursos %}
       <div class="row">
         {% for c in cursos %}
-          <div class="col-md-6 mb-3">
-            <div class="card">
+          <div class="col-lg-4 col-md-6 col-sm-12 mb-3">
+            <div class="card h-100 course-card">
+
+              {# Portada del curso #}
+              {% if c.portada %}
+                <img src="{{ c.portada.url }}"
+                     class="card-img-top"
+                     alt="Portada de {{ c.nombre }}"
+                     style="width: 100%; height: auto;">
+              {% endif %}
+
               <div class="card-body">
-                <h5 class="card-title mb-1">{{ c.codigo }} — {{ c.nombre }}</h5>
-                <p class="card-category text-muted mb-2">
-                  Programa: {{ c.programa.codigo }} — {{ c.programa.nombre }}
-                  {% if c.grupo %}<br>Grupo: {{ c.grupo.nombre }}{% endif %}
+                <h5 class="card-title mb-2" style="font-weight:600;">
+                  {{ c.nombre }}
+                </h5>
+
+                <p class="card-category text-muted mb-2 small">
+                  <strong>Programa:</strong>
+                  {{ c.programa.codigo }} — {{ c.programa.nombre }}<br>
+                  {% if c.grupo %}
+                    <strong>Grupo:</strong> {{ c.grupo.nombre }}
+                  {% endif %}
                 </p>
-                <p class="card-text small text-muted">
-                  {{ c.descripcion|default:"Sin descripción."|truncatechars:140 }}
+
+                {# Fechas en una sola línea, lado a lado #}
+                {% if c.fecha_inicio or c.fecha_fin %}
+                  <p class="small text-muted mb-2 d-flex flex-wrap align-items-center">
+                    {% if c.fecha_inicio %}
+                      <span class="me-3 mr-3">
+                        <strong>Inicio:</strong> {{ c.fecha_inicio|date:"d/m/Y" }}
+                      </span>
+                    {% endif %}
+                    {% if c.fecha_fin %}
+                      <span>
+                        <strong>Fin:</strong> {{ c.fecha_fin|date:"d/m/Y" }}
+                      </span>
+                    {% endif %}
+                  </p>
+                {% endif %}
+
+                {# Resumen de lecciones / quizzes / estudiantes #}
+                <p class="small mb-2 d-flex flex-wrap">
+                  <span class="me-3 mr-3 d-flex align-items-center">
+                    <i class="material-icons align-middle me-1" style="font-size:18px;">menu_book</i>
+                    <strong>Lecciones:</strong>&nbsp;{{ c.total_lecciones|default:"0" }}
+                  </span>
+                  <span class="me-3 mr-3 d-flex align-items-center">
+                    <i class="material-icons align-middle me-1" style="font-size:18px;">quiz</i>
+                    <strong>Cuestionarios:</strong>&nbsp;{{ c.total_quizzes|default:"0" }}
+                  </span>
+                  <span class="d-flex align-items-center">
+                    <i class="material-icons align-middle me-1" style="font-size:18px;">groups</i>
+                    <strong>Estudiantes inscritos:</strong>&nbsp;{{ c.total_estudiantes|default:"0" }}
+                  </span>
                 </p>
-                <a href="{% url 'lms:curso_detalle' c.pk %}" class="btn btn-outline-info btn-sm">
-                  Entrar al curso
-                </a>
+
+              <p class="card-text small text-muted mb-3">
+                {{ c.descripcion|default:"Sin descripción."|truncatechars:140 }}
+                {% if c.descripcion and c.descripcion|length < 104 %}
+                  <br>&nbsp;
+                {% endif %}
+              </p>
+
+                {# ===== BOTÓN / ESTADO DEL CURSO ===== #}
+                {% if c.disponible %}
+                  <a href="{% url 'lms:curso_detalle' c.pk %}"
+                     class="btn btn-outline-info btn w-100">
+                    Ver contenido del curso
+                  </a>
+                {% else %}
+                  {# Si aún no inicia: cuenta regresiva #}
+                  {% if c.fecha_inicio and c.fecha_inicio > hoy %}
+                    <button class="btn btn-outline-warning btn w-100 js-countdown"
+                            type="button" disabled
+                            data-inicio="{{ c.fecha_inicio|date:'Y-m-d' }}">
+                      Disponible en {{ c.dias_para_inicio }} día{{ c.dias_para_inicio|pluralize }}
+                    </button>
+                  {# Si ya terminó #}
+                  {% elif c.fecha_fin and c.fecha_fin < hoy %}
+                    <button class="btn btn-outline-white btn w-100" type="button" disabled>
+                      Curso finalizado
+                    </button>
+                  {# Caso raro: no hay fechas pero lo marcaste como no disponible #}
+                  {% else %}
+                    <button class="btn btn-outline-secondary btn w-100" type="button" disabled>
+                      Curso no disponible
+                    </button>
+                  {% endif %}
+                {% endif %}
+                {# ===== FIN BOTÓN / ESTADO ===== #}
+
               </div>
             </div>
           </div>
@@ -43,4 +134,47 @@
     {% endif %}
   </div>
 </div>
+
+{# ===== JS cuenta regresiva (opcional pero chulo) ===== #}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const buttons = document.querySelectorAll('.js-countdown');
+
+  buttons.forEach(function (btn) {
+    const inicioStr = btn.dataset.inicio; // "2025-03-01"
+    if (!inicioStr) return;
+
+    const target = new Date(inicioStr + 'T00:00:00');
+
+    function updateCountdown() {
+      const now = new Date();
+      const diff = target - now;
+
+      if (diff <= 0) {
+        btn.textContent = 'El curso ya está disponible. Actualiza la página.';
+        return;
+      }
+
+      const totalSeconds = Math.floor(diff / 1000);
+      const days  = Math.floor(totalSeconds / (24 * 3600));
+      const hours = Math.floor((totalSeconds % (24 * 3600)) / 3600);
+      const mins  = Math.floor((totalSeconds % 3600) / 60);
+
+      let texto = 'Disponible en ';
+
+      if (days > 0) {
+        texto += days + ' día' + (days === 1 ? '' : 's') + ' ';
+      }
+      texto += hours.toString().padStart(2, '0') + 'h ';
+      texto += mins.toString().padStart(2, '0') + 'm';
+
+      btn.textContent = texto;
+    }
+
+    updateCountdown();
+    setInterval(updateCountdown, 60000); // cada minuto
+  });
+});
+</script>
+
 {% endblock %}

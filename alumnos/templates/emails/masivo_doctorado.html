@@ -1,0 +1,129 @@
+{# templates/emails/masivo_doctorado.html #}
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8">
+    <title>Invitación a Doctorado IUAF - Beca Aniversario</title>
+  </head>
+  <body style="margin:0; padding:0; background-color:#f3f4f6; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color:#f3f4f6; padding:24px 0;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="600" cellspacing="0" cellpadding="0" border="0" style="background-color:#ffffff; border-radius:10px; overflow:hidden; box-shadow:0 4px 12px rgba(15,23,42,0.12);">
+            
+            <!-- HEADER CON IMAGEN -->
+            <tr>
+              <td style="padding:0; margin:0;">
+                <img src="{{ header_url }}" alt="IUAF - Doctorado IUAF Infinito"
+                     style="display:block; width:100%; max-width:600px; border:0; line-height:0; font-size:0;">
+              </td>
+            </tr>
+
+            <!-- TITULAR / SUBTITULAR -->
+            <tr>
+              <td style="padding:20px 28px 8px 28px; border-bottom:1px solid #e5e7eb;">
+                <p style="margin:0; font-size:13px; color:#6b7280; letter-spacing:0.08em; text-transform:uppercase; font-weight:600;">
+                  Mensaje especial · IUAF INFINITO
+                </p>
+                <h1 style="margin:6px 0 4px 0; font-size:20px; color:#111827; font-weight:700;">
+                  Beca y financiamiento especial para tu Doctorado
+                </h1>
+                <p style="margin:0; font-size:13px; color:#6b7280;">
+                  Estimado(a) {{ alumno.nombre }} {{ alumno.apellido_p }} {{ alumno.apellido_m }}
+                </p>
+              </td>
+            </tr>
+
+            <!-- CUERPO DEL MENSAJE (TEXTO QUE ESCRIBES EN EL FORMULARIO) -->
+            <tr>
+              <td style="padding:20px 28px 4px 28px; font-size:14px; color:#111827; line-height:1.6;">
+                {{ body_html|safe }}
+              </td>
+            </tr>
+
+            <!-- CAJA DESTACADA DE BECA / FINANCIAMIENTO -->
+            <tr>
+              <td style="padding:4px 28px 16px 28px;">
+                <div style="
+                  margin-top:12px;
+                  padding:12px 14px;
+                  border-radius:8px;
+                  background:linear-gradient(135deg, #16a34a, #22c55e);
+                  color:#f9fafb;
+                  font-size:13px;
+                  ">
+                  <strong style="display:block; font-size:14px; margin-bottom:4px;">
+                    Beca con financiamiento especial para egresados
+                  </strong>
+                  <span>
+                    Accede a un financiamiento de hasta <strong>24 meses</strong> para cursar tus 20 módulos de Doctorado, 
+                    reduciendo la colegiatura de <strong>320&nbsp;USD</strong> a <strong>165&nbsp;USD</strong> por mes 
+                    o <strong>658&nbsp;USD</strong> por cuatrimestre, durante <strong>6 cuatrimestres</strong>.
+                    Las cuotas se congelan durante todo tu programa y absorvemos los incrementos anuales.
+                  </span>
+                </div>
+              </td>
+            </tr>
+
+            <!-- CTA / BOTON -->
+            <tr>
+              <td style="padding:0 28px 18px 28px;">
+                <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                  <tr>
+                    <td align="left">
+                      <a href="https://wa.me/5219982299972?text=Hola%2C%20me%20interesa%20informaci%C3%B3n%20sobre%20el%20Doctorado%20IUAF"
+                        style="
+                          display:inline-block;
+                          padding:10px 18px;
+                          background-color:#2563eb;
+                          color:#f9fafb;
+                          text-decoration:none;
+                          border-radius:999px;
+                          font-size:13px;
+                          font-weight:600;
+                        ">
+                        Quiero más información sobre el Doctorado
+                      </a>
+
+                    </td>
+                  </tr>
+                </table>
+                <p style="margin:10px 0 0 0; font-size:12px; color:#6b7280;">
+                  También puedes responder directamente a este correo y con gusto te apoyamos.
+                </p>
+              </td>
+            </tr>
+
+            <!-- FIRMA -->
+            <tr>
+              <td style="padding:12px 28px 24px 28px; border-top:1px solid #e5e7eb;">
+                <p style="margin:0 0 2px 0; font-size:14px; color:#111827; font-weight:600;">
+                  IUAF INFINITO
+                </p>
+                <p style="margin:0 0 4px 0; font-size:13px; color:#4b5563;">
+                  Instituto Universitario de Alta Formación
+                </p>
+                <p style="margin:0; font-size:11px; color:#9ca3af;">
+                  Blvd. Kukulkán Km 3.5, Plaza Nautilus Int. 53, Cancún, Q.R. · Tel. 998 939 4481
+                </p>
+              </td>
+            </tr>
+
+            <!-- FOOTER -->
+            <tr>
+              <td style="padding:10px 28px 18px 28px; background-color:#f9fafb; font-size:11px; color:#9ca3af; text-align:center;">
+                <p style="margin:0 0 4px 0;">
+                  Recibes este mensaje por ser alumno o egresado de posgrado IUAF.
+                </p>
+                <p style="margin:0;">
+                  © {{ hoy.year }} Instituto Universitario de Alta Formación. Todos los derechos reservados.
+                </p>
+              </td>
+            </tr>
+
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

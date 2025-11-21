@@ -4179,6 +4179,8 @@ def generar_carta_inscripcion_pdf(alumno, request) -> str | None:
 # Vista principal
 # =========================
 from django.core.mail import EmailMultiAlternatives, get_connection
+import time
+import random
 
 @login_required
 def enviar_bienvenida_estatica(request, alumno_id):
@@ -4899,3 +4901,57 @@ def pago_diario_crear(request, pk):
             "next": next_url,
         },
     )
+
+#################################################################
+# alumnos/views.py
+import re
+from django.contrib.auth.decorators import login_required
+from django.shortcuts import render, redirect
+from django.contrib import messages
+from .email_utils import enviar_correo_personalizado_a_alumnos
+
+@login_required
+def enviar_correo_masivo_view(request):
+    if request.method == "POST":
+        numeros_raw = (request.POST.get("numeros") or "").strip()
+        subject = (request.POST.get("subject") or "").strip()
+        body_template = (request.POST.get("body") or "").strip()
+        carpeta = (request.POST.get("carpeta") or "").strip()  # ej: iuaf/doctorado
+
+        # Adjuntos subidos desde el formulario
+        files = request.FILES.getlist("adjuntos")
+        extra_attachments = []
+        for f in files:
+            content = f.read()
+            mime = f.content_type or "application/octet-stream"
+            extra_attachments.append((f.name, content, mime))
+
+        # Convertir texto (comas, saltos de línea, espacios) a lista
+        tokens = re.split(r"[,\s]+", numeros_raw)
+        numeros = [t for t in tokens if t]
+
+        if not numeros:
+            messages.error(request, "No se ingresó ningún número de estudiante.")
+            return redirect("alumnos:enviar_correo_masivo")
+
+        if not subject or not body_template:
+            messages.error(request, "Asunto y cuerpo son obligatorios.")
+            return redirect("alumnos:enviar_correo_masivo")
+
+        resumen = enviar_correo_personalizado_a_alumnos(
+            numeros_estudiante=numeros,
+            subject=subject,
+            body_template=body_template,
+            rel_dir_adjuntos=carpeta or None,
+            extra_attachments=extra_attachments,
+        )
+
+        msg = (
+            f"Enviados: {len(resumen['enviados'])}, "
+            f"sin correo: {len(resumen['sin_correo'])}, "
+            f"errores: {len(resumen['errores'])}."
+        )
+        messages.success(request, msg)
+        return redirect("alumnos:enviar_correo_masivo")
+
+    return render(request, "alumnos/enviar_correo_masivo.html")

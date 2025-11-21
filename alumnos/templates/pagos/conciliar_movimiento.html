@@ -148,12 +148,18 @@
   <tbody>
     <tr id="tpl-linea">
       <td>
-        <select class="form-select form-select-sm alumno-select" required>
-          <option value="" hidden>Elige alumno…</option>
-          {% for a in candidatos %}
-            <option value="{{ a.pk }}">{{ a.numero_estudiante }} — {{ a.nombre }} {{ a.apellido_p }} {{ a.apellido_m }}</option>
-          {% endfor %}
-        </select>
+<select class="form-select form-select-sm alumno-select" required>
+  <option value="" hidden>Elige alumno…</option>
+  {% for a in candidatos %}
+    <option value="{{ a.pk }}">
+      {{ a.numero_estudiante }} — {{ a.nombre }} {{ a.apellido_p }} {{ a.apellido_m }}
+      {% if a.informacionEscolar %}
+        — {{ a.informacionEscolar|stringformat:"s"|slice:":16" }}
+      {% endif %}
+    </option>
+  {% endfor %}
+</select>
+
       </td>
       <td>
         <select class="form-select form-select-sm concepto-select" required>
